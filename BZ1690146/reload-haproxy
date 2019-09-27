@@ -4,7 +4,7 @@ set -o nounset
 
 mkdir -p /var/tmp/haproxy/run
 
-config_file=$HOME/haproxy.cfg
+config_file=~/haproxy-hacks/BZ1690146/haproxy.cfg
 pid_file=/var/tmp/haproxy/run/haproxy.pid
 
 old_pids=$(pidof haproxy)
