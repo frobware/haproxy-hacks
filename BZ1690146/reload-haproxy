@@ -1,0 +1,22 @@
+#!/bin/bash
+
+set -o nounset
+
+mkdir -p /var/tmp/haproxy/run
+
+config_file=$HOME/haproxy.cfg
+pid_file=/var/tmp/haproxy/run/haproxy.pid
+
+old_pids=$(pidof haproxy)
+echo $old_pids
+
+reload_status=0
+if [ -n "$old_pids" ]; then
+  ~/haproxy-1.8/haproxy -f $config_file -p $pid_file -x /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
+  reload_status=$?
+else
+  ~/haproxy-1.8/haproxy -f $config_file -p $pid_file
+  reload_status=$?
+fi
+
+[ $reload_status -ne 0 ] && exit $reload_status

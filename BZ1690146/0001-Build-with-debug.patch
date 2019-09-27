@@ -1,0 +1,42 @@
+From ed9e6069589e82fbc289e03dd0ac02d6f0e2cfe3 Mon Sep 17 00:00:00 2001
+From: Andrew McDermott <aim@frobware.com>
+Date: Fri, 27 Sep 2019 17:18:01 +0100
+Subject: [PATCH] Build with debug
+
+---
+ Makefile | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 94e04738..710f4234 100644
+--- a/Makefile
++++ b/Makefile
+@@ -142,7 +142,7 @@ LD = $(CC)
+ 
+ #### Debug flags (typically "-g").
+ # Those flags only feed CFLAGS so it is not mandatory to use this form.
+-DEBUG_CFLAGS = -g
++DEBUG_CFLAGS = -g3
+ 
+ #### Add -Werror when set to non-empty
+ ERR =
+@@ -216,6 +216,7 @@ CPU_CFLAGS.i586       = -O2 -march=i586
+ CPU_CFLAGS.i686       = -O2 -march=i686
+ CPU_CFLAGS.ultrasparc = -O6 -mcpu=v9 -mtune=ultrasparc
+ CPU_CFLAGS            = $(CPU_CFLAGS.$(CPU))
++CPU_CFLAGS            =
+ 
+ #### ARCH dependant flags, may be overriden by CPU flags
+ ARCH_FLAGS.32     = -m32
+@@ -237,7 +238,7 @@ CFLAGS = $(ARCH_FLAGS) $(CPU_CFLAGS) $(DEBUG_CFLAGS) $(SPEC_CFLAGS)
+ # These LDFLAGS are used as the first "ld" options, regardless of any library
+ # path or any other option. They may be changed to add any linker-specific
+ # option at the beginning of the ld command line.
+-LDFLAGS = $(ARCH_FLAGS) -g
++LDFLAGS = $(ARCH_FLAGS) -g3
+ 
+ #### Target system options
+ # Depending on the target platform, some options are set, as well as some
+-- 
+2.21.0
+
