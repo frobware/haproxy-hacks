@@ -51,19 +51,19 @@ I wanted to stress test reloading the proxy while applying some load.
 ## Run the [backend](server.js):
 
 ```sh
-node ~/haproxy-hacks/BZ1690146/server.js &
+$ node ~/haproxy-hacks/BZ1690146/server.js &
 ```
 
 ## Run [haproxy](./reload-proxy)
 
 ```sh
-~/haproxy-hacks/BZ1690146/reload-proxy
+$ ~/haproxy-hacks/BZ1690146/reload-proxy
 ```
 
 ## Run apache benchmark and verify everything is working:
 
 ```console
-ab -v 2 -c 100 -n 10000000 -k http://localhost:4242/
+$ ab -v 2 -c 100 -n 10000000 -k http://localhost:4242/
 
 LOG: header received:
 HTTP/1.1 200 OK
@@ -88,12 +88,8 @@ Now that this is working I tried sitting in a loop reloading ad nausem
 to see if I could reproduce the behaviour observed in the bug where
 there are lingering processes that are still listening:
 
-```sh
-while :; do ./reload-haproxy; sleep 0.1; done | ts
-```
-
-From the endless reloading I see:
 ```console
+$ while :; do ./reload-haproxy; sleep 0.1; done | ts
 Sep 27 17:39:01 14281 14236 14216 14174 12763 11185 10884 10538                                                                           │haproxy 9807  aim   72u  IPv4 12464860      0t0  TCP localhost:4242->localhost:45212 (ESTABLISHED)
 Sep 27 17:39:02 14362 14281 14236 14216 14174 12763 11185 10884 10538                                                                     │haproxy 9807  aim   86u  IPv4 12464862      0t0  TCP localhost:4242->localhost:45216 (ESTABLISHED)
 Sep 27 17:39:02 14401 14362 12763 11185 10884 10538                                                                                       │haproxy 9807  aim  130u  IPv4 12464843      0t0  TCP localhost:4242->localhost:45028 (ESTABLISHED)
@@ -127,7 +123,7 @@ Sep 27 17:39:04 15260 15222 15188 14925 12763 11185 10884 10538
 
 And all of the time I have this running in a different shell:
 
-```sh
+```console
 $ ab -v 2 -c 100 -n 10000000 -k http://localhost:4242/ | grep '^HTTP' |grep -v 200
 HTTP/1.0 504 Gateway Time-out
 HTTP/1.0 504 Gateway Time-out
@@ -214,4 +210,4 @@ UID        PID  PPID  C STIME TTY          TIME CMD
 UID        PID  PPID  C STIME TTY          TIME CMD
 ```
 
-and all of these have disappeared - ergo, no lingering processes.
+and all of these have disappeared - ergo, no lingering processes. ¯\_(ツ)_/¯
