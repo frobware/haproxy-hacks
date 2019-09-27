@@ -92,12 +92,6 @@ there are lingering processes that are still listening:
 while :; do ./reload-haproxy; sleep 0.1; done | ts
 ```
 
-And this time looking for 503 errors:
-
-```sh
-$ ab -v 2 -c 100 -n 10000000 -k http://localhost:4242/ | grep '^HTTP' |grep -v 200
-```
-
 From the endless reloading I see:
 ```console
 Sep 27 17:39:01 14281 14236 14216 14174 12763 11185 10884 10538                                                                           │haproxy 9807  aim   72u  IPv4 12464860      0t0  TCP localhost:4242->localhost:45212 (ESTABLISHED)
@@ -131,25 +125,9 @@ Sep 27 17:39:04 15222 15188 15147 14925 12763 11185 10884 10538                 
 Sep 27 17:39:04 15260 15222 15188 14925 12763 11185 10884 10538
 ```
 
-And looking at the number of processes listening on port 4242 I see:
+And all of the time I have this running in a different shell:
 
-```console
-$ lsof -i:4242 | wc -l
-69
-```
-
-This seems to be going up. Not sure my 0.1 second reload is giving
-things threads chance to die... and very possibly a red-herring as
-these do go down:
-
-```console
-$ lsof -i:4242 | wc -l
-20
-```
-
-But, equally, I don't see any 503 errors:
-
-```
+```sh
 $ ab -v 2 -c 100 -n 10000000 -k http://localhost:4242/ | grep '^HTTP' |grep -v 200
 HTTP/1.0 504 Gateway Time-out
 HTTP/1.0 504 Gateway Time-out
@@ -160,18 +138,32 @@ HTTP/1.0 504 Gateway Time-out
 HTTP/1.0 504 Gateway Time-out
 ```
 
+And looking at the number of processes listening on port 4242 I see:
+
+```console
+$ lsof -i:4242 | wc -l
+69
+```
+
+This seems to go up/down:
+
+```console
+$ lsof -i:4242 | wc -l
+20
+```
+
 At some point we see:
 
 ```console
 $ ps -ef |grep haproxy
-aim      15486  1350 99 17:39 ?        00:50:08 /home/aim/haproxy-1.8/haproxy -f /home/aim/haproxy.cfg -p /var/tmp/haproxy/run/haproxy.pid -x /var/tmp/haproxy/run/haproxy.sock -sf 15449 15407 15366 15284 15260 14925 12763 11185 10884 10538
+aim      15486  1350 99 17:39 ?        00:50:08 /home/aim/haproxy-1.8/haproxy -f /home/aim/haproxy-hacks/BZ1690146/haproxy.cfg -p /var/tmp/haproxy/run/haproxy.pid -x /var/tmp/haproxy/run/haproxy.sock -sf 15449 15407 15366 15284 15260 14925 12763 11185 10884 10538
 ```
 
 And looking at the pid tree for `15486` I see:
 
-```
+```console
 $ pstree  -alp -A 15486
-haproxy,15486 -f /home/aim/haproxy.cfg -p /var/tmp/haproxy/run/haproxy.pid -x /var/tmp/haproxy/run/haproxy.sock -sf 15449 15407 15366 15284 15260 14925 12763 11185 10884 10538
+haproxy,15486 -f /home/aim/haproxy-hacks/BZ1690146/haproxy.cfg -p /var/tmp/haproxy/run/haproxy.pid -x /var/tmp/haproxy/run/haproxy.sock -sf 15449 15407 15366 15284 15260 14925 12763 11185 10884 10538
   |-{haproxy},15487
   |-{haproxy},15488
   |-{haproxy},15489
