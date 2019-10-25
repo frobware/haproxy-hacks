@@ -1,6 +1,6 @@
 Notes to reproduce https://bugzilla.redhat.com/show_bug.cgi?id=1761935
 
-** Build HAProxy locally; see https://github.com/frobware/haproxy-hacks/blob/master/README.md
+** Build HAProxy locally; see https://github.com/frobware/haproxy-hacks/blob/master/BZ1690146/README.md
 
 ** Start up haproxy, reloading every second
 
