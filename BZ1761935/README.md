@@ -1,16 +1,16 @@
 Notes to reproduce https://bugzilla.redhat.com/show_bug.cgi?id=1761935
 
-** Build HAProxy locally; see https://github.com/frobware/haproxy-hacks/blob/master/BZ1690146/README.md
+## Build HAProxy locally; see https://github.com/frobware/haproxy-hacks/blob/master/BZ1690146/README.md
 
-** Start up haproxy, reloading every second
+## Start up haproxy, reloading every second
 
     while :; do ~/haproxy-hacks/BZ1761935/reload-proxy ; sleep 1; done
 
-** Start up our backend server
+### Start up our backend server
 
     node ~/haproxy-hacks/BZ1761935/server.js
 
-** Apply some load
+## Apply some load
 
     hey -c 2 -m GET -q 1 -z 50s http://localhost:4242/ba
 
@@ -37,7 +37,7 @@ $ while :
 
 The numbers are the old pids as the proxy is restarted.
 
-From the node process your should see:
+From the node process you should see:
 
 ```console
 $ node ~/haproxy-hacks/BZ1761935/server.js 
@@ -49,10 +49,10 @@ Server running at http://0.0.0.0:9002/
 { host: 'localhost' }
 { host: 'localhost' }
 { host: 'localhost' }
-````
+```
 
 When the hey(1) load is applied you will occasionally see the
-"Connection: close" header injected into their backend request:
+"Connection: close" header injected into the backend request:
 
 
 ```console
