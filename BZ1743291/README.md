@@ -99,7 +99,7 @@ we typed a single "hello".
 ## Memory Leaks?
 
 I wanted to test for memory leaks so I created a malloc/calloc
-interposer [library](alloc.c) that ballons malloc (or calloc)
+interposer [library](alloc.c) that balloons malloc (or calloc)
 requests. The goal here is to make leaking obvious. If you malloc 1MB,
 then immediately free it all well and good. But if the leaks are
 measured in small numbers of bytes it can take too long to see the net
@@ -110,7 +110,7 @@ be immediately magnified.
 
     $ make
 	
-### Change then script to LD_PRELOAD the library
+### Change the script to LD_PRELOAD the library
 
 ```diff
 $ git diff reload-proxy
