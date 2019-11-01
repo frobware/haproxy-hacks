@@ -96,4 +96,40 @@ connection to the websocket endpoint but in this case the process
 disappears after ~30s as there has been no traffic for more than 30s -
 we typed a single "hello".
 
+## Memory Leaks?
 
+I wanted to test for memory leaks so I created a malloc/calloc
+interposer [library](alloc.c) that ballons malloc (or calloc)
+requests. The goal here is to make leaking obvious. If you malloc 1MB,
+then immediately free it all well and good. But if the leaks are
+measured in small numbers of bytes it can take too long to see the net
+effect. Ballooning everything by 1MB (configurable) allows any leak to
+be immediately magnified.
+
+### Build the interposer library
+
+    $ make
+	
+### Change then script to LD_PRELOAD the library
+
+```diff
+$ git diff reload-proxy
+diff --git a/BZ1743291/reload-proxy b/BZ1743291/reload-proxy
+index ce66224..5be2c70 100755
+--- a/BZ1743291/reload-proxy
++++ b/BZ1743291/reload-proxy
+@@ -23,12 +23,10 @@ haproxy_binary=~/haproxy-1.8/haproxy
+ 
+ reload_status=0
+ if [ -n "$old_pids" ]; then
+-  #LD_PRELOAD=$TOPDIR/liballoc.so ~/haproxy-1.8/haproxy -f $config_file -p $pid_file -x /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
+-  $haproxy_binary -f $config_file -p $pid_file -x /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
++  LD_PRELOAD=$TOPDIR/liballoc.so $haproxy_binary -f $config_file -p $pid_file -x /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
+   reload_status=$?
+ else
+-  #LD_PRELOAD=$TOPDIR/liballoc.so ~/haproxy-1.8/haproxy -f $config_file -p $pid_file
+-  $haproxy_binary -f $config_file -p $pid_file
++  LD_PRELOAD=$TOPDIR/liballoc.so $haproxy_binary -f $config_file -p $pid_file
+   reload_status=$?
+ fi
+```
