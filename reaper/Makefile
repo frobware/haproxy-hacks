@@ -1,6 +1,8 @@
 # USE_DEV_INIT = --init
 
+DOCKER ?= podman
+
 run:
 	go build -o reaper main.go && \
-		docker build -t reaper-test . && \
-		docker run $(USE_DEV_INIT) -it --rm reaper-test
+		$(DOCKER) build -t reaper-test . && \
+		$(DOCKER) run $(USE_DEV_INIT) -it --rm reaper-test
