@@ -78,8 +78,7 @@ else
   reload_status=$?
 fi
 
-#ps -ax
-
 [ $reload_status -ne 0 ] && exit $reload_status
 haproxyHealthCheck
+printf "#defunct: %d\n" $(ps -ax | grep defunct | wc -l)
 
