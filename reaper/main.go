@@ -21,14 +21,14 @@ func main() {
 	for {
 		cmd := exec.Command("/bin/reload-haproxy")
 
-		if out, err := cmd.CombinedOutput(); err != nil {
+		if _, err := cmd.CombinedOutput(); err != nil {
 			fmt.Fprintf(os.Stderr, "cmd.CombinedOutput() pid == %v\n", cmd.Process.Pid)
 			panic(err.Error())
 		} else {
-			fmt.Println(string(out))
+			// fmt.Println(string(out))
 		}
 
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
