@@ -3,8 +3,8 @@
 set -eu
 
 for i in $(seq 1 10); do
-    curl -X POST --user dataplaneapi:mypassword \
+    curl --silent -X POST --user dataplaneapi:mypassword \
 	 -H "Content-Type: application/json" \
 	 -d "{\"name\": \"test_frontend_${i}\", \"default_backend\": \"app\", \"mode\": \"http\", \"maxconn\": 2000}" \
-	 "http://localhost:5555/v2/services/haproxy/configuration/frontends?version=$i"
+	 "http://localhost:5555/v2/services/haproxy/configuration/frontends?version=$i" | jq -M
 done
