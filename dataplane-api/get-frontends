@@ -1,0 +1,5 @@
+#!/bin/bash
+
+curl --silent -X GET --user dataplaneapi:mypassword \
+     -H "Content-Type: application/json" \
+     "http://localhost:5555/v2/services/haproxy/configuration/frontends" | jq -M
