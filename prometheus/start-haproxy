@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -x
+
+while :
+do
+    /reload-haproxy
+    sleep 5
+done
