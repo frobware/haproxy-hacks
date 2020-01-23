@@ -2,9 +2,9 @@
 
 set -o nounset
 
-config_file=/var/lib/haproxy/conf/haproxy.config
-config_file=/etc/haproxy/haproxy.cfg
-pid_file=/var/run/haproxy.pid
+: ${CONFIG_FILE:=$PWD/haproxy.cfg}
+
+pid_file=/var/tmp/haproxy/run/haproxy.pid
 readonly max_wait_time=30
 readonly timeout_opts="-m 1 --connect-timeout 1"
 readonly numeric_re='^[0-9]+$'
@@ -71,15 +71,15 @@ echo "OLD_PIDS: $old_pids"
 
 reload_status=0
 if [ -n "$old_pids" ]; then
-  /usr/sbin/haproxy -f $config_file -p $pid_file -x  /var/lib/haproxy/run/haproxy.sock -sf $old_pids
+  haproxy -f $CONFIG_FILE -p $pid_file -x  /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
   reload_status=$?
 else
-  /usr/sbin/haproxy -f $config_file -p $pid_file
+  haproxy -f $CONFIG_FILE -p $pid_file
   reload_status=$?
 fi
 
 [ $reload_status -ne 0 ] && exit $reload_status
 #haproxyHealthCheck
-ps -ax
+# ps -ax
 #printf "#defunct: %d\n" $(ps -ax | grep defunct | wc -l)
 
