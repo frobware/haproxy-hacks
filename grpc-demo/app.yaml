@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: yages
+  labels:
+    app: yages
+spec:
+  replicas: 1
+  template:
+    metadata:
+      name: yages
+      labels:
+        app: yages
+    spec:
+      containers:
+      - name: grpcsrv
+        image: quay.io/mhausenblas/yages:0.1.0
+        env:
+        - name: YAGES_BIND
+          value: "0.0.0.0:8443"
+        restartPolicy: Always
+  selector:
+    matchLabels:
+      app: yages
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yages
+spec:
+  ports:
+  - name: https
+    protocol: TCP
+    port: 443
+    targetPort: 8443
+  selector:
+    app: yages
