@@ -1,0 +1,130 @@
+#+PROPERTY: header-args:sh :prologue exec 2>&1 :epilogue :
+
+#+TITLE: gRPC demo & HTTP/2 conformance check
+
+* A simple gRPC echo server
+
+  - Demonstrate end-to-end gRPC support in OpenShift 4.4+
+
+** Deploy our app
+
+   Yet Another [gRPC] echo server (yages)
+
+   - https://github.com/mhausenblas/yages
+
+   #+BEGIN_SRC sh :results value
+   oc apply -f app.yaml
+   #+END_SRC
+
+   #+RESULTS:
+   | deployment.apps/yages | configured |
+   | service/yages         | unchanged  |
+
+** What do we have deployed?
+   #+BEGIN_SRC sh :results value pp
+   oc get all -l app=yages
+   #+END_SRC
+
+   #+RESULTS:
+   : NAME                         READY   STATUS    RESTARTS   AGE
+   : pod/yages-7565476db9-t76gk   1/1     Running   0          8h
+   : 
+   : NAME                    READY   UP-TO-DATE   AVAILABLE   AGE
+   : deployment.apps/yages   1/1     1            1           8h
+   : 
+   : NAME                               DESIRED   CURRENT   READY   AGE
+   : replicaset.apps/yages-7565476db9   1         1         1       8h
+
+** And from inside the cluster
+
+=gump= is a container that has =grpcurl=, a command-line tool to
+interact with gRPC servers:
+
+   $ oc run -it --rm grpcurl --restart=Never --image=quay.io/mhausenblas/gump:0.1 -- sh
+
+*** Access the gRPC server from with the cluster
+grpcurl --plaintext yages:443 list
+grpcurl --plaintext yages:443 describe
+grpcurl --plaintext yages:443 describe yages.Echo.Reverse
+grpcurl --plaintext -d  '{ "text" : "some text here" }' yages:443 yages.Echo.Reverse
+
+** Access from outside the cluster
+*** Expose a route
+    #+BEGIN_SRC sh :results value pp
+    oc apply -f route.yaml
+    #+END_SRC
+
+    #+RESULTS:
+    : route.route.openshift.io/yages created
+
+*** Show routes
+    #+BEGIN_SRC sh :results value pp
+    oc get routes
+    #+END_SRC
+
+*** Examples
+    #+BEGIN_SRC sh :results pp
+    grpcurl -v -insecure yages-default.apps.amcdermo-202002-23-1827.devcluster.openshift.com:443 list
+    #+END_SRC
+
+    #+RESULTS:
+    : grpc.reflection.v1alpha.ServerReflection
+    : yages.Echo
+
+    #+BEGIN_SRC sh :results value pp
+    grpcurl -v -insecure yages-default.apps.amcdermo-202002-23-1827.devcluster.openshift.com:443 describe yages.Echo
+    #+END_SRC
+
+    #+RESULTS:
+    : yages.Echo is a service:
+    : service Echo {
+    :   rpc Ping ( .yages.Empty ) returns ( .yages.Content );
+    :   rpc Reverse ( .yages.Content ) returns ( .yages.Content );
+    : }
+
+    #+BEGIN_SRC sh :results value pp
+    grpcurl -v -insecure yages-default.apps.amcdermo-202002-23-1827.devcluster.openshift.com:443 yages.Echo.Ping
+    #+END_SRC
+
+    #+RESULTS:
+    #+begin_example
+
+    Resolved method descriptor:
+    rpc Ping ( .yages.Empty ) returns ( .yages.Content );
+
+    Request metadata to send:
+    (empty)
+
+    Response headers received:
+    content-type: application/grpc
+    set-cookie: 406fcd5a0398461e0127b171aaec1fd1=241f027cba62b48bcf26c51f8cbe0432; path=/; HttpOnly; Secure
+
+    Response contents:
+    {
+      "text": "pong"
+    }
+
+    Response trailers received:
+    (empty)
+    Sent 0 requests and received 1 response
+    #+end_example
+
+    Note: Caveats
+
+    I had to modify the template to allow http/2 to run without TLS
+    when terminating at the "edge".
+
+* h2spec
+
+  - h2spec is a conformance testing tool for HTTP/2.
+  - https://github.com/summerwind/h2spec
+
+** Invoke spec from outside the cluster
+   - Run http/2 conformance check against the cluster
+
+   #+BEGIN_SRC sh :results value
+   h2spec http2 -k -p 443 -h ac6b3945cffb64fd1b2f87e8e78c76e0-771651870.us-east-1.elb.amazonaws.com -t
+   #+END_SRC sh
+
+*** Upstream issue
+   https://github.com/haproxy/haproxy/issues/471

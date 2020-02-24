@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Route
+metadata:
+  name: yages
+  annotations:
+    haproxy.router.openshift.io/h2-without-tls: "true"
+spec:
+  to:
+    kind: Service
+    name: yages
+  tls:
+    termination: edge
+  selector:
+    app: yages
