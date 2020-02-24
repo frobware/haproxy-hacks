@@ -43,10 +43,10 @@ interact with gRPC servers:
    $ oc run -it --rm grpcurl --restart=Never --image=quay.io/mhausenblas/gump:0.1 -- sh
 
 *** Access the gRPC server from with the cluster
-grpcurl --plaintext yages:443 list
-grpcurl --plaintext yages:443 describe
-grpcurl --plaintext yages:443 describe yages.Echo.Reverse
-grpcurl --plaintext -d  '{ "text" : "some text here" }' yages:443 yages.Echo.Reverse
+- grpcurl --plaintext yages:443 list
+- grpcurl --plaintext yages:443 describe
+- grpcurl --plaintext yages:443 describe yages.Echo.Reverse
+- grpcurl --plaintext -d  '{ "text" : "some text here" }' yages:443 yages.Echo.Reverse
 
 ** Access from outside the cluster
 *** Expose a route
