@@ -1,0 +1,65 @@
+* HA Proxy reload; how to go from 30s -> 1s
+** HA-Proxy reload optimisation merged upstream
+
+https://git.haproxy.org/?p=haproxy.git;a=commit;h=f91ac19299fe216a793ba6550dca06b688b31549
+
+** It may get an official backport to 2.0
+
+https://www.mail-archive.com/haproxy@formilux.org/msg36536.html
+
+** I have a PR that carries this patch in a build of haproxy-2.1
+
+https://github.com/openshift/router/pull/89
+
+* Live Demo || Friday 13th
+
+** Using haproxy-2.1 we see the following reload time:
+
+   #+BEGIN_SRC sh :results pp
+   (cd ~/git.haproxy.org/haproxy-2.1; git log -n 1 | head -n 5)
+   #+END_SRC
+
+   #+BEGIN_SRC sh :results pp
+    ~/git.haproxy.org/haproxy-2.1/haproxy -v | head -n 1
+   #+END_SRC
+
+** Using haproxy-2.1 with the optimisation patch
+
+   #+BEGIN_SRC sh :results pp
+   (cd ~/git.haproxy.org/haproxy-2.1-with-optim-patch; git log -n 1 | head -n 5)
+   #+END_SRC
+
+   #+BEGIN_SRC sh :results value
+   ~/git.haproxy.org/haproxy-2.1-with-optim-patch/haproxy -v | head -n 1
+   #+END_SRC
+
+** How many backend/routes in our config?
+
+   #+BEGIN_SRC sh :results pp
+   wc -l var/lib/haproxy/conf/os_http_be.map
+   #+END_SRC
+
+   #+BEGIN_SRC sh :results pp
+   grep '^backend' ./var/lib/haproxy/conf/haproxy.config  |wc -l
+   #+END_SRC
+
+** Going to 13K routes
+
+   #+BEGIN_SRC sh :results pp
+   ./make-additional-backends.bash >> var/lib/haproxy/conf/haproxy.config
+   ./make-additional-map-entries.bash  >> var/lib/haproxy/conf/os_http_be.map
+   #+END_SRC
+
+   #+BEGIN_SRC sh :results pp
+   wc -l var/lib/haproxy/conf/os_http_be.map
+   #+END_SRC
+
+   #+RESULTS:
+   : 13000 var/lib/haproxy/conf/os_http_be.map
+
+   #+BEGIN_SRC sh :results pp
+   grep '^backend' ./var/lib/haproxy/conf/haproxy.config  |wc -l
+   #+END_SRC
+
+   #+RESULTS:
+   : 13010
