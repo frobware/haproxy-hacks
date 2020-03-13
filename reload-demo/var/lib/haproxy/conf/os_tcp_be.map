@@ -1,0 +1,6 @@
+^thanos-querier-openshift-monitoring\.apps\.amcdermo-202003-13-0951\.devcluster\.openshift\.com(:[0-9]+)?(/.*)?$ be_secure:openshift-monitoring:thanos-querier
+^prometheus-k8s-openshift-monitoring\.apps\.amcdermo-202003-13-0951\.devcluster\.openshift\.com(:[0-9]+)?(/.*)?$ be_secure:openshift-monitoring:prometheus-k8s
+^oauth-openshift\.apps\.amcdermo-202003-13-0951\.devcluster\.openshift\.com(:[0-9]+)?(/.*)?$ be_tcp:openshift-authentication:oauth-openshift
+^grafana-openshift-monitoring\.apps\.amcdermo-202003-13-0951\.devcluster\.openshift\.com(:[0-9]+)?(/.*)?$ be_secure:openshift-monitoring:grafana
+^console-openshift-console\.apps\.amcdermo-202003-13-0951\.devcluster\.openshift\.com(:[0-9]+)?(/.*)?$ be_secure:openshift-console:console
+^alertmanager-main-openshift-monitoring\.apps\.amcdermo-202003-13-0951\.devcluster\.openshift\.com(:[0-9]+)?(/.*)?$ be_secure:openshift-monitoring:alertmanager-main
