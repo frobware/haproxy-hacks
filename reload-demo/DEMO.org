@@ -89,3 +89,16 @@ https://github.com/openshift/router/pull/89
 
    #+RESULTS:
    : 13010
+
+* Summary
+
+** Using unpatched haproxy
+
+  Time to reload 3K routes: 1.9s
+  Time to reload 13K routes: 47s
+
+** Using patched haproxy
+
+  Time to reload 3K routes: 0.3s
+  Time to reload 13K routes: 1.1s
+
