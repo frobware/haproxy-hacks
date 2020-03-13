@@ -19,9 +19,19 @@ https://github.com/openshift/router/pull/89
    (cd ~/git.haproxy.org/haproxy-2.1; git log -n 1 | head -n 5)
    #+END_SRC
 
+   #+RESULTS:
+   : commit ce757fa24f47852ccf0308193e546b585445f7e3
+   : Author: Christopher Faulet <cfaulet@haproxy.com>
+   : Date:   Fri Feb 21 10:20:46 2020 +0100
+   : 
+   :     BUG/MAJOR: http-ana: Always abort the request when a tarpit is triggered
+
    #+BEGIN_SRC sh :results pp
     ~/git.haproxy.org/haproxy-2.1/haproxy -v | head -n 1
    #+END_SRC
+
+   #+RESULTS:
+   : HA-Proxy version 2.1.3-ce757f-13 2020/02/21 - https://haproxy.org/
 
 ** haproxy-2.1 with the optimisation build
 
@@ -29,9 +39,19 @@ https://github.com/openshift/router/pull/89
    (cd ~/git.haproxy.org/haproxy-2.1-with-optim-patch; git log -n 1 | head -n 5)
    #+END_SRC
 
+   #+RESULTS:
+   : commit 8c7e0f0d60841577b0acd5c8d5344de32ee137ac
+   : Author: Carl Henrik Lunde <carl.henrik.lunde@sparebank1.no>
+   : Date:   Thu Feb 27 16:45:50 2020 +0100
+   : 
+   :     OPTIM: startup: fast unique_id allocation for acl.
+
    #+BEGIN_SRC sh :results value
    ~/git.haproxy.org/haproxy-2.1-with-optim-patch/haproxy -v | head -n 1
    #+END_SRC
+
+   #+RESULTS:
+   : HA-Proxy version 2.1.3-8c7e0f-14 2020/03/13 - https://haproxy.org/
 
 ** How many backend/routes in our config?
 
