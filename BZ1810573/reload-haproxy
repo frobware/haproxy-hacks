@@ -1,0 +1,29 @@
+#!/bin/bash
+
+set -o nounset
+
+topdir="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd -P)"
+
+mkdir -p /var/tmp/haproxy/run
+
+config_file=$topdir/haproxy.cfg
+pid_file=/var/tmp/haproxy/run/haproxy.pid
+
+#: ${HAPROXY:=$topdir/haproxy18-1.8.17-3.el7.x86_64/haproxy}
+: ${HAPROXY:=$topdir/haproxy18-1.8.17-4.el7.x86_64/haproxy}
+
+old_pids=$(pidof haproxy)
+echo $old_pids
+
+if [ -n "$old_pids" ]; then
+    $HAPROXY -f $config_file -p $pid_file -x /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
+    reload_status=$?
+else
+    $HAPROXY -v
+    $HAPROXY -f $config_file -p $pid_file
+    reload_status=$?
+    old_pids=$(pidof haproxy)
+    echo $old_pids
+fi
+
+exit $reload_status
