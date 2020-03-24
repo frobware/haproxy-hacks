@@ -9,8 +9,7 @@ mkdir -p /var/tmp/haproxy/run
 config_file=$topdir/haproxy.cfg
 pid_file=/var/tmp/haproxy/run/haproxy.pid
 
-#: ${HAPROXY:=$topdir/haproxy18-1.8.17-3.el7.x86_64/haproxy}
-: ${HAPROXY:=$topdir/haproxy18-1.8.17-4.el7.x86_64/haproxy}
+: ${HAPROXY:=$topdir/haproxy18-1.8.23-2.el7.x86_64/haproxy}
 
 old_pids=$(pidof haproxy)
 echo $old_pids

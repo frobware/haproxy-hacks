@@ -15,3 +15,4 @@ grab_haproxy_bin() {
 
 grab_haproxy_bin http://download.eng.bos.redhat.com/brewroot/vol/rhel-7/packages/haproxy/1.8.17/3.el7/x86_64/haproxy18-1.8.17-3.el7.x86_64.rpm
 grab_haproxy_bin https://people.redhat.com/kwalker/repos/bz1810573/x86_64/Packages/haproxy18-1.8.17-4.el7.x86_64.rpm
+grab_haproxy_bin https://github.com/frobware/haproxy-hacks/raw/master/RPMs/haproxy18-1.8.23-2.el7.x86_64.rpm
