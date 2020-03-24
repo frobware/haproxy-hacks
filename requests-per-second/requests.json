@@ -1,0 +1,15 @@
+[
+  {
+    "scheme": "http",
+    "host": "127.0.0.1",
+    "port": 4242,
+    "method": "GET",
+    "path": "/",
+    "delay": {
+      "min": 0,
+      "max": 2000
+    },
+    "keep-alive-requests": 100,
+    "clients": 200
+  },
+]
