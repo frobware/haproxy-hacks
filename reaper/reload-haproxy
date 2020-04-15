@@ -5,7 +5,7 @@ set -o nounset
 config_file=/var/lib/haproxy/conf/haproxy.config
 config_file=/etc/haproxy/haproxy.cfg
 pid_file=/var/run/haproxy.pid
-readonly max_wait_time=30
+readonly max_wait_time=0
 readonly timeout_opts="-m 1 --connect-timeout 1"
 readonly numeric_re='^[0-9]+$'
 
@@ -40,7 +40,7 @@ function haproxyHealthCheck() {
         return 1
       fi
 
-      sleep 0.0
+      sleep 0.1
       retries=$((retries + 1))
     done
     return 0
@@ -60,15 +60,16 @@ function haproxyHealthCheck() {
       return 1
     fi
 
-    sleep 0.0
+    sleep 0.1
     retries=$((retries + 1))
   done
 }
 
 
 old_pids=$(pidof haproxy)
-#echo "OLD_PIDS: $old_pids"
+echo "OLD_PIDS: $old_pids"
 
+set -x
 reload_status=0
 if [ -n "$old_pids" ]; then
   /usr/sbin/haproxy -f $config_file -p $pid_file -x  /var/lib/haproxy/run/haproxy.sock -sf $old_pids
@@ -79,6 +80,10 @@ else
 fi
 
 [ $reload_status -ne 0 ] && exit $reload_status
+
 haproxyHealthCheck
+
+ps -ax | grep defunct
 printf "#defunct: %d\n" $(ps -ax | grep defunct | wc -l)
 
+[ $reload_status -ne 0 ] && exit $reload_status
