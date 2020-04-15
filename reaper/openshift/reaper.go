@@ -1,12 +1,11 @@
-package main
+// +build linux
+
+package openshift
 
 import (
 	"bufio"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -16,23 +15,6 @@ import (
 
 	"k8s.io/klog"
 )
-
-func main() {
-	StartPeriodicReaper(6)
-
-	for {
-		cmd := exec.Command("/bin/reload-haproxy")
-
-		if out, err := cmd.CombinedOutput(); err != nil {
-			fmt.Fprintf(os.Stderr, "cmd.CombinedOutput() err=%v, out=%s\n", err, out)
-			//panic(err.Error())
-		} else {
-			fmt.Printf("cmd with pid %v completed\n%s\n", cmd.Process.Pid, out)
-		}
-
-		time.Sleep(1000 * time.Millisecond)
-	}
-}
 
 // parseProcForZombies parses the current procfs mounted at /proc
 // to find proccess in the zombie state.
@@ -51,7 +33,7 @@ func parseProcForZombies() ([]int, error) {
 		stateFilePath := filepath.Join("/proc", file.Name(), "status")
 		fd, err := os.Open(stateFilePath)
 		if err != nil {
-			klog.V(1).Infof("Failed to open %q: %v", stateFilePath, err)
+			//klog.V(4).Infof("Failed to open %q: %v", stateFilePath, err)
 			continue
 		}
 		defer fd.Close()
@@ -76,26 +58,26 @@ func parseProcForZombies() ([]int, error) {
 // have an oppurtunity to reap their children within `period` seconds.
 func StartPeriodicReaper(period int64) {
 	if os.Getpid() == 1 {
-		log.Printf("Launching periodic reaper\n")
+		klog.V(4).Infof("Launching periodic reaper")
 		go func() {
 			var zs []int
 			var err error
 			for {
 				for _, z := range zs {
-					klog.V(1).Infof("Found a zombie: %d", z)
+					klog.V(4).Infof("Found a zombie: %d", z)
 					cpid, err := syscall.Wait4(z, nil, syscall.WNOHANG, nil)
 					if err != nil {
-						log.Printf("Zombie reap error: %v\n", err)
+						klog.V(4).Infof("Zombie reap error: %v", err)
 					} else {
-						log.Printf("Zombie reaped: %d\n", cpid)
+						klog.V(4).Infof("Zombie reaped: %d", cpid)
 					}
 				}
 				zs, err = parseProcForZombies()
 				if err != nil {
-					log.Println(err.Error())
+					klog.V(4).Infof(err.Error())
 					continue
 				}
-				log.Printf("Sleeping for %v seconds\n", period)
+				klog.V(4).Infof("Sleeping for %v seconds", period)
 				time.Sleep(time.Duration(period) * time.Second)
 			}
 		}()
@@ -106,14 +88,14 @@ func StartPeriodicReaper(period int64) {
 // that has pid 1.
 func StartReaper() {
 	if os.Getpid() == 1 {
-		klog.V(1).Infof("Launching reaper")
+		klog.V(4).Infof("Launching reaper")
 		go func() {
 			sigs := make(chan os.Signal, 1)
 			signal.Notify(sigs, syscall.SIGCHLD)
 			for {
 				// Wait for a child to terminate
 				sig := <-sigs
-				klog.V(1).Infof("Signal received: %v", sig)
+				klog.V(4).Infof("Signal received: %v", sig)
 				for {
 					// Reap processes
 					cpid, _ := syscall.Wait4(-1, nil, syscall.WNOHANG, nil)
@@ -121,7 +103,7 @@ func StartReaper() {
 						break
 					}
 
-					klog.V(1).Infof("Reaped process with pid %d", cpid)
+					klog.V(4).Infof("Reaped process with pid %d", cpid)
 				}
 			}
 		}()
