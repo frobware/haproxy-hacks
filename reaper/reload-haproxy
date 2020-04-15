@@ -69,7 +69,6 @@ function haproxyHealthCheck() {
 old_pids=$(pidof haproxy)
 echo "OLD_PIDS: $old_pids"
 
-set -x
 reload_status=0
 if [ -n "$old_pids" ]; then
   /usr/sbin/haproxy -f $config_file -p $pid_file -x  /var/lib/haproxy/run/haproxy.sock -sf $old_pids
@@ -84,6 +83,6 @@ fi
 haproxyHealthCheck
 
 ps -ax | grep defunct
-printf "#defunct: %d\n" $(ps -ax | grep defunct | wc -l)
+printf "#defunct %d\n" $(ps -ax | grep defunct | wc -l)
 
 [ $reload_status -ne 0 ] && exit $reload_status
