@@ -102,3 +102,12 @@ https://github.com/openshift/router/pull/89
   Time to reload 3K routes: 0.3s
   Time to reload 13K routes: 1.1s
 
+
+* Results
+
+Reload time in seconds
+
+| #Routes | 2.0.13 reload(s) | 2.0.14 reload(s) |
+|---------+------------------+------------------|
+|     300 |              1.7 |              0.2 |
+|   13000 |             33.0 |              0.8 |
