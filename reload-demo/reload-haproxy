@@ -7,11 +7,11 @@ set -o nounset
 [ -f $CONFIG_FILE ] || exit 1
 
 function so_slow() {
-    PATH=$HOME/git.haproxy.org/haproxy-2.1:$PATH
+    PATH=/usr/local/haproxy-2.0.13/bin:$PATH
 }
 
 function so_fast() {
-    PATH=$HOME/git.haproxy.org/haproxy-2.1-with-optim-patch:$PATH
+    PATH=/usr/local/haproxy-2.0.14/bin:$PATH
 }
 
 so_fast
