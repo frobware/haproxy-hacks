@@ -1,0 +1,6 @@
+#!/bin/bash
+
+set -o xtrace
+
+make test.yaml
+oc apply -f ./test.yaml
