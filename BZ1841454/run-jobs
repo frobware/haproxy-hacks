@@ -17,4 +17,4 @@ for i in $(seq 1 $N); do
 done
 
 parallel --eta --bar --keep-order --joblog "${jobdir}/joblog.dat" --jobs "${P:-200}" < "${jobdir}/jobs" > /dev/null || true
-./analyze-results "$jobdir"
+./analyze-results "$jobdir" | tee "$jobdir/results.txt"
