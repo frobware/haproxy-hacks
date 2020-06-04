@@ -60,20 +60,16 @@ $go_server
           - name: GO111MODULE
             value: "auto"
           - name: GOCACHE
-            value: "/workdir"
+            value: "/tmp"
           volumeMounts:
           - name: src-volume
             mountPath: /go/src
-          - name: tmp
-            mountPath: /var/run
           - name: workdir
             mountPath: /workdir
         volumes:
         - name: src-volume
           configMap:
             name: src-config
-        - name: tmp
-          emptyDir: {}
         - name: workdir
           emptyDir: {}
         containers:
@@ -86,15 +82,17 @@ $go_server
           volumeMounts:
           - name: workdir
             mountPath: /workdir
-          - name: tmp
-            mountPath: /var/run
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 3
         volumes:
         - name: src-volume
           configMap:
             name: src-config
         - name: workdir
-          emptyDir: {}
-        - name: tmp
           emptyDir: {}
     selector:
       matchLabels:
