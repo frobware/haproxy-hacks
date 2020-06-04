@@ -2,14 +2,19 @@
 
 set -eu
 
-host=$(oc get routes bz1841454-edge -o json | jq -r '.spec.host')
-: ${N:=1000}
-rm -rf results/$N
-mkdir -p results/$N
+: "${RESULTSDIR:=results}"
+: "${N:=1000}"
+
+date="$(date +%Y-%m-%d-%H%M%S | sed -e 's/ /-/g' -e 's/:/-/g')"
+jobdir="${RESULTSDIR}/${date}---${N}"
+host="$(oc get routes bz1841454-edge -o json | jq -r '.spec.host')"
+
+rm -rf "$jobdir"
+mkdir -p "$jobdir"
 
 for i in $(seq 1 $N); do
-    echo "curl -k -m ${TIMEOUT:-10} -X POST -H 'Content-Type:application/json' --data @images.json https://$host" >> results/$N/jobs
+    echo "curl -i -v --output ${jobdir}/curl-output-$i.stdout -k -m ${TIMEOUT:-10} ${CURLARGS:-} -X POST -H 'Content-Type:application/json' --data @${POSTDATA:-images-small.json} https://$host 2> ${jobdir}/curl-output-$i.stderr" >> "${jobdir}/jobs"
 done
 
-parallel --eta --bar --keep-order --joblog results/$N/joblog.dat --jobs ${P:-200} < ./results/$N/jobs > /dev/null || true
-N=${N} ./analyze-results
+parallel --eta --bar --keep-order --joblog "${jobdir}/joblog.dat" --jobs "${P:-200}" < "${jobdir}/jobs" > /dev/null || true
+./analyze-results "$jobdir"

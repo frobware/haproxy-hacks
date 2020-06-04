@@ -52,7 +52,7 @@ func main() {
 		atomic.AddInt64(&clientCon, 1)
 		n := clientCon
 		log.Println("connection", n, r.RemoteAddr)
-		_, err := ioutil.ReadAll(r.Body)
+		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -64,7 +64,7 @@ func main() {
 			Headers: r.Header,
 			Params:  r.URL.Query(),
 			Auth:    r.URL.User,
-			// Body:    string(bytes),
+			Body:    string(bytes),
 		}
 
 		resp, err := json.MarshalIndent(&rs, "", "\t")
