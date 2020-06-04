@@ -3,14 +3,14 @@
 set -eu
 set -o pipefail
 
-: ${DATAFILE:=results/${N:-1000}/joblog.dat}
+datafile=${1:?}/joblog.dat
 
-echo "Analyzing ${DATAFILE}"
+echo "Analyzing ${datafile}"
 
 echo "List of curl requests that exceeded the timeout:"
 sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .separator "\t"
-.import $DATAFILE results
+.import $datafile results
 .headers on
 select Seq,Starttime,JobRuntime,Receive,Exitval from results where Exitval != 0 and Receive == 0;
 EOF
@@ -19,7 +19,7 @@ echo
 echo "List of curl requests that didn't complete:"
 sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .separator "\t"
-.import $DATAFILE results
+.import $datafile results
 .headers on
 select Seq,Starttime,JobRuntime,Receive,Exitval from results where Exitval != 0 and Receive != 0;
 EOF
@@ -29,7 +29,7 @@ echo "curl failures:"
 sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .separator "\t"
 .import curl-error-codes.txt exitcodes
-.import $DATAFILE results
+.import $datafile results
 .headers on
 select Seq,Starttime,JobRuntime,Receive,Exitval,message from results inner join exitcodes on results.Exitval = exitcodes.code;
 EOF
@@ -38,7 +38,7 @@ echo
 echo "count(curl requests that exceeded the timeout):"
 sqlite3 <<EOF
 .separator "\t"
-.import $DATAFILE results
+.import $datafile results
 select count(*) from results where Exitval != 0 and Receive == 0;
 EOF
 
@@ -46,7 +46,7 @@ echo
 echo "count(curl requests that didn't complete):"
 sqlite3 <<EOF
 .separator "\t"
-.import $DATAFILE results
+.import $datafile results
 select count(*) from results where Exitval != 0 and Receive != 0;
 EOF
 
@@ -54,7 +54,7 @@ echo
 echo "count(failed requests): "
 sqlite3 <<EOF
 .separator "\t"
-.import $DATAFILE results
+.import $datafile results
 select count(*) from results where Exitval != 0;
 EOF
 
@@ -62,7 +62,7 @@ echo
 echo "count(successful requests): "
 sqlite3 <<EOF
 .separator "\t"
-.import $DATAFILE results
+.import $datafile results
 select count(*) from results where Exitval == 0;
 EOF
 
@@ -70,7 +70,7 @@ echo
 echo "execution time (seconds) for successful requests: "
 sqlite3 <<EOF
 .separator "\t"
-.import $DATAFILE results
+.import $datafile results
 .headers on
 select min(JobRuntime),max(JobRuntime),round(avg(JobRuntime),3) from results where Exitval == 0;
 EOF
