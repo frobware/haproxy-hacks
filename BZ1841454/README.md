@@ -6,7 +6,7 @@ I created some scripts to try and reproduce:
 
 The general gist is that we run a server in a pod that will echo the
 headers and the payload back to the client. The curl client sends
-images.json as a application/json payload.
+[a json payload](images.json) as part of the request.
   
 ## Setup/Deploy
 
