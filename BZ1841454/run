@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+
+for i in $(seq 1 ${R:-10}); do
+    CURLARGS=${CURLARGS:-"-f"} POSTDATA=${POSTDATA:-"images.json"} TIMEOUT=${TIMEOUT:-15} P=${P:-200} N=${N:-1000} ./run-jobs
+done
