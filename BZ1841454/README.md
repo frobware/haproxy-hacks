@@ -22,11 +22,6 @@ is inferred). Each invocation of curl is expected to complete within
 10s.
 
     $ TIMEOUT=10 N=1000 P=200 ./run-jobs
-
-## Analayzing the results
-
-    $ N=1000 ./analyze-results
-
     count(curl requests that exceeded the timeout):
     162
 
