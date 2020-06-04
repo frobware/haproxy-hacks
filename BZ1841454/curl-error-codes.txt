@@ -1,0 +1,83 @@
+code	message
+1	Unsupported protocol. This build of curl has no support for this protocol.
+2	Failed to initialize.
+3	URL malformed.
+4	A feature was not enabled.
+5	Couldn't resolve proxy.
+6	Couldn't resolve host.
+7	Failed to connect to host.
+8	Weird server reply.
+9	FTP access denied.
+10	FTP accept failed.
+11	FTP weird PASS reply.
+12	FTP session timeout.
+13	FTP weird PASV reply.
+14	FTP weird 227 format.
+15	FTP can't get host.
+16	HTTP/2 error. A problem was detected in the HTTP2 framing layer.
+17	FTP couldn't set binary.
+18	Partial file. Only a part of the file was transferred.
+19	FTP couldn't download/access the given file.
+21	FTP quote error.
+22	HTTP page not retrieved. The requested url was not found.
+23	Write error.
+25	FTP couldn't STOR file.
+26	Read error Various reading problems.
+27	Out of memory.
+28	Operation timeout.
+30	FTP PORT failed.
+31	FTP couldn't use REST.
+33	HTTP range error.
+34	HTTP post error.
+35	SSL connect error. The SSL handshaking failed.
+36	Bad download resume.
+37	FILE couldn't read file.
+38	LDAP cannot bind LDAP bind operation failed.
+39	LDAP search failed.
+41	Function not found A required LDAP function was not found.
+42	Aborted by callback.
+43	Internal error.
+45	Interface error.
+47	Too many redirects.
+48	Unknown option specified to libcurl.
+49	Malformed telnet option.
+51	The peer's SSL certificate or SSH MD5 fingerprint was not OK.
+52	The server didn't reply anything.
+53	SSL crypto engine not found.
+54	Cannot set SSL crypto engine as default.
+55	Failed sending network data.
+56	Failure in receiving network data.
+58	Problem with the local certificate.
+59	Couldn't use specified SSL cipher.
+60	Peer certificate cannot be authenticated with known CA certificates.
+61	Unrecognized transfer encoding.
+62	Invalid LDAP URL.
+63	Maximum file size exceeded.
+64	Requested FTP SSL level failed.
+65	Sending the data requires a rewind that failed.
+66	Failed to initialise SSL Engine.
+67	login failed.
+68	File not found on TFTP server.
+69	Permission problem on TFTP server.
+70	Out of disk space on TFTP server.
+71	Illegal TFTP operation.
+72	Unknown TFTP transfer ID.
+73	File already exists (TFTP).
+74	No such user (TFTP).
+75	Character conversion failed.
+76	Character conversion functions required.
+77	Problem with reading the SSL CA cert (path? access rights?).
+78	The resource referenced in the URL does not exist.
+79	An unspecified error occurred during the SSH session.
+80	Failed to shut down the SSL connection.
+82	Could not load CRL file.
+83	Issuer check failed (added in 7190).
+84	The FTP PRET command failed.
+85	RTSP: mismatch of CSeq numbers.
+86	RTSP: mismatch of Session Identifiers.
+87	unable to parse FTP file list.
+88	FTP chunk callback reported error.
+89	No connection available, the session will be queued.
+90	SSL public key does not matched pinned public key.
+91	Invalid SSL certificate status.
+92	Stream error in HTTP/2 framing layer.

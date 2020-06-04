@@ -8,7 +8,7 @@ set -o pipefail
 echo "Analyzing ${DATAFILE}"
 
 echo "List of curl requests that exceeded the timeout:"
-sqlite3 <<EOF | awk '{ print "  ", $0 }' | cat -n
+sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .separator "\t"
 .import $DATAFILE results
 .headers on
@@ -17,11 +17,21 @@ EOF
 
 echo
 echo "List of curl requests that didn't complete:"
-sqlite3 <<EOF | awk '{ print "  ", $0 }' | cat -n
+sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .separator "\t"
 .import $DATAFILE results
 .headers on
 select Seq,Starttime,JobRuntime,Receive,Exitval from results where Exitval != 0 and Receive != 0;
+EOF
+
+echo
+echo "curl failures:"
+sqlite3 <<EOF | awk '{ print "  ", $0 }'
+.separator "\t"
+.import curl-error-codes.txt exitcodes
+.import $DATAFILE results
+.headers on
+select Seq,Starttime,JobRuntime,Receive,Exitval,message from results inner join exitcodes on results.Exitval = exitcodes.code;
 EOF
 
 echo
