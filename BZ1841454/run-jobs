@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-set -u
+set -eu
 
 host=$(oc get routes bz1841454-edge -o json | jq -r '.spec.host')
 : ${N:=1000}
@@ -8,8 +8,8 @@ rm -rf results/$N
 mkdir -p results/$N
 
 for i in $(seq 1 $N); do
-    echo "curl -f -k -m ${TIMEOUT:-10} -X POST -H 'Content-Type:application/json' --data @images.json https://$host" >> results/$N/jobs
+    echo "curl -k -m ${TIMEOUT:-10} -X POST -H 'Content-Type:application/json' --data @images.json https://$host" >> results/$N/jobs
 done
 
-parallel --eta --bar --joblog results/$N/joblog.dat --jobs ${P:-200} < ./results/$N/jobs > /dev/null || true
+parallel --eta --bar --keep-order --joblog results/$N/joblog.dat --jobs ${P:-200} < ./results/$N/jobs > /dev/null || true
 N=${N} ./analyze-results
