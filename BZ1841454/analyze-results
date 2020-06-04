@@ -7,7 +7,7 @@ set -o pipefail
 
 echo "Analyzing ${DATAFILE}"
 
-echo "curl requests that exceeded the timeout:"
+echo "List of curl requests that exceeded the timeout:"
 sqlite3 <<EOF | awk '{ print "  ", $0 }' | cat -n
 .separator "\t"
 .import $DATAFILE results
@@ -16,7 +16,7 @@ select Seq,Starttime,JobRuntime,Receive,Exitval from results where Exitval != 0 
 EOF
 
 echo
-echo "curl requests that didn't complete:"
+echo "List of curl requests that didn't complete:"
 sqlite3 <<EOF | awk '{ print "  ", $0 }' | cat -n
 .separator "\t"
 .import $DATAFILE results
@@ -54,4 +54,13 @@ sqlite3 <<EOF
 .separator "\t"
 .import $DATAFILE results
 select count(*) from results where Exitval == 0;
+EOF
+
+echo
+echo "execution time (seconds) for successful requests: "
+sqlite3 <<EOF
+.separator "\t"
+.import $DATAFILE results
+.headers on
+select min(JobRuntime),max(JobRuntime),round(avg(JobRuntime),3) from results where Exitval == 0;
 EOF
