@@ -48,15 +48,13 @@ $go_server
         labels:
           app: bz1841454
       spec:
-        initContainers:
+        containers:
         - image: golang:1.14
-          name: builder
-          command: ["/bin/bash", "-c"]
-          args:
-          - set -e;
-            cd /go/src;
-            go build -o /workdir/server -x -v -mod=readonly server.go;
+          name: server
+          command: ["go", "run", "/go/src/server.go"]
           env:
+          - name: BUSY_TIMEOUT
+            value: "${BUSY_TIMEOUT:-0}"
           - name: GO111MODULE
             value: "auto"
           - name: GOCACHE
@@ -64,24 +62,6 @@ $go_server
           volumeMounts:
           - name: src-volume
             mountPath: /go/src
-          - name: workdir
-            mountPath: /workdir
-        volumes:
-        - name: src-volume
-          configMap:
-            name: src-config
-        - name: workdir
-          emptyDir: {}
-        containers:
-        - image: golang:1.14
-          name: server
-          command: ["/workdir/server"]
-          env:
-          - name: BUSY_TIMEOUT
-            value: "${BUSY_TIMEOUT:-0}"
-          volumeMounts:
-          - name: workdir
-            mountPath: /workdir
           readinessProbe:
             httpGet:
               path: /healthz
@@ -92,8 +72,6 @@ $go_server
         - name: src-volume
           configMap:
             name: src-config
-        - name: workdir
-          emptyDir: {}
     selector:
       matchLabels:
         app: bz1841454
