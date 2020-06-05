@@ -5,9 +5,11 @@ set -eu
 : "${RESULTSDIR:=results}"
 : "${N:=1000}"
 
+: ${HOST:=$(oc get routes bz1841454-edge -o json | jq -r '.spec.host')}
+
+host="$HOST"
 date="$(date +%Y-%m-%d-%H%M%S | sed -e 's/ /-/g' -e 's/:/-/g')"
 jobdir="${RESULTSDIR}/${date}---${N}"
-host="$(oc get routes bz1841454-edge -o json | jq -r '.spec.host')"
 
 rm -rf "$jobdir"
 mkdir -p "$jobdir"
