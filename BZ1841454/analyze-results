@@ -5,72 +5,84 @@ set -o pipefail
 
 datafile=${1:?}/joblog.dat
 
-echo "Analyzing ${datafile}"
-
-echo "List of curl requests that exceeded the timeout:"
-sqlite3 <<EOF | awk '{ print "  ", $0 }'
-.separator "\t"
-.import $datafile results
-.headers on
-select Seq,Starttime,JobRuntime,Receive,Exitval from results where Exitval != 0 and Receive == 0;
-EOF
-
 echo
 echo "List of curl requests that didn't complete:"
 sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .separator "\t"
 .import $datafile results
 .headers on
-select Seq,Starttime,JobRuntime,Receive,Exitval from results where Exitval != 0 and Receive != 0;
+select seq,starttime,jobruntime,receive,exitval FROM results WHERE exitval != 0 and receive != 0;
 EOF
 
 echo
-echo "curl failures:"
+echo "All Failures:"
 sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .separator "\t"
 .import curl-error-codes.txt exitcodes
 .import $datafile results
 .headers on
-select Seq,Starttime,JobRuntime,Receive,Exitval,message from results inner join exitcodes on results.Exitval = exitcodes.code;
+SELECT CAST(seq AS NUMBER) as seq,
+       starttime,
+       jobruntime,
+       receive,
+       exitval,
+       message
+FROM   results
+INNER JOIN
+      exitcodes ON results.exitval = exitcodes.code
+WHERE exitcodes.code != 0
+ORDER BY seq;
 EOF
 
 echo
-echo "count(curl requests that exceeded the timeout):"
+echo "count(curl requests that started but didn't complete):"
 sqlite3 <<EOF
 .separator "\t"
 .import $datafile results
-select count(*) from results where Exitval != 0 and Receive == 0;
+select count(*) from results where exitval != 0 and receive != 0;
 EOF
 
 echo
-echo "count(curl requests that didn't complete):"
 sqlite3 <<EOF
 .separator "\t"
 .import $datafile results
-select count(*) from results where Exitval != 0 and Receive != 0;
+.import curl-error-codes.txt exitcodes
+.headers on
+.mode line
+SELECT Count(exitval),
+       exitcodes.code,
+       exitcodes.message,
+       printf("%.3f", Avg(jobruntime)) as Avg
+FROM   results
+       inner join exitcodes
+	       ON results.exitval == exitcodes.code
+WHERE  exitval != 0
+GROUP  BY exitval;
 EOF
 
 echo
-echo "count(failed requests): "
-sqlite3 <<EOF
-.separator "\t"
-.import $datafile results
-select count(*) from results where Exitval != 0;
-EOF
-
-echo
-echo "count(successful requests): "
-sqlite3 <<EOF
-.separator "\t"
-.import $datafile results
-select count(*) from results where Exitval == 0;
-EOF
-
-echo
-echo "execution time (seconds) for successful requests: "
+echo "jobtime(s) for successful requests: "
+echo "------------------------------------"
 sqlite3 <<EOF
 .separator "\t"
 .import $datafile results
 .headers on
-select min(JobRuntime),max(JobRuntime),round(avg(JobRuntime),3) from results where Exitval == 0;
+SELECT CAST(Min(jobruntime) AS NUMBER) as Min,
+       CAST(Max(jobruntime) AS NUMBER) as Max,
+       printf("%.3f", Avg(jobruntime)) as Avg
+FROM   results
+WHERE  Exitval == 0;
 EOF
+
+echo
+sqlite3 <<EOF
+.separator "\t"
+.import $datafile results
+.headers on
+SELECT count(*) as FAILURES
+FROM   results
+WHERE  exitval != 0
+EOF
+
+echo
+echo "Result directory: ${1}"
