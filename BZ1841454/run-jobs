@@ -15,7 +15,7 @@ rm -rf "$jobdir"
 mkdir -p "$jobdir"
 
 for i in $(seq 1 $N); do
-    echo "curl -i -v --output ${jobdir}/curl-output-$i.stdout -k -m ${TIMEOUT:-10} ${CURLARGS:-} -X POST -H 'Content-Type:application/json' --data @${POSTDATA:-images-small.json} https://$host 2> ${jobdir}/curl-output-$i.stderr" >> "${jobdir}/jobs"
+    echo "curl -i -v --trace-time --trace-ascii ${jobdir}/curl-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -k -m ${TIMEOUT:-10} ${CURLARGS:-} -X POST -H 'Content-Type:application/json' --data @${POSTDATA:-images-small.json} https://$host 2> ${jobdir}/curl-output-$i.stderr" >> "${jobdir}/jobs"
 done
 
 parallel --eta --bar --keep-order --joblog "${jobdir}/joblog.dat" --jobs "${P:-200}" < "${jobdir}/jobs" > /dev/null || true
