@@ -11,7 +11,7 @@ sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .separator "\t"
 .import $datafile results
 .headers on
-select seq,starttime,jobruntime,receive,exitval FROM results WHERE exitval != 0 and receive != 0;
+select seq,strftime("%H:%M:%f", DATETIME(CAST(starttime AS REAL), 'unixepoch')) AS WALLCLOCK,starttime,jobruntime,receive,exitval FROM results WHERE exitval != 0 and receive != 0;
 EOF
 
 echo
@@ -22,6 +22,7 @@ sqlite3 <<EOF | awk '{ print "  ", $0 }'
 .import $datafile results
 .headers on
 SELECT CAST(seq AS NUMBER) as seq,
+       strftime("%H:%M:%f", DATETIME(CAST(starttime AS REAL), 'unixepoch')) AS WALLCLOCK,
        starttime,
        jobruntime,
        receive,
@@ -49,10 +50,10 @@ sqlite3 <<EOF
 .import curl-error-codes.txt exitcodes
 .headers on
 .mode line
-SELECT Count(exitval),
-       exitcodes.code,
+SELECT Count(exitval) AS count,
+       exitval,
        exitcodes.message,
-       printf("%.3f", Avg(jobruntime)) as Avg
+       printf("%.3f", Avg(jobruntime)) as AvgJobtime
 FROM   results
        inner join exitcodes
 	       ON results.exitval == exitcodes.code
@@ -61,8 +62,8 @@ GROUP  BY exitval;
 EOF
 
 echo
-echo "jobtime(s) for successful requests: "
-echo "------------------------------------"
+echo "jobtime(s) for successful requests"
+echo "----------------------------------"
 sqlite3 <<EOF
 .separator "\t"
 .import $datafile results
