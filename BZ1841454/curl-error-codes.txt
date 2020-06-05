@@ -1,4 +1,5 @@
 code	message
+0	Success
 1	Unsupported protocol. This build of curl has no support for this protocol.
 2	Failed to initialize.
 3	URL malformed.
