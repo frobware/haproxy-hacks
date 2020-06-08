@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"errors"
 	"flag"
 	"fmt"
@@ -79,7 +80,16 @@ func startWorkers(maxWorkers int, done <-chan struct{}, requests <-chan request,
 // error if URL could not be fetched. The caller must call Close() on
 // the reader to avoid resource leaks.
 func (f fetcher) Fetch(URL string) (io.ReadCloser, error) {
-	client := http.Client{}
+	tlsConfig := tls.Config{
+		InsecureSkipVerify: true,
+	}
+
+	client := &http.Client{
+		Timeout: f.FetchTimeout,
+		Transport: &http.Transport{
+			TLSClientConfig: &tlsConfig,
+		},
+	}
 
 	if f.FetchTimeout > 0 {
 		client.Timeout = f.FetchTimeout
