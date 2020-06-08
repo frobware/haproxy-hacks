@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -143,25 +144,45 @@ func main() {
 
 	}
 
-	successCh := make(chan time.Duration)
+	summaryCh := make(chan result)
 
 	go func() {
-		var n int
-		values := make([]int64, *workers, *workers)
-		ticker := time.Tick(3 * time.Second)
+		var errors []error
+		var values []int64
+
+		ticker := time.Tick(1 * time.Second)
 
 		for {
 			select {
-			case duration := <-successCh:
-				values[n%len(values)] = duration.Milliseconds()
-				n = n + 1
+			case result := <-summaryCh:
+				if result.error != nil {
+					errors = append(errors, result.error)
+				} else {
+					values = append(values, result.getDuration.Milliseconds())
+				}
 			case <-ticker:
 				var total int64 = 0
 				for i := range values {
 					total += values[i]
 				}
 				var avg int64 = total / int64(len(values))
-				log.Println("Avg GET", time.Duration(avg)*time.Millisecond)
+				log.Printf("#success: %6v, #failures: %6v, GET(avg): %v", len(values), len(errors), time.Duration(avg)*time.Millisecond)
+				aggregateErrors := map[string]int{}
+				for _, e := range errors {
+					aggregateErrors[e.Error()] += 1
+				}
+				for k := range aggregateErrors {
+					if !strings.Contains(k, "context deadline exceeded") {
+						fmt.Printf("\t%v\n", k)
+					}
+				}
+				if *verbose {
+					for k, v := range aggregateErrors {
+						fmt.Printf("\t%v x %s\n", v, k)
+					}
+				}
+				errors = []error{}
+				values = []int64{}
 			}
 		}
 	}()
@@ -185,11 +206,7 @@ func main() {
 			pending = pending[1:]
 		case result := <-resultCh:
 			outstandingFetches--
-			if result.error != nil {
-				log.Println(fetcher.FetchTimeout, result.error.Error())
-			} else {
-				successCh <- result.getDuration
-			}
+			summaryCh <- *result
 			pending = append(pending, request{
 				Fetcher: result.Fetcher,
 				URL:     result.URL,
