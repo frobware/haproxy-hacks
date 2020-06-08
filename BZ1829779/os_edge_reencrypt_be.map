@@ -1,0 +1,2 @@
+^route1.frobware.com be_edge_http:default:grpc-interop-edge
+^spicy.frobware.com be_edge_http:default:grpc-interop-edge
