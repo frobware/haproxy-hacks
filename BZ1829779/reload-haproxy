@@ -13,8 +13,8 @@ config_file=$TOPDIR/haproxy.cfg
 
 pid_file=/var/tmp/haproxy/run/haproxy.pid
 
-haproxy_binary=/usr/local/haproxy-2.0.14/sbin/haproxy
 haproxy_binary=/usr/local/haproxy-1.8.17/sbin/haproxy
+haproxy_binary=/usr/local/haproxy-2.0.14/sbin/haproxy
 
 pid_file=/var/tmp/haproxy/run/haproxy.pid
 readonly timeout_opts="-m 1 --connect-timeout 1"
@@ -74,4 +74,4 @@ else
 fi
 
 [ $reload_status -ne 0 ] && exit $reload_status
-haproxyHealthCheck
+#haproxyHealthCheck
