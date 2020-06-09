@@ -2,13 +2,9 @@ package main
 
 import (
 	"crypto/tls"
-	"errors"
 	"flag"
-	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 )
@@ -18,14 +14,15 @@ type Fetcher interface {
 	// Fetch returns a reader for the body of the downloaded URL,
 	// or error if it could not be downloaded. The caller is
 	// responsible for body.Close().
-	Fetch(url string) (body io.ReadCloser, err error)
+	Fetch(url string) (*http.Response, error)
 }
 
 // Ensure fetcher is a Fetcher.
 var _ Fetcher = (*fetcher)(nil)
 
 type fetcher struct {
-	FetchTimeout time.Duration
+	MaxConnectionsPerHost int
+	FetchTimeout          time.Duration
 	Fetcher
 }
 
@@ -37,22 +34,22 @@ type request struct {
 // result captures all of the state after downloading request.URL.
 type result struct {
 	request
-	getDuration time.Duration
-	error       error
+	fetchOkDuration time.Duration
+	fetchError      error
+	resp            *http.Response
 }
 
 func fetch(req request) *result {
 	startTime := time.Now()
 	result := &result{request: req}
-	body, err := req.Fetcher.Fetch(req.URL)
-
-	if err != nil {
-		result.error = err
-		return result
+	if resp, err := req.Fetcher.Fetch(req.URL); err != nil {
+		result.fetchError = err
+	} else {
+		if resp.StatusCode == http.StatusOK {
+			result.fetchOkDuration = time.Now().Sub(startTime)
+		}
+		result.resp = resp
 	}
-
-	defer body.Close()
-	result.getDuration = time.Now().Sub(startTime)
 	return result
 }
 
@@ -65,8 +62,8 @@ func startWorkers(maxWorkers int, done <-chan struct{}, requests <-chan request,
 			defer wg.Done()
 			for {
 				select {
-				case req := <-requests:
-					results <- fetch(req)
+				case request := <-requests:
+					results <- fetch(request)
 				case <-done:
 					return
 				}
@@ -80,7 +77,7 @@ func startWorkers(maxWorkers int, done <-chan struct{}, requests <-chan request,
 // Fetch URL returning the reader to the body of the document, or an
 // error if URL could not be fetched. The caller must call Close() on
 // the reader to avoid resource leaks.
-func (f fetcher) Fetch(URL string) (io.ReadCloser, error) {
+func (f fetcher) Fetch(URL string) (*http.Response, error) {
 	tlsConfig := tls.Config{
 		InsecureSkipVerify: true,
 	}
@@ -89,6 +86,11 @@ func (f fetcher) Fetch(URL string) (io.ReadCloser, error) {
 		Timeout: f.FetchTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tlsConfig,
+			Proxy:           http.ProxyFromEnvironment,
+			// DialContext: (&net.Dialer{
+			// 	Timeout: f.FetchTimeout,
+			// }).DialContext,
+			MaxIdleConnsPerHost: f.MaxConnectionsPerHost,
 		},
 	}
 
@@ -96,23 +98,14 @@ func (f fetcher) Fetch(URL string) (io.ReadCloser, error) {
 		client.Timeout = f.FetchTimeout
 	}
 
-	resp, err := client.Get(URL)
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		msg := fmt.Sprintf("fetch failed: HTTP status %d", resp.StatusCode)
-		return nil, errors.New(msg)
-	}
-
-	return resp.Body, nil
+	return client.Get(URL)
 }
 
 // NewHTTPFetcher returns a new Fetcher.
-func NewHTTPFetcher(fetchTimeout time.Duration) *fetcher {
+func NewHTTPFetcher(fetchTimeout time.Duration, maxConnectionsPerHost int) *fetcher {
 	return &fetcher{
-		FetchTimeout: fetchTimeout,
+		FetchTimeout:          fetchTimeout,
+		MaxConnectionsPerHost: maxConnectionsPerHost,
 	}
 }
 
@@ -123,6 +116,19 @@ var (
 	concurrentGets = flag.Int("c", 100, "concurrent GET requests")
 )
 
+func avg(values []int64) int64 {
+	if len(values) == 0 {
+		return 0
+	}
+
+	var total int64
+	for i := range values {
+		total += values[i]
+	}
+
+	return total / int64(len(values))
+}
+
 func main() {
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
@@ -131,20 +137,10 @@ func main() {
 	requestCh := make(chan request)
 	resultCh := make(chan *result)
 
-	fetcher := NewHTTPFetcher(*timeout)
+	fetcher := NewHTTPFetcher(*timeout, *concurrentGets)
 	wg := startWorkers(*workers, doneCh, requestCh, resultCh)
 
-	var pending []request
-
-	for i := 0; i < *concurrentGets; i++ {
-		pending = append(pending, request{
-			Fetcher: fetcher,
-			URL:     flag.Arg(0),
-		})
-
-	}
-
-	summaryCh := make(chan result)
+	summaryCh := make(chan *result)
 
 	go func() {
 		var errors []error
@@ -155,32 +151,16 @@ func main() {
 		for {
 			select {
 			case result := <-summaryCh:
-				if result.error != nil {
-					errors = append(errors, result.error)
+				if result.fetchError != nil {
+					errors = append(errors, result.fetchError)
 				} else {
-					values = append(values, result.getDuration.Milliseconds())
+					values = append(values, result.fetchOkDuration.Milliseconds())
 				}
 			case <-ticker:
-				var total int64 = 0
-				for i := range values {
-					total += values[i]
-				}
-				var avg int64 = total / int64(len(values))
-				log.Printf("#success: %6v, #failures: %6v, GET(avg): %v", len(values), len(errors), time.Duration(avg)*time.Millisecond)
-				aggregateErrors := map[string]int{}
-				for _, e := range errors {
-					aggregateErrors[e.Error()] += 1
-				}
-				for k := range aggregateErrors {
-					if !strings.Contains(k, "context deadline exceeded") {
-						fmt.Printf("\t%v\n", k)
-					}
-				}
-				if *verbose {
-					for k, v := range aggregateErrors {
-						fmt.Printf("\t%v x %s\n", v, k)
-					}
-				}
+				log.Printf("#success: %6v, #failures: %6v, GET(avg): %v",
+					len(values),
+					len(errors),
+					time.Duration(avg(values))*time.Millisecond)
 				errors = []error{}
 				values = []int64{}
 			}
@@ -188,6 +168,15 @@ func main() {
 	}()
 
 	outstandingFetches := 0
+	var pending []request
+
+	for i := 0; i < *concurrentGets; i++ {
+		pending = append(pending, request{
+			Fetcher: fetcher,
+			URL:     flag.Arg(0),
+		})
+
+	}
 
 	for {
 		var sendCh chan<- request
@@ -206,11 +195,20 @@ func main() {
 			pending = pending[1:]
 		case result := <-resultCh:
 			outstandingFetches--
-			summaryCh <- *result
-			pending = append(pending, request{
-				Fetcher: result.Fetcher,
-				URL:     result.URL,
-			})
+			summaryCh <- result
+			if result.fetchError != nil {
+				if *verbose {
+					log.Printf("%v", result.fetchError)
+				}
+			} else if result.resp != nil {
+				result.resp.Body.Close()
+			}
+			if len(pending) < *concurrentGets {
+				pending = append(pending, request{
+					Fetcher: result.Fetcher,
+					URL:     result.URL,
+				})
+			}
 		}
 	}
 
