@@ -12,10 +12,10 @@ items:
 - apiVersion: v1
   kind: Service
   metadata:
-    name: bz1841454
+    name: bz1829779
   spec:
     selector:
-      app: bz1841454
+      app: bz1829779
     ports:
       - port: 8080
         name: http
@@ -24,7 +24,7 @@ items:
 - apiVersion: v1
   kind: ConfigMap
   labels:
-    app: bz1841454
+    app: bz1829779
   metadata:
     name: src-config
   data:
@@ -37,16 +37,16 @@ $go_server
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
-    name: bz1841454
+    name: bz1829779
     labels:
-      app: bz1841454
+      app: bz1829779
   spec:
     replicas: ${REPLICAS:-2}
     template:
       metadata:
-        name: bz1841454
+        name: bz1829779
         labels:
-          app: bz1841454
+          app: bz1829779
       spec:
         containers:
         - image: golang:1.14
@@ -74,13 +74,13 @@ $go_server
             name: src-config
     selector:
       matchLabels:
-        app: bz1841454
+        app: bz1829779
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
     labels:
-      app: bz1841454
-    name: bz1841454-edge
+      app: bz1829779
+    name: bz1829779-edge
   spec:
     port:
       targetPort: 8080
@@ -107,7 +107,7 @@ $go_server
         -----END CERTIFICATE-----
     to:
       kind: Service
-      name: bz1841454
+      name: bz1829779
       weight: 100
     wildcardPolicy: None
 EOF
