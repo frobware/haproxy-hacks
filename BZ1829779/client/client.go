@@ -5,6 +5,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -20,6 +21,13 @@ type Fetcher interface {
 // Ensure fetcher is a Fetcher.
 var _ Fetcher = (*fetcher)(nil)
 
+var (
+	verbose = flag.Bool("v", false, "Verbose")
+	workers = flag.Int("workers", 50, "number of GET workers")
+	timeout = flag.Duration("timeout", 100*time.Millisecond, "GET timeout")
+	queue   = flag.Int("queue", 100, "queue <N> GET requests")
+)
+
 type fetcher struct {
 	MaxConnectionsPerHost int
 	FetchTimeout          time.Duration
@@ -34,22 +42,19 @@ type request struct {
 // result captures all of the state after downloading request.URL.
 type result struct {
 	request
-	fetchOkDuration time.Duration
-	fetchError      error
-	resp            *http.Response
+	startTime  time.Time
+	endTime    time.Time
+	fetchError error
+	resp       *http.Response
 }
 
 func fetch(req request) *result {
-	startTime := time.Now()
-	result := &result{request: req}
-	if resp, err := req.Fetcher.Fetch(req.URL); err != nil {
-		result.fetchError = err
-	} else {
-		if resp.StatusCode == http.StatusOK {
-			result.fetchOkDuration = time.Now().Sub(startTime)
-		}
-		result.resp = resp
+	result := &result{
+		request:   req,
+		startTime: time.Now(),
 	}
+	result.resp, result.fetchError = req.Fetcher.Fetch(req.URL)
+	result.endTime = time.Now()
 	return result
 }
 
@@ -86,11 +91,11 @@ func (f fetcher) Fetch(URL string) (*http.Response, error) {
 		Timeout: f.FetchTimeout,
 		Transport: &http.Transport{
 			TLSClientConfig: &tlsConfig,
-			Proxy:           http.ProxyFromEnvironment,
+			// Proxy:           http.ProxyFromEnvironment,
 			// DialContext: (&net.Dialer{
 			// 	Timeout: f.FetchTimeout,
 			// }).DialContext,
-			MaxIdleConnsPerHost: f.MaxConnectionsPerHost,
+			// MaxIdleConnsPerHost: f.MaxConnectionsPerHost,
 		},
 	}
 
@@ -109,24 +114,18 @@ func NewHTTPFetcher(fetchTimeout time.Duration, maxConnectionsPerHost int) *fetc
 	}
 }
 
-var (
-	verbose        = flag.Bool("v", false, "Verbose")
-	workers        = flag.Int("workers", 50, "number of GET workers")
-	timeout        = flag.Duration("timeout", 100*time.Millisecond, "GET timeout")
-	concurrentGets = flag.Int("c", 100, "concurrent GET requests")
-)
-
-func avg(values []int64) int64 {
+func avgMillis(values []time.Duration) time.Duration {
 	if len(values) == 0 {
 		return 0
 	}
 
-	var total int64
+	var total time.Duration
+
 	for i := range values {
 		total += values[i]
 	}
 
-	return total / int64(len(values))
+	return total / time.Duration(len(values))
 }
 
 func main() {
@@ -137,32 +136,54 @@ func main() {
 	requestCh := make(chan request)
 	resultCh := make(chan *result)
 
-	fetcher := NewHTTPFetcher(*timeout, *concurrentGets)
+	fetcher := NewHTTPFetcher(*timeout, *queue)
 	wg := startWorkers(*workers, doneCh, requestCh, resultCh)
 
 	summaryCh := make(chan *result)
 
 	go func() {
+		var results []*result
 		var errors []error
-		var values []int64
+		var values []time.Duration
+
+		var max time.Duration
 
 		ticker := time.Tick(1 * time.Second)
 
 		for {
 			select {
 			case result := <-summaryCh:
+				d := result.endTime.Sub(result.startTime)
+				if d > max {
+					max = d
+				}
+				if result.fetchError != nil {
+					log.Printf("start=%v, end=%v, duration=%v\n", result.startTime, result.endTime, result.endTime.Sub(result.startTime))
+					log.Printf("resp=%+v, error=%v\n", result.resp, result.fetchError)
+					os.Exit(1)
+				}
+				results = append(results, result)
 				if result.fetchError != nil {
 					errors = append(errors, result.fetchError)
 				} else {
-					values = append(values, result.fetchOkDuration.Milliseconds())
+					values = append(values, result.endTime.Sub(result.startTime))
 				}
 			case <-ticker:
-				log.Printf("#success: %6v, #failures: %6v, GET(avg): %v",
+				log.Printf("#success: %6v, #failures: %6v, GET(avg): %v, max=%v",
 					len(values),
 					len(errors),
-					time.Duration(avg(values))*time.Millisecond)
+					avgMillis(values).Round(time.Millisecond),
+					max.Round(time.Millisecond))
+				if len(errors) > 0 {
+					for k, v := range results {
+						log.Printf("%d: start=%v, end=%v, duration=%v\n", k, v.startTime, v.endTime, v.endTime.Sub(v.startTime))
+						break
+					}
+					os.Exit(1)
+				}
 				errors = []error{}
-				values = []int64{}
+				values = []time.Duration{}
+				results = []*result{}
 			}
 		}
 	}()
@@ -170,7 +191,7 @@ func main() {
 	outstandingFetches := 0
 	var pending []request
 
-	for i := 0; i < *concurrentGets; i++ {
+	for i := 0; i < *queue; i++ {
 		pending = append(pending, request{
 			Fetcher: fetcher,
 			URL:     flag.Arg(0),
@@ -203,7 +224,7 @@ func main() {
 			} else if result.resp != nil {
 				result.resp.Body.Close()
 			}
-			if len(pending) < *concurrentGets {
+			if len(pending) < *queue {
 				pending = append(pending, request{
 					Fetcher: result.Fetcher,
 					URL:     result.URL,
