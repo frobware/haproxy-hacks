@@ -4,3 +4,4 @@ set -o xtrace
 
 make test.yaml
 oc apply -f ./test.yaml
+oc apply -f ./reqecho.yaml
