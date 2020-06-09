@@ -13,8 +13,7 @@ config_file=$TOPDIR/haproxy.cfg
 
 pid_file=/var/tmp/haproxy/run/haproxy.pid
 
-[ -s $config_file ] || mkfifo $config_file
-
+haproxy_binary=/usr/local/haproxy-2.0.14/sbin/haproxy
 haproxy_binary=/usr/local/haproxy-1.8.17/sbin/haproxy
 
 pid_file=/var/tmp/haproxy/run/haproxy.pid
@@ -62,7 +61,7 @@ function haproxyHealthCheck() {
 
 }
 
-old_pids=$(pidof haproxy)
+old_pids=$(pidof haproxy || true)
 echo "$(date) -- oldpids: $old_pids"
 
 reload_status=0
