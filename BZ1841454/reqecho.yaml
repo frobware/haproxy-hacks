@@ -16,6 +16,7 @@ items:
       spec:
         containers:
         - name: bz1841454-reqecho
+          # https://github.com/frobware/reqecho
           image: frobware/reqecho:latest
           imagePullPolicy: Always
     selector:

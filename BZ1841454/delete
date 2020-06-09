@@ -3,3 +3,4 @@
 set -o xtrace
 
 oc delete -f ./test.yaml
+oc delete -f ./reqecho.yaml
