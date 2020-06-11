@@ -3,19 +3,50 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/httptrace"
 	"os"
+	"os/exec"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
+
+	"github.com/fatih/color"
+)
+
+// connection tracing and timing info lifted from httpstat:
+//   https://github.com/davecheney/httpstat/blob/master/main.go
+
+const (
+	httpsTemplate = `` +
+		`  DNS Lookup   TCP Connection   TLS Handshake   Server Processing   Content Transfer` + "\n" +
+		`------------------------------------------------------------------------------------` + "\n" +
+		`[%s  |     %s  |    %s  |        %s  |       %s  ]` + "\n" +
+		`            |                |               |                   |                  |` + "\n" +
+		`   namelookup:%s      |               |                   |                  |` + "\n" +
+		`                       connect:%s     |                   |                  |` + "\n" +
+		`                                   pretransfer:%s         |                  |` + "\n" +
+		`                                                     starttransfer:%s        |` + "\n" +
+		`                                                                                total:%s` + "\n"
+
+	httpTemplate = `` +
+		`   DNS Lookup   TCP Connection   Server Processing   Content Transfer` + "\n" +
+		`[ %s  |     %s  |        %s  |       %s  ]` + "\n" +
+		`             |                |                   |                  |` + "\n" +
+		`    namelookup:%s      |                   |                  |` + "\n" +
+		`                        connect:%s         |                  |` + "\n" +
+		`                                      starttransfer:%s        |` + "\n" +
+		`                                                                 total:%s` + "\n"
 )
 
 // Fetcher fetches HTML documents.
 type Fetcher interface {
-	// Fetch returns a reader for the body of the downloaded URL,
-	// or error if it could not be downloaded. The caller is
-	// responsible for body.Close().
-	Fetch(url string) (*http.Response, error)
+	Fetch(request) *result
 }
 
 // Ensure fetcher is a Fetcher.
@@ -23,9 +54,10 @@ var _ Fetcher = (*fetcher)(nil)
 
 var (
 	verbose = flag.Bool("v", false, "Verbose")
-	workers = flag.Int("workers", 50, "number of GET workers")
-	timeout = flag.Duration("timeout", 100*time.Millisecond, "GET timeout")
-	queue   = flag.Int("queue", 100, "queue <N> GET requests")
+	workers = flag.Int("workers", 50, "number of workers")
+	timeout = flag.Duration("timeout", 250*time.Millisecond, "client.GET timeout")
+	queue   = flag.Int("queue", 100, "concurent queue depth")
+	repeat  = flag.Bool("repeat", true, "Repeatedly insert finished jobs back into the queue")
 )
 
 type fetcher struct {
@@ -39,24 +71,88 @@ type request struct {
 	URL string
 }
 
-// result captures all of the state after downloading request.URL.
-type result struct {
-	request
-	startTime  time.Time
-	endTime    time.Time
-	fetchError error
-	resp       *http.Response
+func fprintf(format string, a ...interface{}) (n int, err error) {
+	return fmt.Fprintf(color.Output, format, a...)
 }
 
-func fetch(req request) *result {
-	result := &result{
-		request:   req,
-		startTime: time.Now(),
-	}
-	result.resp, result.fetchError = req.Fetcher.Fetch(req.URL)
-	result.endTime = time.Now()
-	return result
+func grayscale(code color.Attribute) func(string, ...interface{}) string {
+	return color.New(code + 232).SprintfFunc()
 }
+
+func (r result) Print() {
+	fmta := func(d time.Duration) string {
+		return color.CyanString("%7dms", int(d/time.Millisecond))
+	}
+
+	fmtb := func(d time.Duration) string {
+		return color.CyanString("%-9s", strconv.Itoa(int(d/time.Millisecond))+"ms")
+	}
+
+	colorize := func(s string) string {
+		v := strings.Split(s, "\n")
+		v[0] = grayscale(16)(v[0])
+		return strings.Join(v, "\n")
+	}
+
+	subOrMinusOne := func(t1, t2 time.Time) time.Duration {
+		// z := t1.Sub(t2) // XXX
+		// return time.Duration(math.Max(0, float64(z)))
+		return t1.Sub(t2)
+	}
+
+	fprintf(colorize(httpsTemplate),
+		fmta(subOrMinusOne(r.t1, r.t0)), // dns lookup
+		fmta(subOrMinusOne(r.t2, r.t1)), // tcp connection
+		fmta(subOrMinusOne(r.t6, r.t5)), // tls handshake
+		fmta(subOrMinusOne(r.t4, r.t3)), // server processing
+		fmta(subOrMinusOne(r.t7, r.t4)), // content transfer
+		fmtb(subOrMinusOne(r.t1, r.t0)), // namelookup
+		fmtb(subOrMinusOne(r.t2, r.t0)), // connect
+		fmtb(subOrMinusOne(r.t3, r.t0)), // pretransfer
+		fmtb(subOrMinusOne(r.t4, r.t0)), // starttransfer
+		fmtb(subOrMinusOne(r.t7, r.t0)), // total
+	)
+
+}
+
+func (r result) TotalTime() time.Duration {
+	return r.t7.Sub(r.t0)
+}
+
+type connectionTrace struct {
+	DNSStart, DNSDone, ConnectStart, ConnectDone, GotConn, GotFirstResponseByte, TLSHandshakeStart, TLSHandshakeDone bool
+}
+
+// result captures all of the state after downloading URL.
+type result struct {
+	URL                            string
+	connectionError                error
+	fetchError                     error
+	localAddr                      string
+	resp                           *http.Response
+	t0, t1, t2, t3, t4, t5, t6, t7 time.Time
+
+	connectionTrace
+}
+
+// transport is an http.RoundTripper that keeps track of the in-flight
+// request and implements hooks to report HTTP tracing events.
+type transport struct {
+	result  *result
+	current *http.Request
+}
+
+// RoundTrip wraps http.DefaultTransport.RoundTrip to keep track
+// of the current request.
+// func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+// 	t.current = req
+// 	return http.DefaultTransport.RoundTrip(req)
+// }
+
+// // GotConn records local address to aid failure correlation.
+// func (t *transport) GotConn(info httptrace.GotConnInfo) {
+// 	t.result.localAddr = info.Conn.LocalAddr()
+// }
 
 func startWorkers(maxWorkers int, done <-chan struct{}, requests <-chan request, results chan<- *result) *sync.WaitGroup {
 	wg := &sync.WaitGroup{}
@@ -68,7 +164,7 @@ func startWorkers(maxWorkers int, done <-chan struct{}, requests <-chan request,
 			for {
 				select {
 				case request := <-requests:
-					results <- fetch(request)
+					results <- request.Fetch(request)
 				case <-done:
 					return
 				}
@@ -79,31 +175,101 @@ func startWorkers(maxWorkers int, done <-chan struct{}, requests <-chan request,
 	return wg
 }
 
-// Fetch URL returning the reader to the body of the document, or an
-// error if URL could not be fetched. The caller must call Close() on
-// the reader to avoid resource leaks.
-func (f fetcher) Fetch(URL string) (*http.Response, error) {
-	tlsConfig := tls.Config{
-		InsecureSkipVerify: true,
+func (f fetcher) Fetch(r request) *result {
+	result := &result{
+		URL: r.URL,
 	}
 
-	client := &http.Client{
-		Timeout: f.FetchTimeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tlsConfig,
-			// Proxy:           http.ProxyFromEnvironment,
-			// DialContext: (&net.Dialer{
-			// 	Timeout: f.FetchTimeout,
-			// }).DialContext,
-			// MaxIdleConnsPerHost: f.MaxConnectionsPerHost,
+	tr := &http.Transport{
+		Proxy:                 http.ProxyFromEnvironment,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 3 * time.Second,
+	}
+
+	// tr := &transport{
+	// 	result: result,
+	// }
+
+	trace := &httptrace.ClientTrace{
+		DNSStart: func(_ httptrace.DNSStartInfo) {
+			result.t0 = time.Now()
+			result.DNSStart = true
+		},
+		DNSDone: func(_ httptrace.DNSDoneInfo) {
+			result.t1 = time.Now()
+			result.DNSDone = true
+		},
+
+		ConnectStart: func(_, _ string) {
+			if result.t1.IsZero() {
+				result.t1 = time.Now()
+			}
+			result.ConnectStart = true
+		},
+
+		ConnectDone: func(net, addr string, err error) {
+			if err != nil {
+				result.connectionError = fmt.Errorf("unable to connect to host %v: %v", addr, err)
+			} else {
+				result.ConnectDone = true
+			}
+			result.t2 = time.Now()
+		},
+
+		GotConn: func(i httptrace.GotConnInfo) {
+			if i.Conn.LocalAddr().String() == "" {
+				panic("xx")
+			}
+			result.localAddr = i.Conn.LocalAddr().String() // correlate with tshark
+			result.t3 = time.Now()
+			result.GotConn = true
+		},
+
+		GotFirstResponseByte: func() {
+			result.t4 = time.Now()
+			result.GotFirstResponseByte = true
+		},
+
+		TLSHandshakeStart: func() {
+			result.t5 = time.Now()
+			result.TLSHandshakeStart = true
+		},
+
+		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
+			result.t6 = time.Now()
+			result.TLSHandshakeDone = true
 		},
 	}
 
-	if f.FetchTimeout > 0 {
-		client.Timeout = f.FetchTimeout
+	client := &http.Client{
+		Timeout:   f.FetchTimeout,
+		Transport: tr,
 	}
 
-	return client.Get(URL)
+	httpReq, _ := http.NewRequest("GET", r.URL, nil)
+	result.resp, result.fetchError = client.Do(httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), trace)))
+
+	if result.fetchError != nil {
+		if result.resp != nil && result.resp.Body != nil {
+			w := ioutil.Discard
+			if _, err := io.Copy(w, result.resp.Body); err != nil && w != ioutil.Discard {
+				log.Fatalf("failed to read response body: %v", err)
+			}
+			result.resp.Body.Close()
+		}
+		return result
+	}
+
+	result.t7 = time.Now()
+
+	if result.t0.IsZero() {
+		// we skipped DNS
+		result.t0 = result.t1
+	}
+
+	return result
 }
 
 // NewHTTPFetcher returns a new Fetcher.
@@ -139,55 +305,6 @@ func main() {
 	fetcher := NewHTTPFetcher(*timeout, *queue)
 	wg := startWorkers(*workers, doneCh, requestCh, resultCh)
 
-	summaryCh := make(chan *result)
-
-	go func() {
-		var results []*result
-		var errors []error
-		var values []time.Duration
-
-		var max time.Duration
-
-		ticker := time.Tick(1 * time.Second)
-
-		for {
-			select {
-			case result := <-summaryCh:
-				d := result.endTime.Sub(result.startTime)
-				if d > max {
-					max = d
-				}
-				if result.fetchError != nil {
-					log.Printf("start=%v, end=%v, duration=%v\n", result.startTime, result.endTime, result.endTime.Sub(result.startTime))
-					log.Printf("resp=%+v, error=%v\n", result.resp, result.fetchError)
-					os.Exit(1)
-				}
-				results = append(results, result)
-				if result.fetchError != nil {
-					errors = append(errors, result.fetchError)
-				} else {
-					values = append(values, result.endTime.Sub(result.startTime))
-				}
-			case <-ticker:
-				log.Printf("#success: %6v, #failures: %6v, GET(avg): %v, max=%v",
-					len(values),
-					len(errors),
-					avgMillis(values).Round(time.Millisecond),
-					max.Round(time.Millisecond))
-				if len(errors) > 0 {
-					for k, v := range results {
-						log.Printf("%d: start=%v, end=%v, duration=%v\n", k, v.startTime, v.endTime, v.endTime.Sub(v.startTime))
-						break
-					}
-					os.Exit(1)
-				}
-				errors = []error{}
-				values = []time.Duration{}
-				results = []*result{}
-			}
-		}
-	}()
-
 	outstandingFetches := 0
 	var pending []request
 
@@ -198,6 +315,60 @@ func main() {
 		})
 
 	}
+
+	summaryCh := make(chan *result)
+
+	go func() {
+		var results []*result
+		var errors []error
+		var values []time.Duration
+		var TLSHandshake []time.Duration
+
+		var max time.Duration
+
+		ticker := time.Tick(1 * time.Second)
+
+		for {
+			select {
+			case result := <-summaryCh:
+				d := result.TotalTime()
+				if d > max {
+					max = d
+				}
+				// if *verbose && result.TLSHandshakeDone {
+				// 	log.Printf("TLSHandshakeDone in %v", result.t6.Sub(result.t5))
+				// }
+				if result.fetchError != nil {
+					result.Print()
+					log.Printf("localAddr=%v (t3=%v), connectionError=%v, fetchError=%v\n", result.localAddr, result.t3, result.connectionError, result.fetchError)
+					log.Printf("%+v", result.connectionTrace)
+					cmd := exec.Command("/usr/bin/pkill", "tshark")
+					log.Printf("Command finished with error: %v", cmd.Run())
+					os.Exit(1)
+				}
+				results = append(results, result)
+				if result.fetchError != nil {
+					errors = append(errors, result.fetchError)
+				} else {
+					values = append(values, result.TotalTime())
+					TLSHandshake = append(TLSHandshake, result.t6.Sub(result.t5))
+				}
+			case <-ticker:
+				log.Printf("pending: %v --- #success: %6v, #failures: %6v, GET(avg): %v, max=%v, TLSHandshake(avg): %v",
+					len(pending),
+					len(values),
+					len(errors),
+					avgMillis(values).Round(time.Millisecond),
+					max.Round(time.Millisecond),
+					avgMillis(TLSHandshake).Round(time.Millisecond))
+				errors = []error{}
+				values = []time.Duration{}
+				results = []*result{}
+				TLSHandshake = []time.Duration{}
+				max = 0
+			}
+		}
+	}()
 
 	for {
 		var sendCh chan<- request
@@ -224,9 +395,9 @@ func main() {
 			} else if result.resp != nil {
 				result.resp.Body.Close()
 			}
-			if len(pending) < *queue {
+			if *repeat {
 				pending = append(pending, request{
-					Fetcher: result.Fetcher,
+					Fetcher: fetcher,
 					URL:     result.URL,
 				})
 			}
