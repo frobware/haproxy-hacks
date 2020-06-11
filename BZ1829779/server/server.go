@@ -51,7 +51,7 @@ func main() {
 		now := time.Now()
 		atomic.AddInt64(&clientCon, 1)
 		n := clientCon
-		log.Println("connection", n, r.RemoteAddr)
+		// log.Println("connection", n, r.RemoteAddr)
 		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -80,7 +80,10 @@ func main() {
 		w.Write(resp)
 		w.Write([]byte("\n"))
 
-		log.Println("c-complete", n, r.RemoteAddr, busyTime, time.Now().Sub(now))
+		d := time.Now().Sub(now)
+		if d > 1*time.Second {
+			log.Println("c-complete", n, r.RemoteAddr, busyTime, time.Now().Sub(now))
+		}
 	})
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
