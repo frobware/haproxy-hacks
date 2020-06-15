@@ -55,7 +55,7 @@ var _ Fetcher = (*fetcher)(nil)
 var (
 	verbose = flag.Bool("v", false, "Verbose")
 	workers = flag.Int("workers", 50, "number of workers")
-	timeout = flag.Duration("timeout", 250*time.Millisecond, "client.GET timeout")
+	timeout = flag.Duration("timeout", 0, "client.GET timeout")
 	queue   = flag.Int("queue", 100, "concurent queue depth")
 	repeat  = flag.Bool("repeat", false, "Insert finished jobs back into the queue")
 )
@@ -215,11 +215,11 @@ func (f fetcher) Fetch(r request) *result {
 	}
 
 	tr := &http.Transport{
-		Proxy:                 http.ProxyFromEnvironment,
-		MaxIdleConns:          100,
-		IdleConnTimeout:       90 * time.Second,
-		TLSHandshakeTimeout:   10 * time.Second,
-		ExpectContinueTimeout: 3 * time.Second,
+		// Proxy:                 http.ProxyFromEnvironment,
+		// MaxIdleConns:          100,
+		// IdleConnTimeout:       90 * time.Second,
+		// TLSHandshakeTimeout:   10 * time.Second,
+		// ExpectContinueTimeout: 3 * time.Second,
 	}
 
 	// tr := &transport{
