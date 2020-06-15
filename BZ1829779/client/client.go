@@ -57,7 +57,7 @@ var (
 	workers = flag.Int("workers", 50, "number of workers")
 	timeout = flag.Duration("timeout", 250*time.Millisecond, "client.GET timeout")
 	queue   = flag.Int("queue", 100, "concurent queue depth")
-	repeat  = flag.Bool("repeat", true, "Repeatedly insert finished jobs back into the queue")
+	repeat  = flag.Bool("repeat", false, "Insert finished jobs back into the queue")
 )
 
 type fetcher struct {
@@ -79,38 +79,72 @@ func grayscale(code color.Attribute) func(string, ...interface{}) string {
 	return color.New(code + 232).SprintfFunc()
 }
 
+var fmtaSpacer string = strings.Repeat(" ", 9)
+var fmtbSpacer string = strings.Repeat(" ", 9)
+
 func (r result) Print() {
 	fmta := func(d time.Duration) string {
-		return color.CyanString("%7dms", int(d/time.Millisecond))
+		return fmt.Sprintf("%7dms", int(d/time.Millisecond))
 	}
 
 	fmtb := func(d time.Duration) string {
-		return color.CyanString("%-9s", strconv.Itoa(int(d/time.Millisecond))+"ms")
+		return fmt.Sprintf("%-9s", strconv.Itoa(int(d/time.Millisecond))+"ms")
 	}
 
-	colorize := func(s string) string {
-		v := strings.Split(s, "\n")
-		v[0] = grayscale(16)(v[0])
-		return strings.Join(v, "\n")
+	var dnsLookup string = fmtaSpacer
+	var tcpConnection string = fmtaSpacer
+	var tlsHandshake string = fmtaSpacer
+	var serverProcessing string = fmtaSpacer
+	var contentTransfer string = fmtaSpacer
+	var nameLookup string = fmtbSpacer
+	var connect string = fmtbSpacer
+	var preTransfer string = fmtbSpacer
+	var startTransfer string = fmtbSpacer
+	var total string = fmtbSpacer
+
+	if !r.t1.IsZero() {
+		dnsLookup = fmta(r.t1.Sub(r.t0))
+	}
+	if !r.t2.IsZero() {
+		tcpConnection = fmta(r.t2.Sub(r.t1))
+	}
+	if !r.t6.IsZero() {
+		tlsHandshake = fmta(r.t6.Sub(r.t5))
+	}
+	if !r.t4.IsZero() {
+		serverProcessing = fmta(r.t4.Sub(r.t3))
+	}
+	if !r.t7.IsZero() {
+		contentTransfer = fmta(r.t7.Sub(r.t4))
 	}
 
-	subOrMinusOne := func(t1, t2 time.Time) time.Duration {
-		// z := t1.Sub(t2) // XXX
-		// return time.Duration(math.Max(0, float64(z)))
-		return t1.Sub(t2)
+	if !r.t1.IsZero() {
+		nameLookup = fmtb(r.t1.Sub(r.t0))
+	}
+	if !r.t2.IsZero() {
+		connect = fmtb(r.t2.Sub(r.t0))
+	}
+	if !r.t3.IsZero() {
+		preTransfer = fmtb(r.t3.Sub(r.t0))
+	}
+	if !r.t4.IsZero() {
+		startTransfer = fmtb(r.t4.Sub(r.t0))
+	}
+	if !r.t7.IsZero() {
+		total = fmtb(r.t7.Sub(r.t0))
 	}
 
-	fprintf(colorize(httpsTemplate),
-		fmta(subOrMinusOne(r.t1, r.t0)), // dns lookup
-		fmta(subOrMinusOne(r.t2, r.t1)), // tcp connection
-		fmta(subOrMinusOne(r.t6, r.t5)), // tls handshake
-		fmta(subOrMinusOne(r.t4, r.t3)), // server processing
-		fmta(subOrMinusOne(r.t7, r.t4)), // content transfer
-		fmtb(subOrMinusOne(r.t1, r.t0)), // namelookup
-		fmtb(subOrMinusOne(r.t2, r.t0)), // connect
-		fmtb(subOrMinusOne(r.t3, r.t0)), // pretransfer
-		fmtb(subOrMinusOne(r.t4, r.t0)), // starttransfer
-		fmtb(subOrMinusOne(r.t7, r.t0)), // total
+	fprintf(httpsTemplate,
+		dnsLookup,
+		tcpConnection,
+		tlsHandshake,
+		serverProcessing,
+		contentTransfer,
+		nameLookup,
+		connect,
+		preTransfer,
+		startTransfer,
+		total,
 	)
 
 }
@@ -305,7 +339,7 @@ func main() {
 	fetcher := NewHTTPFetcher(*timeout, *queue)
 	wg := startWorkers(*workers, doneCh, requestCh, resultCh)
 
-	outstandingFetches := 0
+	outstandingRequests := 0
 	var pending []request
 
 	for i := 0; i < *queue; i++ {
@@ -335,9 +369,9 @@ func main() {
 				if d > max {
 					max = d
 				}
-				// if *verbose && result.TLSHandshakeDone {
-				// 	log.Printf("TLSHandshakeDone in %v", result.t6.Sub(result.t5))
-				// }
+				if *verbose {
+					result.Print()
+				}
 				if result.fetchError != nil {
 					result.Print()
 					log.Printf("localAddr=%v (t3=%v), connectionError=%v, fetchError=%v\n", result.localAddr, result.t3, result.connectionError, result.fetchError)
@@ -377,16 +411,16 @@ func main() {
 		if len(pending) > 0 {
 			sendCh = requestCh
 			link = pending[0]
-		} else if outstandingFetches == 0 {
+		} else if outstandingRequests == 0 {
 			break
 		}
 
 		select {
 		case sendCh <- link:
-			outstandingFetches++
+			outstandingRequests++
 			pending = pending[1:]
 		case result := <-resultCh:
-			outstandingFetches--
+			outstandingRequests--
 			summaryCh <- result
 			if result.fetchError != nil {
 				if *verbose {
