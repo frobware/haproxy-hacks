@@ -15,8 +15,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/fatih/color"
 )
 
 // connection tracing and timing info lifted from httpstat:
@@ -71,13 +69,13 @@ type request struct {
 	URL string
 }
 
-func fprintf(format string, a ...interface{}) (n int, err error) {
-	return fmt.Fprintf(color.Output, format, a...)
-}
+// func fprintf(format string, a ...interface{}) (n int, err error) {
+// 	return fmt.Fprintf(color.Output, format, a...)
+// }
 
-func grayscale(code color.Attribute) func(string, ...interface{}) string {
-	return color.New(code + 232).SprintfFunc()
-}
+// func grayscale(code color.Attribute) func(string, ...interface{}) string {
+// 	return color.New(code + 232).SprintfFunc()
+// }
 
 var fmtaSpacer string = strings.Repeat(" ", 9)
 var fmtbSpacer string = strings.Repeat(" ", 9)
