@@ -220,6 +220,10 @@ func (f fetcher) Fetch(r request) *result {
 		// ExpectContinueTimeout: 3 * time.Second,
 	}
 
+	tr.TLSClientConfig = &tls.Config{
+		InsecureSkipVerify: true,
+	}
+
 	// tr := &transport{
 	// 	result: result,
 	// }
@@ -386,7 +390,8 @@ func main() {
 					TLSHandshake = append(TLSHandshake, result.t6.Sub(result.t5))
 				}
 			case <-ticker:
-				log.Printf("pending: %v --- #success: %6v, #failures: %6v, GET(avg): %v, max=%v, TLSHandshake(avg): %v",
+				log.Printf("GET/s: %v, pending: %v --- #success: %6v, #failures: %6v, GET(avg): %v, max=%v, TLSHandshake(avg): %v",
+					len(results),
 					len(pending),
 					len(values),
 					len(errors),
