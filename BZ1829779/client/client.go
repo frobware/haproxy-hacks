@@ -69,9 +69,9 @@ type request struct {
 	URL string
 }
 
-// func fprintf(format string, a ...interface{}) (n int, err error) {
-// 	return fmt.Fprintf(color.Output, format, a...)
-// }
+func fprintf(format string, a ...interface{}) (n int, err error) {
+	return fmt.Fprintf(os.Stdout, format, a...)
+}
 
 // func grayscale(code color.Attribute) func(string, ...interface{}) string {
 // 	return color.New(code + 232).SprintfFunc()
