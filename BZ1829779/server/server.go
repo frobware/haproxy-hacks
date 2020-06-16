@@ -69,7 +69,7 @@ func main() {
 		atomic.AddInt64(&clientCon, 1)
 		n := clientCon
 		connectionCh <- true
-		// log.Println("connection", n, r.RemoteAddr)
+		log.Println("connection", n, r.RemoteAddr)
 		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
