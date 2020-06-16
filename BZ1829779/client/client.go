@@ -390,14 +390,12 @@ func main() {
 					TLSHandshake = append(TLSHandshake, result.t6.Sub(result.t5))
 				}
 			case <-ticker:
-				log.Printf("GET/s: %v, pending: %v --- #success: %6v, #failures: %6v, GET(avg): %v, max=%v, TLSHandshake(avg): %v",
-					len(results),
-					len(pending),
+				log.Printf("GET/s: %4v --- #failures: %4v, GET(avg)/ms: %9v, max/ms=%9v, TLSHandshake(avg)/ms: %9v",
 					len(values),
 					len(errors),
-					avgMillis(values).Round(time.Millisecond),
-					max.Round(time.Millisecond),
-					avgMillis(TLSHandshake).Round(time.Millisecond))
+					avgMillis(values).Milliseconds(),
+					max.Milliseconds(),
+					avgMillis(TLSHandshake).Milliseconds())
 				errors = []error{}
 				values = []time.Duration{}
 				results = []*result{}
