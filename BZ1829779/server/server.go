@@ -41,10 +41,19 @@ func init() {
 }
 
 func main() {
+	connectionCh := make(chan bool)
+	ticker := time.Tick(1 * time.Second)
+
 	go func() {
+		var connections int64
 		for {
-			time.Sleep(1 * time.Second)
-			log.Printf("heartbeat")
+			select {
+			case <-connectionCh:
+				connections += 1
+			case <-ticker:
+				log.Printf("connection/s: %v", connections)
+				connections = 0
+			}
 		}
 
 	}()
@@ -59,6 +68,7 @@ func main() {
 		now := time.Now()
 		atomic.AddInt64(&clientCon, 1)
 		n := clientCon
+		connectionCh <- true
 		// log.Println("connection", n, r.RemoteAddr)
 		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
