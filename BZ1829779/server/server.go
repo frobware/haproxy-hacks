@@ -41,6 +41,14 @@ func init() {
 }
 
 func main() {
+	go func() {
+		for {
+			time.Sleep(1 * time.Second)
+			log.Printf("heartbeat")
+		}
+
+	}()
+
 	busyTime, err := time.ParseDuration(lookupEnv("BUSY_TIMEOUT", "0s"))
 
 	if err != nil {
