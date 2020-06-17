@@ -110,4 +110,18 @@ $go_server
       name: bz1829779
       weight: 100
     wildcardPolicy: None
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    labels:
+      app: bz1829779
+    name: bz1829779-insecure
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: bz1829779
+      weight: 100
+    wildcardPolicy: None
 EOF
