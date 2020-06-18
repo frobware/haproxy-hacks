@@ -15,6 +15,10 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // connection tracing and timing info lifted from httpstat:
@@ -56,6 +60,7 @@ var (
 	timeout = flag.Duration("timeout", 0, "client.GET timeout")
 	queue   = flag.Int("queue", 100, "concurent queue depth")
 	repeat  = flag.Bool("repeat", false, "Insert finished jobs back into the queue")
+	metrics = flag.Bool("metrics", false, "Enable Prometheus metrics")
 )
 
 type fetcher struct {
@@ -285,6 +290,7 @@ func (f fetcher) Fetch(r request) *result {
 	}
 
 	httpReq, _ := http.NewRequest("GET", r.URL, nil)
+	httpReq.Close = true
 	result.resp, result.fetchError = client.Do(httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), trace)))
 
 	if result.fetchError != nil {
@@ -329,6 +335,18 @@ func avgMillis(values []time.Duration) time.Duration {
 
 	return total / time.Duration(len(values))
 }
+
+var (
+	httpGETs = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "http_gets",
+		Help: "#GETS/s",
+	})
+
+	httpMaxResponseTime = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "http_max_response_time",
+		Help: "max response time(ms)",
+	})
+)
 
 func main() {
 	flag.Parse()
@@ -396,6 +414,8 @@ func main() {
 					avgMillis(values).Milliseconds(),
 					max.Milliseconds(),
 					avgMillis(TLSHandshake).Milliseconds())
+				httpGETs.Set(float64(len(values)))
+				httpMaxResponseTime.Set(float64(max.Milliseconds()))
 				errors = []error{}
 				values = []time.Duration{}
 				results = []*result{}
@@ -404,6 +424,14 @@ func main() {
 			}
 		}
 	}()
+
+	if *metrics {
+		go func() {
+			fmt.Println("Exposing metics on :9112")
+			http.Handle("/metrics", promhttp.Handler())
+			http.ListenAndServe(":9112", nil)
+		}()
+	}
 
 	for {
 		var sendCh chan<- request
