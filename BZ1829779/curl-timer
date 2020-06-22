@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+if ! type -P sqlite3 >/dev/null 2>&1; then
+    echo "sqlite3 missing; yum install -y /usr/bin/sqlite3"
+    exit 1
+fi
+
+set -u
+set -o pipefail
+
+host=$1
+results_file=$(mktemp)
+
+for i in $(seq 1 ${N:-5000}); do
+    curl -o /dev/null -k -L -s -w "${i} %{time_total} %{time_namelookup} %{time_connect} %{time_pretransfer} %{time_starttransfer} %{http_code}\n" "$host"; done | tee $results_file
+echo
+
+sqlite3 <<EOF
+CREATE TABLE results (id INTEGER PRIMARY KEY,
+        time_total REAL,
+	time_namelookup REAL,
+	time_connect REAL,
+	time_pretransfer REAL,
+	time_starttransfer REAL,
+	http_code INTEGER);
+.separator " "
+.import $results_file results
+.headers on
+.mode column
+SELECT MIN(time_total) AS MIN_TIME_TOTAL,
+       MAX(time_total) AS MAX_TIME_TOTAL,
+       ROUND(avg(time_total),3) AS AVG_TIME_TOTAL,
+       MAX(time_namelookup) AS MAX_NAMELOOKUP,
+       MAX(time_connect) AS MAX_CONNECT,
+       MAX(time_pretransfer) AS MAX_PRE_TRANSFER,
+       MAX(time_starttransfer) AS MAX_START_TRANSFER
+FROM results
+WHERE http_code == 200;
+
+SELECT *
+FROM results
+WHERE http_code != 200;
+
+SELECT count(*) AS BIG_NAMELOOKUP
+FROM results
+WHERE time_namelookup >= 1.0;
+EOF
+
+echo "Results left in: $results_file"
