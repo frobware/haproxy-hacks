@@ -1,0 +1,22 @@
+[package]
+name = "r-curler"
+version = "0.1.0"
+authors = ["Andrew McDermott <aim@frobware.com>"]
+edition = "2018"
+
+[dependencies]
+curl = "0.4.29"               # Rust bindings to libcurl for making HTTP requests
+
+# Add openssl-sys as a direct dependency so it can be cross compiled to
+# x86_64-unknown-linux-musl using the "vendored" feature below
+openssl-sys = "*"
+
+[features]
+# Force openssl-sys to staticly link in the openssl library. Necessary when
+# cross compiling to x86_64-unknown-linux-musl.
+vendored = ["openssl-sys/vendored"]
+
+# cargo build --target=x86_64-unknown-linux-musl --features vendored
+# cargo build --features vendored
+
+# cargo build --target=x86_64-unknown-linux-musl --features vendored
