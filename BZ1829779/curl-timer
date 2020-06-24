@@ -8,7 +8,7 @@ fi
 set -u
 set -o pipefail
 
-host=$1
+host=${1:?no hostname specified}
 results_file=$(mktemp)
 
 for i in $(seq 1 ${N:-5000}); do
