@@ -11,10 +11,11 @@ set -o pipefail
 results_file=${1:?}
 
 t=$(mktemp)
-awk '{ print $1, $3, $5, $7, $9, $11, $13, $15 }' $results_file > $t
+awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' $results_file > $t
 
 sqlite3 <<EOF
 CREATE TABLE results (id INTEGER PRIMARY KEY,
+        timestamp TEXT,
 	time_namelookup REAL,
 	time_connect REAL,
 	time_pretransfer REAL,

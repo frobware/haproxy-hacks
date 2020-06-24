@@ -13,7 +13,7 @@ find_package(CURL REQUIRED COMPONENTS libcurl MODULE)
 
 add_executable (curler curler.c)
 include_directories(${CURL_INCLUDE_DIR})
-target_link_libraries(curler ${CURL_LIBRARIES})
+target_link_libraries(curler ${CURL_LIBRARIES} -lm)
 
 message(STATUS "CMAKE_SYSTEM=${CMAKE_SYSTEM}")
 message(STATUS "CMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}")
