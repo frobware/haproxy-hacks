@@ -47,6 +47,8 @@ int main(int argc, char *argv[]) {
 	fprintf(stderr, "curl_easy_perform() failed: %s\n",
 		curl_easy_strerror(res));
       } else {
+	fprintf(stdout, "%d ", i+1);
+
 	assert((CURLE_OK == curl_easy_getinfo(curl_handle,
 					      CURLINFO_NAMELOOKUP_TIME,
 					      &doubleinfo)));
