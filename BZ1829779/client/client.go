@@ -4,13 +4,10 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httptrace"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -212,6 +209,15 @@ func startWorkers(maxWorkers int, done <-chan struct{}, requests <-chan request,
 	return wg
 }
 
+type CustomTransport struct {
+	http.RoundTripper
+}
+
+func (ct *CustomTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req.Header.Set("Host", "bz1829779-insecure-bz1829779.apps.0623-r4u.qe.rhcloud.com")
+	return ct.RoundTripper.RoundTrip(req)
+}
+
 func (f fetcher) Fetch(r request) *result {
 	result := &result{
 		URL: r.URL,
@@ -223,15 +229,12 @@ func (f fetcher) Fetch(r request) *result {
 		// IdleConnTimeout:       90 * time.Second,
 		// TLSHandshakeTimeout:   10 * time.Second,
 		// ExpectContinueTimeout: 3 * time.Second,
+		// DisableKeepAlives: true,
 	}
 
 	tr.TLSClientConfig = &tls.Config{
 		InsecureSkipVerify: true,
 	}
-
-	// tr := &transport{
-	// 	result: result,
-	// }
 
 	trace := &httptrace.ClientTrace{
 		DNSStart: func(_ httptrace.DNSStartInfo) {
@@ -278,7 +281,7 @@ func (f fetcher) Fetch(r request) *result {
 			result.TLSHandshakeStart = true
 		},
 
-		TLSHandshakeDone: func(_ tls.ConnectionState, _ error) {
+		TLSHandshakeDone: func(i tls.ConnectionState, _ error) {
 			result.t6 = time.Now()
 			result.TLSHandshakeDone = true
 		},
@@ -290,18 +293,28 @@ func (f fetcher) Fetch(r request) *result {
 	}
 
 	httpReq, _ := http.NewRequest("GET", r.URL, nil)
-	httpReq.Close = true
-	result.resp, result.fetchError = client.Do(httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), trace)))
+	ctx := httpReq.WithContext(httptrace.WithClientTrace(httpReq.Context(), trace))
+	result.resp, result.fetchError = client.Do(ctx)
 
-	if result.fetchError != nil {
-		if result.resp != nil && result.resp.Body != nil {
-			w := ioutil.Discard
-			if _, err := io.Copy(w, result.resp.Body); err != nil && w != ioutil.Discard {
-				log.Fatalf("failed to read response body: %v", err)
-			}
-			result.resp.Body.Close()
+	// if result.fetchError != nil {
+	// 	// if result.resp != nil && result.resp.Body != nil {
+	// 	// 	w := ioutil.Discard
+	// 	// 	if _, err := io.Copy(w, result.resp.Body); err != nil && w != ioutil.Discard {
+	// 	// 		log.Fatalf("failed to read response body: %v", err)
+	// 	// 	}
+	// 	// 	result.resp.Body.Close()
+	// 	// }
+	// 	// return result
+	// 	log.Printf("fetcher GET error: %v", result.fetchError)
+	// }
+
+	if result.fetchError == nil {
+		if result.resp.StatusCode != http.StatusOK {
+			log.Printf("expected GET status == 200, got %v", result.resp.StatusCode)
 		}
-		return result
+		result.resp.Body.Close()
+	} else {
+		// log.Printf("fetcher GET error: %v", result.fetchError)
 	}
 
 	result.t7 = time.Now()
@@ -392,14 +405,14 @@ func main() {
 				if *verbose {
 					result.Print()
 				}
-				if result.fetchError != nil {
-					result.Print()
-					log.Printf("localAddr=%v (t3=%v), connectionError=%v, fetchError=%v\n", result.localAddr, result.t3, result.connectionError, result.fetchError)
-					log.Printf("%+v", result.connectionTrace)
-					cmd := exec.Command("/usr/bin/pkill", "tshark")
-					log.Printf("Command finished with error: %v", cmd.Run())
-					os.Exit(1)
-				}
+				// if result.fetchError != nil {
+				// 	result.Print()
+				// 	log.Printf("localAddr=%v (t3=%v), connectionError=%v, fetchError=%v\n", result.localAddr, result.t3, result.connectionError, result.fetchError)
+				// 	log.Printf("%+v", result.connectionTrace)
+				// 	cmd := exec.Command("/usr/bin/pkill", "tshark")
+				// 	log.Printf("Command finished with error: %v", cmd.Run())
+				// 	os.Exit(1)
+				// }
 				results = append(results, result)
 				if result.fetchError != nil {
 					errors = append(errors, result.fetchError)
@@ -416,6 +429,7 @@ func main() {
 					avgMillis(TLSHandshake).Milliseconds())
 				httpGETs.Set(float64(len(values)))
 				httpMaxResponseTime.Set(float64(max.Milliseconds()))
+
 				errors = []error{}
 				values = []time.Duration{}
 				results = []*result{}
@@ -449,15 +463,14 @@ func main() {
 			outstandingRequests++
 			pending = pending[1:]
 		case result := <-resultCh:
+			if result.fetchError != nil {
+				result.Print()
+				log.Printf("localAddr=%v (t3=%v), connectionError=%v, fetchError=%v\n", result.localAddr, result.t3, result.connectionError, result.fetchError)
+				log.Printf("%+v", result.connectionTrace)
+				log.Printf("RESULT ERROR: %v", result.fetchError)
+			}
 			outstandingRequests--
 			summaryCh <- result
-			if result.fetchError != nil {
-				if *verbose {
-					log.Printf("%v", result.fetchError)
-				}
-			} else if result.resp != nil {
-				result.resp.Body.Close()
-			}
 			if *repeat {
 				pending = append(pending, request{
 					Fetcher: fetcher,
