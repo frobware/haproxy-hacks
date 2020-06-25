@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+if ! type -P sqlite3 >/dev/null 2>&1; then
+    echo "missing sqlite3 dependency; yum install -y /usr/bin/sqlite3"
+    exit 1
+fi
+
+if ! type -P tshark >/dev/null 2>&1; then
+    echo "missing tshark dependency; yum install -y /usr/bin/tshark"
+    exit 1
+fi
+
+set -eu
+set -o pipefail
+
+pcap_file=${1:?no pcap file specified}
+tmpfile=$(mktemp)
+
+tshark -t ad -r ${pcap_file} -Y "http.time" | awk '{printf "%d\n", $13 * 1000}' > $tmpfile
+
+sqlite3 <<EOF
+.separator " "
+.headers on
+.mode column
+#https://github.com/Oeffner/SQLiteHistograms
+.load ./histograms
+
+CREATE TABLE results (time_total INTEGER);
+.import $tmpfile results
+
+SELECT Min(time_total)                  AS "MIN(ms)",
+       Max(time_total)                  AS "MAX(ms)",
+       Cast(Avg(time_total) AS INTEGER) AS "AVG(ms)"
+FROM   results;
+
+SELECT rowid,
+       Cast(bin AS INTEGER) AS "bin(ms)",
+       bincount             AS count,
+       accumcount,
+       Cast(Sum(bincount)
+	      OVER (
+		ORDER BY accumcount) / Cast((SELECT Count(time_total)
+					     FROM   results) AS REAL) * 100.0 AS
+	    INTEGER)        AS "acccum%age"
+FROM   Histo("results", "time_total", 10, 0, 1
+					     + (SELECT Max(time_total)
+						FROM   results));
+EOF
+
+rm -f $tmpfile
