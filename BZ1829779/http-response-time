@@ -16,7 +16,8 @@ set -o pipefail
 pcap_file=${1:?no pcap file specified}
 tmpfile=$(mktemp)
 
-tshark -t ad -r ${pcap_file} -Y "http.time" | awk '{printf "%d\n", $13 * 1000}' > $tmpfile
+tshark -t d -r ${pcap_file} -Y "http.time"
+tshark -t ad -r ${pcap_file} -Y "http.time" | awk '{printf "%f\n", $13 * 1000}' > $tmpfile
 
 sqlite3 <<EOF
 .separator " "
@@ -25,25 +26,25 @@ sqlite3 <<EOF
 #https://github.com/Oeffner/SQLiteHistograms
 .load ./histograms
 
-CREATE TABLE results (time_total INTEGER);
+CREATE TABLE results (time_total REAL);
 .import $tmpfile results
 
-SELECT Min(time_total)                  AS "MIN(ms)",
-       Max(time_total)                  AS "MAX(ms)",
-       Cast(Avg(time_total) AS INTEGER) AS "AVG(ms)"
+SELECT Min(time_total)               AS "MIN",
+       Max(time_total)               AS "MAX",
+       Cast(Avg(time_total) AS READ) AS "AVG"
 FROM   results;
 
 SELECT rowid,
-       Cast(bin AS INTEGER) AS "bin(ms)",
-       bincount             AS count,
+       Cast(bin AS INTEGER) AS "bin",
+       bincount             AS "bincount",
        accumcount,
        Cast(Sum(bincount)
 	      OVER (
 		ORDER BY accumcount) / Cast((SELECT Count(time_total)
 					     FROM   results) AS REAL) * 100.0 AS
 	    INTEGER)        AS "acccum%age"
-FROM   Histo("results", "time_total", 10, 0, 1
-					     + (SELECT Max(time_total)
+FROM   Histo("results", "time_total", 10, 0, 0.000001 +
+					     (SELECT Max(time_total)
 						FROM   results));
 EOF
 
