@@ -16,8 +16,7 @@ set -o pipefail
 pcap_file=${1:?no pcap file specified}
 tmpfile=$(mktemp)
 
-tshark -t d -r ${pcap_file} -Y "http.time"
-tshark -t ad -r ${pcap_file} -Y "http.time" | awk '{printf "%f\n", $13 * 1000}' > $tmpfile
+tshark -r ${pcap_file} -Y "http.time" | awk '{print $12}' > $tmpfile
 
 sqlite3 <<EOF
 .separator " "
@@ -29,23 +28,20 @@ sqlite3 <<EOF
 CREATE TABLE results (time_total REAL);
 .import $tmpfile results
 
-SELECT Min(time_total)               AS "MIN",
-       Max(time_total)               AS "MAX",
-       Cast(Avg(time_total) AS READ) AS "AVG"
+SELECT Min(time_total) AS "MIN",
+       Max(time_total) AS "MAX",
+       Avg(time_total) AS "AVG"
 FROM   results;
 
-SELECT rowid,
-       Cast(bin AS INTEGER) AS "bin",
-       bincount             AS "bincount",
-       accumcount,
+SELECT histo.*,
        Cast(Sum(bincount)
 	      OVER (
 		ORDER BY accumcount) / Cast((SELECT Count(time_total)
 					     FROM   results) AS REAL) * 100.0 AS
 	    INTEGER)        AS "acccum%age"
-FROM   Histo("results", "time_total", 10, 0, 0.000001 +
+FROM   Histo("results", "time_total", ${NBINS:-10}, 0, 0.000001 +
 					     (SELECT Max(time_total)
-						FROM   results));
+						FROM results));
 EOF
 
 rm -f $tmpfile
