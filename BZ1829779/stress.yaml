@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stress-shell
+spec:
+  selector:
+    matchLabels:
+      app: stress-shell
+  template:
+    metadata:
+      labels:
+        app: stress-shell
+    spec:
+      containers:
+      - name: stress-shell
+        command: ["stress-ng"]
+        args: ["--cpu=8", "--io=4", "--vm=2", "--vm-bytes=128M", "--fork=4"]
+        image: lorel/docker-stress-ng
+        imagePullPolicy: Always
+        resources: {}
+        stdin: true
+        stdinOnce: true
+        tty: true
