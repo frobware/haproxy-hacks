@@ -14,6 +14,9 @@ t=$(mktemp)
 awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' $results_file > $t
 
 sqlite3 <<EOF
+#https://github.com/Oeffner/SQLiteHistograms
+.load ./histograms
+
 CREATE TABLE results (id INTEGER PRIMARY KEY,
         timestamp TEXT,
 	time_namelookup REAL,
@@ -27,18 +30,66 @@ CREATE TABLE results (id INTEGER PRIMARY KEY,
 .import $t results
 .headers on
 .mode column
-SELECT MIN(time_total) AS MIN_TIME_TOTAL,
-       MAX(time_total) AS MAX_TIME_TOTAL,
-       ROUND(avg(time_total),3) AS AVG_TIME_TOTAL,
-       MAX(time_namelookup) AS MAX_NAMELOOKUP,
-       MAX(time_connect) AS MAX_CONNECT,
-       MAX(time_pretransfer) AS MAX_PRE_TRANSFER,
-       MAX(time_starttransfer) AS MAX_START_TRANSFER
-FROM results;
-
 SELECT *
 FROM results
-WHERE time_total >= ${2:-0.100};
+WHERE time_${3:-total} >= ${2:-0.100};
 EOF
 
-rm -f $t
+for i in namelookup connect pretransfer starttransfer; do
+    echo
+    sqlite3 <<EOF
+.load ./histograms
+CREATE TABLE results (id INTEGER PRIMARY KEY,
+        timestamp TEXT,
+	time_namelookup REAL,
+	time_connect REAL,
+	time_pretransfer REAL,
+	time_starttransfer REAL,
+	http_code INTEGER,
+	port INTEGER,
+        time_total REAL);
+.separator " "
+.import $t results
+.headers on
+.mode column
+SELECT CAST(Min(time_$i) * 1000 AS INTEGER) AS "MIN-$i(ms)",
+       CAST(Max(time_$i) * 1000 AS INTEGER) AS "MAX-$i(ms)",
+       CAST(Avg(time_$i) * 1000 AS INTEGER) AS "AVG-$i(ms)"
+FROM   results;
+EOF
+done
+
+for i in namelookup connect pretransfer starttransfer; do
+    echo
+    sqlite3 <<EOF
+.load ./histograms
+CREATE TABLE results (id INTEGER PRIMARY KEY,
+        timestamp TEXT,
+	time_namelookup REAL,
+	time_connect REAL,
+	time_pretransfer REAL,
+	time_starttransfer REAL,
+	http_code INTEGER,
+	port INTEGER,
+        time_total REAL);
+.separator " "
+.import $t results
+.headers on
+.mode column
+
+SELECT CAST(histo.bin * 1000 AS INTEGER) as "bin-$i(ms)",
+       histo.bincount,
+       histo.accumcount,
+       Cast(Sum(bincount)
+	      OVER (
+		ORDER BY accumcount) / Cast((SELECT Count(time_$i)
+					     FROM   results) AS REAL) * 100.0 AS
+	    INTEGER)        AS "acccum%age"
+FROM   Histo("results", "time_$i", ${NBINS:-10}, (SELECT Min(time_$i)
+						FROM results) - 0.0001,
+					     (SELECT Max(time_$i)
+						FROM results) + 0.0001);
+EOF
+done
+
+rm -f "$t"
