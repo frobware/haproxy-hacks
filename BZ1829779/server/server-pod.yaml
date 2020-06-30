@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    name: bz1829779-server
+  spec:
+    containers:
+    - image: frobware/bz1829779-server
+      name: server
+      command: ["/workdir/server"]
+      env:
+      - name: HTTP_PORT
+        value: "3264"
+      readinessProbe:
+        httpGet:
+          path: /healthz
+          port: 3264
+        initialDelaySeconds: 3
+        periodSeconds: 3
+    dnsPolicy: ClusterFirst
+    hostNetwork: true     
+    nodeSelector:    
+      role: node     
+      router: enabled      
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: router
+    serviceAccountName: router

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	defaultHTTPPort = "8080"
+	defaultHTTPPort = "3264"
 )
 
 func lookupEnv(key, defaultVal string) string {
@@ -65,17 +65,19 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		now := time.Now()
+		handleConnStart := time.Now()
 		atomic.AddInt64(&clientCon, 1)
 		n := clientCon
-		connectionCh <- true
 		log.Println("connection", n, r.RemoteAddr)
+
+		readAllStart := time.Now()
 		bytes, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
+		readAllDone := time.Now()
 		rs := RequestSummary{
 			URL:     r.URL.RequestURI(),
 			Method:  r.Method,
@@ -95,13 +97,12 @@ func main() {
 			time.Sleep(busyTime)
 		}
 
+		writeStart := time.Now()
 		w.Write(resp)
 		w.Write([]byte("\n"))
+		writeDone := time.Now()
 
-		d := time.Now().Sub(now)
-		if d > 1*time.Second {
-			log.Println("c-complete", n, r.RemoteAddr, busyTime, time.Now().Sub(now))
-		}
+		log.Println("c-complete", n, r.RemoteAddr, busyTime, readAllDone.Sub(readAllStart), writeDone.Sub(writeStart), time.Now().Sub(handleConnStart))
 	})
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
