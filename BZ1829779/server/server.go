@@ -42,21 +42,24 @@ func init() {
 
 func main() {
 	connectionCh := make(chan bool)
-	ticker := time.Tick(1 * time.Second)
+	doTicker := lookupEnv("TICKER", "false") == "true"
 
-	go func() {
-		var connections int64
-		for {
-			select {
-			case <-connectionCh:
-				connections += 1
-			case <-ticker:
-				log.Printf("connection/s: %v", connections)
-				connections = 0
+	if doTicker {
+		ticker := time.Tick(1 * time.Second)
+		go func() {
+			var connections int64
+			for {
+				select {
+				case <-connectionCh:
+					connections += 1
+				case <-ticker:
+					log.Printf("connection/s: %v", connections)
+					connections = 0
+				}
 			}
-		}
 
-	}()
+		}()
+	}
 
 	busyTime, err := time.ParseDuration(lookupEnv("BUSY_TIMEOUT", "0s"))
 
@@ -68,6 +71,9 @@ func main() {
 		handleConnStart := time.Now()
 		atomic.AddInt64(&clientCon, 1)
 		n := clientCon
+		if doTicker {
+			connectionCh <- true
+		}
 		log.Println("connection", n, r.RemoteAddr)
 
 		readAllStart := time.Now()
