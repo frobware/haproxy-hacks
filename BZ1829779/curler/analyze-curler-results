@@ -13,7 +13,7 @@ results_file=${1:?}
 t=$(mktemp)
 awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' $results_file > $t
 
-sqlite3 <<EOF
+./sqlite3 <<EOF
 #https://github.com/Oeffner/SQLiteHistograms
 .load ./histograms
 
