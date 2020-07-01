@@ -9,7 +9,7 @@ items:
     name: bz1829779
     namespace: default
   spec:
-    replicas: 1
+    replicas: 2
     selector:
       app: bz1829779
     template:
@@ -32,6 +32,7 @@ items:
         serviceAccount: router
         serviceAccountName: router
         clusterIP: None
+        dnsPolicy: ClusterFirstWithHostNet
     ports:
     - name: 3264-tcp
       protocol: TCP
