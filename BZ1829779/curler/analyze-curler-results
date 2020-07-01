@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 
-if ! type -P sqlite3 >/dev/null 2>&1; then
-    echo "sqlite3 missing; yum install -y /usr/bin/sqlite3"
-    exit 1
-fi
+thisdir="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd -P)"
 
 set -u
 set -o pipefail
@@ -13,9 +10,8 @@ results_file=${1:?}
 t=$(mktemp)
 awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' $results_file > $t
 
-./sqlite3 <<EOF
-#https://github.com/Oeffner/SQLiteHistograms
-.load ./histograms
+$thisdir/sqlite3 <<EOF
+.load $thisdir/histograms.so
 
 CREATE TABLE results (id INTEGER PRIMARY KEY,
 	timestamp TEXT,
@@ -37,8 +33,8 @@ EOF
 
 for i in namelookup connect pretransfer starttransfer; do
     echo
-    sqlite3 <<EOF
-.load ./histograms
+    $thisdir/sqlite3 <<EOF
+.load $thisdir/histograms
 CREATE TABLE results (id INTEGER PRIMARY KEY,
 	timestamp TEXT,
 	time_namelookup REAL,
@@ -61,8 +57,8 @@ done
 
 for i in namelookup connect pretransfer starttransfer total; do
     echo
-    sqlite3 <<EOF
-.load ./histograms
+    $thisdir/sqlite3 <<EOF
+.load $thisdir/histograms
 CREATE TABLE results (id INTEGER PRIMARY KEY,
 	timestamp TEXT,
 	time_namelookup REAL,
