@@ -17,5 +17,3 @@ build: server
 
 push: build
 	docker push frobware/bz1829779-server
-
-.PHONY: bz1829779-hostnetwork.yaml
