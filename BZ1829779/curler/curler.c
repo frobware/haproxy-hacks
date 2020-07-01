@@ -2,6 +2,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #undef NDEBUG
 #include <assert.h>
@@ -27,6 +28,9 @@ int main(int argc, char *argv[]) {
     n = atoi(getenv("N"));
   }
 
+  char urlbuf[8192];
+  assert(strlen(argv[1]) < 8000);
+
   for (i = 0; i < n; i++) {
     curl_handle = curl_easy_init();
     assert(curl_handle);
@@ -35,7 +39,8 @@ int main(int argc, char *argv[]) {
       long longinfo;
       double doubleinfo;
 
-      curl_easy_setopt(curl_handle, CURLOPT_URL, argv[1]);
+      sprintf(urlbuf, "%s/?N=%d", argv[1], i);
+      curl_easy_setopt(curl_handle, CURLOPT_URL, urlbuf);
       curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb);
 
       curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
