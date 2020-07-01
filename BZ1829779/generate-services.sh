@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for i in $(seq 0 ${1:-10}); do
+for i in $(seq 1 ${1:-10}); do
 cat <<-EOF
 ---
 apiVersion: v1
