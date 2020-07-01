@@ -26,7 +26,7 @@ items:
   labels:
     app: bz1829779
   metadata:
-    name: src-config
+    name: bz1829779-src-config
   data:
     go.mod: |
 $go_mod
@@ -60,7 +60,7 @@ $go_server
           - name: GOCACHE
             value: "/tmp"
           volumeMounts:
-          - name: src-volume
+          - name: bz1829779-src-volume
             mountPath: /go/src
           readinessProbe:
             httpGet:
@@ -69,9 +69,9 @@ $go_server
             initialDelaySeconds: 3
             periodSeconds: 3
         volumes:
-        - name: src-volume
+        - name: bz1829779-src-volume
           configMap:
-            name: src-config
+            name: bz1829779-src-config
     selector:
       matchLabels:
         app: bz1829779
