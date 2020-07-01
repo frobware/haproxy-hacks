@@ -108,7 +108,13 @@ func main() {
 		w.Write([]byte("\n"))
 		writeDone := time.Now()
 
-		log.Println("c-complete", n, r.RemoteAddr, busyTime, readAllDone.Sub(readAllStart), writeDone.Sub(writeStart), time.Now().Sub(handleConnStart))
+		log.Printf("c-complete %v %s busytime %f readbody %.9f writeresp %.9f total %.9f\n",
+			n,
+			r.RemoteAddr,
+			busyTime.Seconds(),
+			readAllDone.Sub(readAllStart).Seconds(),
+			writeDone.Sub(writeStart).Seconds(),
+			time.Now().Sub(handleConnStart).Seconds())
 	})
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
