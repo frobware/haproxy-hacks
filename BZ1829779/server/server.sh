@@ -3,7 +3,7 @@
 go_mod="$(sed -e 's/^/        /' go.mod    | sed '/^[[:space:]]*$/d')"
 go_sum="$(sed -e 's/^/        /' go.sum    | sed '/^[[:space:]]*$/d')"
 
-go_server="$(sed -e 's/^/        /' server/server.go | sed '/^[[:space:]]*$/d')"
+go_server="$(sed -e 's/^/        /' server.go | sed '/^[[:space:]]*$/d')"
 
 cat <<EOF
 apiVersion: v1
@@ -17,9 +17,9 @@ items:
     selector:
       app: bz1829779
     ports:
-      - port: 8080
+      - port: 3264
         name: http
-        targetPort: 8080
+        targetPort: 3264
         protocol: TCP
 - apiVersion: v1
   kind: ConfigMap
@@ -65,7 +65,7 @@ $go_server
           readinessProbe:
             httpGet:
               path: /healthz
-              port: 8080
+              port: 3264
             initialDelaySeconds: 3
             periodSeconds: 3
         volumes:
@@ -83,7 +83,7 @@ $go_server
     name: bz1829779-edge
   spec:
     port:
-      targetPort: 8080
+      targetPort: 3264
     tls:
       termination: edge
       insecureEdgeTerminationPolicy: Redirect
@@ -118,7 +118,7 @@ $go_server
     name: bz1829779-insecure
   spec:
     port:
-      targetPort: 8080
+      targetPort: 3264
     to:
       kind: Service
       name: bz1829779
