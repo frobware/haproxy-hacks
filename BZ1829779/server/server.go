@@ -108,9 +108,10 @@ func main() {
 		w.Write([]byte("\n"))
 		writeDone := time.Now()
 
-		log.Printf("c-complete %v %s busytime %f readbody %.9f writeresp %.9f total %.9f\n",
+		log.Printf("c-complete %v %s N=%v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
 			n,
 			r.RemoteAddr,
+			rs.Params["N"],
 			busyTime.Seconds(),
 			readAllDone.Sub(readAllStart).Seconds(),
 			writeDone.Sub(writeStart).Seconds(),
