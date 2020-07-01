@@ -31,7 +31,7 @@ FROM results
 WHERE time_${3:-total} >= ${2:-0.100};
 EOF
 
-for i in namelookup connect pretransfer starttransfer; do
+for i in namelookup connect pretransfer starttransfer total; do
     echo
     $thisdir/sqlite3 <<EOF
 .load $thisdir/histograms
