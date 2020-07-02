@@ -108,15 +108,6 @@ if [[ $highlight_outliers == 0 ]]; then
     highlight_filter=$count
 fi
 
-"$thisdir/sqlite3" "$db" <<EOF
-.headers on
-.mode column
-SELECT results.*, COUNT(*) OVER (ROWS UNBOUNDED PRECEDING) AS count
-FROM results
-WHERE $time_field >= $highlight_filter
-ORDER BY $order_by_field
-EOF
-
 for i in namelookup connect app_connect pretransfer starttransfer total; do
     echo
     "$thisdir/sqlite3" "$db" <<EOF
@@ -149,6 +140,34 @@ FROM   Histo("results", "time_$i", ${NBINS:-20}, (SELECT Min(time_$i)
 						FROM results) + 0.0001);
 EOF
 done
+
+echo
+"$thisdir/sqlite3" "$db" <<EOF
+.headers on
+.mode column
+SELECT results.*, COUNT(*) OVER (ROWS UNBOUNDED PRECEDING) AS count
+FROM results
+WHERE $time_field >= $highlight_filter
+ORDER BY $order_by_field
+EOF
+
+# Anaylis from:
+
+echo
+"$thisdir/sqlite3" "$db" <<EOF
+.headers on
+.mode column
+select printf("%.6f", time_namelookup) AS "DNS Lookup",
+       printf("%.6f", time_connect - time_namelookup) AS "TCP Connection",
+       printf("%.6f", time_app_connect - time_connect) AS "TLS Handshake",
+       printf("%.6f", time_connect - time_namelookup) AS "TTFB",
+       printf("%.6f", time_starttransfer - time_pretransfer) AS "Server Processing",
+       printf("%.6f", time_total - time_starttransfer) AS "Content Transfer",
+       printf("%.6f", time_total) AS "TOTAL"
+from results
+WHERE $time_field >= $highlight_filter
+ORDER BY $order_by_field
+EOF
 
 rm "$t"
 
