@@ -76,7 +76,7 @@ func main() {
 		if doTicker {
 			connectionCh <- true
 		}
-		log.Printf("connection host %v port %v\n", n, host, port)
+		log.Printf("connection %v host %v port %v\n", n, host, port)
 
 		readAllStart := time.Now()
 		bytes, err := ioutil.ReadAll(r.Body)
