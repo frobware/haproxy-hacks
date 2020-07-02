@@ -4,7 +4,7 @@ project (CURLER)
 enable_language(C)
 
 #set(CMAKE_C_COMPILER clang)
-set(CMAKE_BUILD_TYPE Debug)
+#set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FindPkgConfig)
