@@ -5,6 +5,20 @@ set -o pipefail
 
 thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
+declare -a colval=("time_namelookup"
+		   "time_connect - time_namelookup"
+		   "time_app_connect - time_connect"
+		   "time_starttransfer - time_pretransfer"
+		   "time_total - time_starttransfer"
+		   "time_total")
+
+declare -a colname=("DNS Lookup"
+		    "TCP Connection"
+		    "TLS Handshake"
+		    "Server Processing"
+		    "Content Transfer"
+		    "GET Complete")
+
 drop_dns_outliers=0
 highlight_filter=0.5
 highlight_outliers=0
@@ -87,6 +101,7 @@ db=$(mktemp)
 awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16, $18 }' "$results_file" > "$t"
 
 "$thisdir/sqlite3" "$db" <<EOF
+CREATE TABLE summary(NAME TEXT, MIN REAL, MAX REAL, AVG REAL, MEDIAN REAL, STDEV REAL);
 CREATE TABLE results (queryid INTEGER PRIMARY KEY,
 	timestamp TEXT,
 	time_namelookup REAL,
@@ -104,6 +119,19 @@ SET time_app_connect = time_connect
 WHERE time_app_connect == 0.0;
 EOF
 
+for i in "${!colname[@]}"; do
+    "$thisdir/sqlite3" "$db" <<EOF
+INSERT INTO summary(Name, Min, Max, Avg, Median, Stdev)
+SELECT "${colname[$i]}",
+       Min(${colval[$i]}),
+       Max(${colval[$i]}),
+       Avg(${colval[$i]}),
+       Median(${colval[$i]}),
+       Stdev(${colval[$i]})
+FROM results;
+EOF
+done
+
 if [[ $drop_dns_outliers == 1 ]]; then
     count=$("$thisdir/sqlite3" "$db" "SELECT COUNT(*) FROM results WHERE time_namelookup >= 5.0")
     echo "Dropping $count DNS outliers at >= 5.0s"
@@ -115,18 +143,6 @@ if [[ $highlight_outliers == 0 ]]; then
     echo "Automatically setting highlight filter to $time_field(99%)"
     highlight_filter=$count
 fi
-
-for i in namelookup connect app_connect pretransfer starttransfer total; do
-    echo
-    "$thisdir/sqlite3" "$db" <<EOF
-.mode line
-SELECT CAST(Min(time_$i) * 1000 AS INTEGER) AS "MIN-$i(ms)",
-       CAST(Max(time_$i) * 1000 AS INTEGER) AS "MAX-$i(ms)",
-       CAST(Avg(time_$i) * 1000 AS INTEGER) AS "AVG-$i(ms)",
-       CAST(stdev(time_$i) * 1000 AS INTEGER) AS "STDEV-$i(ms)"
-FROM   results;
-EOF
-done
 
 for i in $bins; do
     echo
@@ -149,28 +165,41 @@ FROM   Histo("results", "time_$i", ${NBINS:-20}, (SELECT Min(time_$i)
 EOF
 done
 
+echo
+"$thisdir/sqlite3" "$db" <<EOF
+.headers on
+.mode column
+SELECT printf("%17s", name) as Sequence,
+       printf("%.6f", Min) as Min,
+       printf("%.6f", Max) as Max,
+       printf("%.6f", Avg) as Avg,
+       printf("%.6f", Median) as MEDIAN,
+       printf("%.6f", Stdev) as STDEV
+FROM summary;
+EOF
+
 [ $summary -eq 1 ] && exit 0
 
 echo
 "$thisdir/sqlite3" "$db" <<EOF
 .headers on
 .mode column
-SELECT results.*, COUNT(*) OVER (ROWS UNBOUNDED PRECEDING) AS count
+SELECT results.*,
+COUNT(*) OVER (ROWS UNBOUNDED PRECEDING) AS count
 FROM results
 WHERE $time_field >= $highlight_filter
 ORDER BY $order_by_field
 EOF
 
-# Anaylis from:
-
 echo
 "$thisdir/sqlite3" "$db" <<EOF
 .headers on
 .mode column
-select printf("%.6f", time_namelookup) AS "DNS Lookup",
+select queryid,
+       timestamp,
+       printf("%.6f", time_namelookup) AS "DNS Lookup",
        printf("%.6f", time_connect - time_namelookup) AS "TCP Connection",
-       printf("%.6f", MAX(time_app_connect, time_connect) - time_connect) AS "TLS Handshake",
-       printf("%.6f", time_connect - time_namelookup) AS "TTFB",
+       printf("%.6f", time_app_connect - time_connect) AS "TLS Handshake",
        printf("%.6f", time_starttransfer - time_pretransfer) AS "Server Processing",
        printf("%.6f", time_total - time_starttransfer) AS "Content Transfer",
        printf("%.6f", time_total) AS "TOTAL"
