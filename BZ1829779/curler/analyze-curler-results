@@ -12,6 +12,7 @@ time_field="time_total"
 keep_db=0
 order_by_field="queryid";
 bins="total"
+summary=0
 
 PARAMS=""
 while (( "$#" )); do
@@ -60,6 +61,10 @@ while (( "$#" )); do
 		echo "Error: Argument for $1 is missing" >&2
 		exit 1
 	    fi
+	    ;;
+	-s|--summary)
+	    summary=1
+	    shift
 	    ;;
 	-*|--*=)
 	    echo "Error: Unsupported flag $1" >&2
@@ -143,6 +148,8 @@ FROM   Histo("results", "time_$i", ${NBINS:-20}, (SELECT Min(time_$i)
 						FROM results) + 0.0001);
 EOF
 done
+
+[ $summary -eq 1 ] && exit 0
 
 echo
 "$thisdir/sqlite3" "$db" <<EOF
