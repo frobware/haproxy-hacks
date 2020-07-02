@@ -12932,6 +12932,11 @@ static void open_db(ShellState *p, int openFlags){
     sqlite3_shathree_init(p->db, 0, 0);
     sqlite3_completion_init(p->db, 0, 0);
     sqlite3_uint_init(p->db, 0, 0);
+
+    /* variance, stdev, etc. */
+    RegisterExtensionFunctions(p->db);
+    sqlite3_histograms_init(p->db, 0, 0);
+
 #if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_ENABLE_DBPAGE_VTAB)
     sqlite3_dbdata_init(p->db, 0, 0);
 #endif
