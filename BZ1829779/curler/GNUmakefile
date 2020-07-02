@@ -10,7 +10,7 @@ BUILD_FILE              = Makefile
 
 BUILD_DIR               := build
 
-CMAKE_BUILD_TYPE	?= Debug
+CMAKE_BUILD_TYPE	?= Release
 CMAKE_C_COMPILER        ?= gcc
 
 .PHONY: all rclean $(BUILD_DIR)
