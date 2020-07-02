@@ -51,7 +51,7 @@ int main(int argc, char *argv[]) {
   char urlbuf[8192];
   assert(strlen(argv[1]) < 8000);
 
-  for (i = 0; i < n; i++) {
+  for (i = 0; i <= n; i++) {
     if (curl_handle == NULL) {
       curl_handle = curl_easy_init();
       assert(curl_handle);
@@ -60,14 +60,14 @@ int main(int argc, char *argv[]) {
     long longinfo;
     double doubleinfo;
 
-    sprintf(urlbuf, "%s/?queryid=%d", argv[1], i + 1);
+    sprintf(urlbuf, "%s/?queryid=%d", argv[1], i);
     curl_easy_setopt(curl_handle, CURLOPT_URL, urlbuf);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb);
 
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
-    fprintf(stdout, "%d ", i + 1);
+    fprintf(stdout, "%d ", i);
 
 #ifndef NOTIMESTAMP
     {
@@ -99,6 +99,11 @@ int main(int argc, char *argv[]) {
       if (!reuse) {
         curl_easy_cleanup(curl_handle); // End a libcurl easy handle
       }
+      continue;
+    }
+
+    if (i == 0) {
+      /* absorb cost of namelookup */
       continue;
     }
 
