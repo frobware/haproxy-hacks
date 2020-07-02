@@ -79,13 +79,14 @@ results_file=${1:?no-results-file}
 t=$(mktemp)
 db=$(mktemp)
 
-awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' "$results_file" > "$t"
+awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16, $18 }' "$results_file" > "$t"
 
 "$thisdir/sqlite3" "$db" <<EOF
 CREATE TABLE results (queryid INTEGER PRIMARY KEY,
 	timestamp TEXT,
 	time_namelookup REAL,
 	time_connect REAL,
+	time_app_connect REAL,
 	time_pretransfer REAL,
 	time_starttransfer REAL,
 	http_code INTEGER,
@@ -116,7 +117,7 @@ WHERE $time_field >= $highlight_filter
 ORDER BY $order_by_field
 EOF
 
-for i in namelookup connect pretransfer starttransfer total; do
+for i in namelookup connect app_connect pretransfer starttransfer total; do
     echo
     "$thisdir/sqlite3" "$db" <<EOF
 .mode line
