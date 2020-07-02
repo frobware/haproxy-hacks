@@ -67,7 +67,9 @@ int main(int argc, char *argv[]) {
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
-    fprintf(stdout, "%d ", i);
+    if (i > 0) {
+      fprintf(stdout, "%d ", i);
+    }
 
 #ifndef NOTIMESTAMP
     {
@@ -85,7 +87,9 @@ int main(int argc, char *argv[]) {
 
       tm_info = localtime(&tv.tv_sec);
       strftime(buffer, 26, "%H:%M:%S", tm_info);
-      fprintf(stdout, "%s.%03d ", buffer, millisec);
+      if (i > 0) {
+	fprintf(stdout, "%s.%03d ", buffer, millisec);
+      }
     }
 #endif
     curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
