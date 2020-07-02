@@ -3,7 +3,7 @@
 set -u
 set -o pipefail
 
-thisdir="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd -P)"
+thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 drop_dns_outliers=0
 highlight_filter=0.5
@@ -11,6 +11,7 @@ highlight_outliers=0
 time_field="time_total"
 keep_db=0
 order_by_field="queryid";
+bins="total"
 
 PARAMS=""
 while (( "$#" )); do
@@ -20,7 +21,7 @@ while (( "$#" )); do
 	    shift
 	    ;;
 	-f|--time-field)
-	    if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+	    if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
 		time_field=$2
 		shift 2
 	    else
@@ -30,7 +31,7 @@ while (( "$#" )); do
 	    ;;
 	-h|--highlight-outliers)
 	    highlight_outliers=1
-	    if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+	    if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
 		highlight_filter=$2
 		shift 2
 	    else
@@ -43,7 +44,7 @@ while (( "$#" )); do
 	    shift
 	    ;;
 	-o|--order-by)
-	    if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+	    if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
 		order_by_field=$2
 		shift 2
 	    else
@@ -69,9 +70,9 @@ results_file=${1:?no-results-file}
 t=$(mktemp)
 db=$(mktemp)
 
-awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' $results_file > $t
+awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' "$results_file" > "$t"
 
-"$thisdir/sqlite3" $db <<EOF
+"$thisdir/sqlite3" "$db" <<EOF
 CREATE TABLE results (queryid INTEGER PRIMARY KEY,
 	timestamp TEXT,
 	time_namelookup REAL,
@@ -86,18 +87,18 @@ CREATE TABLE results (queryid INTEGER PRIMARY KEY,
 EOF
 
 if [[ $drop_dns_outliers == 1 ]]; then
-    count=$("$thisdir/sqlite3" $db "SELECT COUNT(*) FROM results WHERE time_namelookup >= 5.0")
+    count=$("$thisdir/sqlite3" "$db" "SELECT COUNT(*) FROM results WHERE time_namelookup >= 5.0")
     echo "Dropping $count DNS outliers at >= 5.0s"
-    "$thisdir/sqlite3" $db "DELETE FROM results WHERE time_namelookup >= 5.0;"
+    "$thisdir/sqlite3" "$db" "DELETE FROM results WHERE time_namelookup >= 5.0;"
 fi
 
 if [[ $highlight_outliers == 0 ]]; then
-    count=$("$thisdir/sqlite3" $db "SELECT $time_field FROM results ORDER BY $time_field ASC LIMIT 1 OFFSET (SELECT COUNT(*) FROM results) * 99 / 100 - 1")
+    count=$("$thisdir/sqlite3" "$db" "SELECT $time_field FROM results ORDER BY $time_field ASC LIMIT 1 OFFSET (SELECT COUNT(*) FROM results) * 99 / 100 - 1")
     echo "Automatically setting highlight filter to $time_field(99%)"
     highlight_filter=$count
 fi
 
-"$thisdir/sqlite3" $db <<EOF
+"$thisdir/sqlite3" "$db" <<EOF
 .headers on
 .mode column
 SELECT results.*, COUNT(*) OVER (ROWS UNBOUNDED PRECEDING) AS count
@@ -108,7 +109,7 @@ EOF
 
 for i in namelookup connect pretransfer starttransfer total; do
     echo
-    "$thisdir/sqlite3" $db <<EOF
+    "$thisdir/sqlite3" "$db" <<EOF
 .mode line
 SELECT CAST(Min(time_$i) * 1000 AS INTEGER) AS "MIN-$i(ms)",
        CAST(Max(time_$i) * 1000 AS INTEGER) AS "MAX-$i(ms)",
@@ -118,9 +119,9 @@ FROM   results;
 EOF
 done
 
-for i in total; do
+for i in $bins; do
     echo
-    "$thisdir/sqlite3" $db <<EOF
+    "$thisdir/sqlite3" "$db" <<EOF
 .headers on
 .mode column
 
