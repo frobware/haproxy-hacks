@@ -70,12 +70,13 @@ func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handleConnStart := time.Now()
+		host, port, _ := net.SplitHostPort(r.RemoteAddr)
 		atomic.AddInt64(&clientCon, 1)
 		n := clientCon
 		if doTicker {
 			connectionCh <- true
 		}
-		log.Println("connection", n, r.RemoteAddr)
+		log.Printf("connection host %v port %v\n", n, host, port)
 
 		readAllStart := time.Now()
 		bytes, err := ioutil.ReadAll(r.Body)
@@ -115,8 +116,6 @@ func main() {
 				queryid = val[0]
 			}
 		}
-
-		host, port, _ := net.SplitHostPort(r.RemoteAddr)
 
 		log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
 			n,

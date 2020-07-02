@@ -9,11 +9,11 @@ bz1829779.yaml: bz1829779.sh | server
 server: server.go
 	go build -o server server.go
 
-check-server-build:
-	go build -o server server.go
-
 build: server
 	docker build . -t frobware/bz1829779-server
 
 push: build
 	docker push frobware/bz1829779-server
+
+clean:
+	$(RM) *.yaml
