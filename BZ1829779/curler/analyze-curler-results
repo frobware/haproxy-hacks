@@ -94,6 +94,9 @@ CREATE TABLE results (queryid INTEGER PRIMARY KEY,
 	time_total REAL);
 .separator " "
 .import $t results
+UPDATE results
+SET time_app_connect = time_connect
+WHERE time_app_connect == 0.0;
 EOF
 
 if [[ $drop_dns_outliers == 1 ]]; then
