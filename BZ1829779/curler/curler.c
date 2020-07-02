@@ -1,5 +1,6 @@
 #include <curl/curl.h>
 #include <math.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,6 +11,21 @@
 static size_t write_cb(void *data, size_t size, size_t nmemb, void *userp) {
   size_t realsize = size * nmemb;
   return realsize;
+}
+
+void getinfo_or_die(CURL *curl, CURLINFO info, ...) {
+  va_list arg;
+  void *paramp;
+  CURLcode result;
+
+  va_start(arg, info);
+  paramp = va_arg(arg, void *);
+  result = curl_easy_getinfo(curl, info, paramp);
+  va_end(arg);
+
+  if (result != CURLE_OK) {
+    abort();
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -39,14 +55,14 @@ int main(int argc, char *argv[]) {
       long longinfo;
       double doubleinfo;
 
-      sprintf(urlbuf, "%s/?queryid=%d", argv[1], i+1);
+      sprintf(urlbuf, "%s/?queryid=%d", argv[1], i + 1);
       curl_easy_setopt(curl_handle, CURLOPT_URL, urlbuf);
       curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb);
 
       curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
       curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
-      fprintf(stdout, "%d ", i+1);
+      fprintf(stdout, "%d ", i + 1);
 
 #ifndef NOTIMESTAMP
       {
@@ -73,47 +89,34 @@ int main(int argc, char *argv[]) {
       res = curl_easy_perform(curl_handle);
 
       if (res != CURLE_OK) {
-        fprintf(stdout, "curl_easy_perform() failed: %s\n",
-                curl_easy_strerror(res));
-      } else {
-        assert((CURLE_OK == curl_easy_getinfo(curl_handle,
-                                              CURLINFO_NAMELOOKUP_TIME,
-                                              &doubleinfo)));
-        fprintf(stdout, "namelookup %0.6f ", doubleinfo);
-
-        assert(
-            (CURLE_OK == curl_easy_getinfo(curl_handle, CURLINFO_CONNECT_TIME,
-                                           &doubleinfo)));
-        fprintf(stdout, "connect %0.6f ", doubleinfo);
-
-        assert((CURLE_OK == curl_easy_getinfo(curl_handle,
-                                              CURLINFO_APPCONNECT_TIME,
-                                              &doubleinfo)));
-        fprintf(stdout, "app_connect %0.6f ", doubleinfo);
-
-        assert((CURLE_OK == curl_easy_getinfo(curl_handle,
-                                              CURLINFO_PRETRANSFER_TIME,
-                                              &doubleinfo)));
-        fprintf(stdout, "pretransfer %0.6f ", doubleinfo);
-
-        assert((CURLE_OK == curl_easy_getinfo(curl_handle,
-                                              CURLINFO_STARTTRANSFER_TIME,
-                                              &doubleinfo)));
-        fprintf(stdout, "starttransfer %0.6f ", doubleinfo);
-
-        assert(
-            (CURLE_OK == curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE,
-                                           &longinfo)));
-        fprintf(stdout, "http_code %03ld ", longinfo);
-
-        assert((CURLE_OK == curl_easy_getinfo(curl_handle, CURLINFO_LOCAL_PORT,
-                                              &longinfo)));
-        fprintf(stdout, "port %ld ", longinfo);
-
-        assert((CURLE_OK == curl_easy_getinfo(curl_handle, CURLINFO_TOTAL_TIME,
-                                              &doubleinfo)));
-        fprintf(stdout, "total %0.6f\n", doubleinfo);
+        fprintf(stderr, "curl_easy_perform() failed: %s\n", curl_easy_strerror(res));
+        curl_easy_cleanup(curl_handle); // End a libcurl easy handle
+        continue;
       }
+
+      getinfo_or_die(curl_handle, CURLINFO_NAMELOOKUP_TIME, &doubleinfo);
+      fprintf(stdout, "namelookup %0.6f ", doubleinfo);
+
+      getinfo_or_die(curl_handle, CURLINFO_CONNECT_TIME, &doubleinfo);
+      fprintf(stdout, "connect %0.6f ", doubleinfo);
+
+      getinfo_or_die(curl_handle, CURLINFO_APPCONNECT_TIME, &doubleinfo);
+      fprintf(stdout, "app_connect %0.6f ", doubleinfo);
+
+      getinfo_or_die(curl_handle, CURLINFO_PRETRANSFER_TIME, &doubleinfo);
+      fprintf(stdout, "pretransfer %0.6f ", doubleinfo);
+
+      getinfo_or_die(curl_handle, CURLINFO_STARTTRANSFER_TIME, &doubleinfo);
+      fprintf(stdout, "starttransfer %0.6f ", doubleinfo);
+
+      getinfo_or_die(curl_handle, CURLINFO_RESPONSE_CODE, &longinfo);
+      fprintf(stdout, "http_code %03ld ", longinfo);
+
+      getinfo_or_die(curl_handle, CURLINFO_LOCAL_PORT, &longinfo);
+      fprintf(stdout, "port %ld ", longinfo);
+
+      getinfo_or_die(curl_handle, CURLINFO_TOTAL_TIME, &doubleinfo);
+      fprintf(stdout, "total %0.6f\n", doubleinfo);
 
       curl_easy_cleanup(curl_handle); // End a libcurl easy handle
     }
