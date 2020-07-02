@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -82,8 +83,8 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-
 		readAllDone := time.Now()
+
 		rs := RequestSummary{
 			URL:     r.URL.RequestURI(),
 			Method:  r.Method,
@@ -108,10 +109,20 @@ func main() {
 		w.Write([]byte("\n"))
 		writeDone := time.Now()
 
-		log.Printf("c-complete %v %s N=%v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
+		queryid := "0"
+		if val, ok := rs.Params["queryid"]; ok {
+			if len(val) > 0 {
+				queryid = val[0]
+			}
+		}
+
+		host, port, _ := net.SplitHostPort(r.RemoteAddr)
+
+		log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
 			n,
-			r.RemoteAddr,
-			rs.Params["N"],
+			host,
+			port,
+			queryid,
 			busyTime.Seconds(),
 			readAllDone.Sub(readAllStart).Seconds(),
 			writeDone.Sub(writeStart).Seconds(),
