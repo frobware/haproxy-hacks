@@ -2,8 +2,6 @@
 
 if mountpoint -q /target; then
     cp -v sqlite3 /target
-    cp -v histograms.so /target
-    cp -v sqlitefunctions.so /target
 else
     echo "/target is not a mountpoint."
     echo "- re-run this container with -v /tmp:/target"

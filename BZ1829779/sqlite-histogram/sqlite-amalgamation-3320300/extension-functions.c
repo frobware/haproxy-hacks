@@ -108,7 +108,7 @@ Original code 2006 June 05 by relicoder.
 
 //#include "config.h"
 
-#define COMPILE_SQLITE_EXTENSIONS_AS_LOADABLE_MODULE 1
+/* #define COMPILE_SQLITE_EXTENSIONS_AS_LOADABLE_MODULE 1 */
 #define HAVE_ACOSH 1
 #define HAVE_ASINH 1
 #define HAVE_ATANH 1
@@ -1819,8 +1819,11 @@ int RegisterExtensionFunctions(sqlite3 *db){
     }
     //sqlite3CreateFunc
     /* LMH no error checking */
-    sqlite3_create_function(db, aAggs[i].zName, aAggs[i].nArg, SQLITE_UTF8, 
+    int rc = sqlite3_create_function(db, aAggs[i].zName, aAggs[i].nArg, SQLITE_UTF8,
         pArg, 0, aAggs[i].xStep, aAggs[i].xFinalize);
+    if (rc != SQLITE_OK) {
+	abort();
+    }
 #if 0
     if( aAggs[i].needCollSeq ){
       struct FuncDefAgg *pFunc = sqlite3FindFunction( db, aAggs[i].zName,
