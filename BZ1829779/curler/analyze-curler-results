@@ -1,18 +1,78 @@
 #!/usr/bin/env bash
 
-thisdir="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd -P)"
-
 set -u
 set -o pipefail
 
-results_file=${1:?}
+thisdir="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd -P)"
+
+drop_dns_outliers=0
+highlight_filter=0.5
+highlight_outliers=0
+time_field="time_total"
+keep_db=0
+order_by_field="queryid";
+
+PARAMS=""
+while (( "$#" )); do
+    case "$1" in
+	-d|--drop-dns-outliers)
+	    drop_dns_outliers=1
+	    shift
+	    ;;
+	-f|--time-field)
+	    if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+		time_field=$2
+		shift 2
+	    else
+		echo "Error: Argument for $1 is missing" >&2
+		exit 1
+	    fi
+	    ;;
+	-h|--highlight-outliers)
+	    highlight_outliers=1
+	    if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+		highlight_filter=$2
+		shift 2
+	    else
+		echo "Error: Argument for $1 is missing" >&2
+		exit 1
+	    fi
+	    ;;
+	-k|--keep-db)
+	    keep_db=1
+	    shift
+	    ;;
+	-o|--order-by)
+	    if [ -n "$2" ] && [ ${2:0:1} != "-" ]; then
+		order_by_field=$2
+		shift 2
+	    else
+		echo "Error: Argument for $1 is missing" >&2
+		exit 1
+	    fi
+	    ;;
+	-*|--*=)
+	    echo "Error: Unsupported flag $1" >&2
+	    exit 1
+	;;
+	*) # preserve positional arguments
+	    PARAMS="$PARAMS $1"
+	    shift
+	    ;;
+    esac
+done
+
+# reset positional arguments
+eval set -- "$PARAMS"
+results_file=${1:?no-results-file}
 
 t=$(mktemp)
+db=$(mktemp)
+
 awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' $results_file > $t
 
-$thisdir/sqlite3 <<EOF
-
-CREATE TABLE results (id INTEGER PRIMARY KEY,
+"$thisdir/sqlite3" $db <<EOF
+CREATE TABLE results (queryid INTEGER PRIMARY KEY,
 	timestamp TEXT,
 	time_namelookup REAL,
 	time_connect REAL,
@@ -23,50 +83,44 @@ CREATE TABLE results (id INTEGER PRIMARY KEY,
 	time_total REAL);
 .separator " "
 .import $t results
+EOF
+
+if [[ $drop_dns_outliers == 1 ]]; then
+    count=$("$thisdir/sqlite3" $db "SELECT COUNT(*) FROM results WHERE time_namelookup >= 5.0")
+    echo "Dropping $count DNS outliers at >= 5.0s"
+    "$thisdir/sqlite3" $db "DELETE FROM results WHERE time_namelookup >= 5.0;"
+fi
+
+if [[ $highlight_outliers == 0 ]]; then
+    count=$("$thisdir/sqlite3" $db "SELECT $time_field FROM results ORDER BY $time_field ASC LIMIT 1 OFFSET (SELECT COUNT(*) FROM results) * 99 / 100 - 10")
+    echo "Automatically setting highlight filter to $time_field(99%)"
+    highlight_filter=$count
+fi
+
+"$thisdir/sqlite3" $db <<EOF
 .headers on
 .mode column
-SELECT *
+SELECT results.*, COUNT(*) OVER (ROWS UNBOUNDED PRECEDING) AS count
 FROM results
-WHERE time_${3:-total} >= ${2:-0.100};
+WHERE $time_field >= $highlight_filter
+ORDER BY $order_by_field
 EOF
 
 for i in namelookup connect pretransfer starttransfer total; do
     echo
-    $thisdir/sqlite3 <<EOF
-CREATE TABLE results (id INTEGER PRIMARY KEY,
-	timestamp TEXT,
-	time_namelookup REAL,
-	time_connect REAL,
-	time_pretransfer REAL,
-	time_starttransfer REAL,
-	http_code INTEGER,
-	port INTEGER,
-	time_total REAL);
-.separator " "
-.import $t results
-.headers on
-.mode column
+    "$thisdir/sqlite3" $db <<EOF
+.mode line
 SELECT CAST(Min(time_$i) * 1000 AS INTEGER) AS "MIN-$i(ms)",
        CAST(Max(time_$i) * 1000 AS INTEGER) AS "MAX-$i(ms)",
-       CAST(Avg(time_$i) * 1000 AS INTEGER) AS "AVG-$i(ms)"
+       CAST(Avg(time_$i) * 1000 AS INTEGER) AS "AVG-$i(ms)",
+       CAST(stdev(time_$i) * 1000 AS INTEGER) AS "STDEV-$i(ms)"
 FROM   results;
 EOF
 done
 
-for i in namelookup connect pretransfer starttransfer total; do
+for i in total; do
     echo
-    $thisdir/sqlite3 <<EOF
-CREATE TABLE results (id INTEGER PRIMARY KEY,
-	timestamp TEXT,
-	time_namelookup REAL,
-	time_connect REAL,
-	time_pretransfer REAL,
-	time_starttransfer REAL,
-	http_code INTEGER,
-	port INTEGER,
-	time_total REAL);
-.separator " "
-.import $t results
+    "$thisdir/sqlite3" $db <<EOF
 .headers on
 .mode column
 
@@ -78,14 +132,17 @@ SELECT CAST(histo.bin * 1000 AS INTEGER) as "bin-$i(ms)",
 		ORDER BY accumcount) / Cast((SELECT Count(time_$i)
 					     FROM   results) AS REAL) * 100.0 AS
 	    INTEGER)        AS "acccum%age"
-FROM   Histo("results", "time_$i", ${NBINS:-10}, (SELECT Min(time_$i)
+FROM   Histo("results", "time_$i", ${NBINS:-20}, (SELECT Min(time_$i)
 						FROM results) - 0.0001,
 					     (SELECT Max(time_$i)
 						FROM results) + 0.0001);
-
-SELECT stdev(time_${i}) from results;
-
 EOF
 done
 
-rm -f "$t"
+rm "$t"
+
+if [ $keep_db -eq 1 ]; then
+    echo "Database: $db"
+else
+    rm "$db"
+fi
