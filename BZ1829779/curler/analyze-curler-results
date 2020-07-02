@@ -84,10 +84,6 @@ SELECT CAST(histo.bin * 1000 AS INTEGER) as "bin-$i(ms)",
 FROM   Histo("results", "time_$i", ${NBINS:-10}, 0,
 					     (SELECT Max(time_$i)
 						FROM results) + 0.0001);
-
-select count(*) from results
-where http_code != 200;
-
 EOF
 done
 
