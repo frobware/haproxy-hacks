@@ -159,7 +159,7 @@ echo
 .mode column
 select printf("%.6f", time_namelookup) AS "DNS Lookup",
        printf("%.6f", time_connect - time_namelookup) AS "TCP Connection",
-       printf("%.6f", time_app_connect - time_connect) AS "TLS Handshake",
+       printf("%.6f", MAX(time_app_connect, time_connect) - time_connect) AS "TLS Handshake",
        printf("%.6f", time_connect - time_namelookup) AS "TTFB",
        printf("%.6f", time_starttransfer - time_pretransfer) AS "Server Processing",
        printf("%.6f", time_total - time_starttransfer) AS "Content Transfer",
