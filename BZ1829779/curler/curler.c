@@ -39,14 +39,14 @@ int main(int argc, char *argv[]) {
       long longinfo;
       double doubleinfo;
 
-      sprintf(urlbuf, "%s/?N=%d", argv[1], i);
+      sprintf(urlbuf, "%s/?queryid=%d", argv[1], i+1);
       curl_easy_setopt(curl_handle, CURLOPT_URL, urlbuf);
       curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb);
 
       curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
       curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
-      fprintf(stdout, "%d ", i);
+      fprintf(stdout, "%d ", i+1);
 
 #ifndef NOTIMESTAMP
       {
