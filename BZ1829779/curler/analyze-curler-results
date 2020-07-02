@@ -92,7 +92,7 @@ if [[ $drop_dns_outliers == 1 ]]; then
 fi
 
 if [[ $highlight_outliers == 0 ]]; then
-    count=$("$thisdir/sqlite3" $db "SELECT $time_field FROM results ORDER BY $time_field ASC LIMIT 1 OFFSET (SELECT COUNT(*) FROM results) * 99 / 100 - 10")
+    count=$("$thisdir/sqlite3" $db "SELECT $time_field FROM results ORDER BY $time_field ASC LIMIT 1 OFFSET (SELECT COUNT(*) FROM results) * 99 / 100 - 1")
     echo "Automatically setting highlight filter to $time_field(99%)"
     highlight_filter=$count
 fi
