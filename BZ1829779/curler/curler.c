@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
       curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
       curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
-      fprintf(stdout, "%d ", i + 1);
+      fprintf(stdout, "%d ", i);
 
 #ifndef NOTIMESTAMP
       {
