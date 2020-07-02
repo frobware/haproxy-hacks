@@ -11,7 +11,6 @@ t=$(mktemp)
 awk '{ print $1, $2, $4, $6, $8, $10, $12, $14, $16 }' $results_file > $t
 
 $thisdir/sqlite3 <<EOF
-.load $thisdir/histograms.so
 
 CREATE TABLE results (id INTEGER PRIMARY KEY,
 	timestamp TEXT,
@@ -34,7 +33,6 @@ EOF
 for i in namelookup connect pretransfer starttransfer total; do
     echo
     $thisdir/sqlite3 <<EOF
-.load $thisdir/histograms
 CREATE TABLE results (id INTEGER PRIMARY KEY,
 	timestamp TEXT,
 	time_namelookup REAL,
@@ -58,7 +56,6 @@ done
 for i in namelookup connect pretransfer starttransfer total; do
     echo
     $thisdir/sqlite3 <<EOF
-.load $thisdir/histograms
 CREATE TABLE results (id INTEGER PRIMARY KEY,
 	timestamp TEXT,
 	time_namelookup REAL,
@@ -81,9 +78,13 @@ SELECT CAST(histo.bin * 1000 AS INTEGER) as "bin-$i(ms)",
 		ORDER BY accumcount) / Cast((SELECT Count(time_$i)
 					     FROM   results) AS REAL) * 100.0 AS
 	    INTEGER)        AS "acccum%age"
-FROM   Histo("results", "time_$i", ${NBINS:-10}, 0,
+FROM   Histo("results", "time_$i", ${NBINS:-10}, (SELECT Min(time_$i)
+						FROM results) - 0.0001,
 					     (SELECT Max(time_$i)
 						FROM results) + 0.0001);
+
+SELECT stdev(time_${i}) from results;
+
 EOF
 done
 
