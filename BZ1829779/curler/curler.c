@@ -86,14 +86,19 @@ int main(int argc, char *argv[]) {
         fprintf(stdout, "connect %0.6f ", doubleinfo);
 
         assert((CURLE_OK == curl_easy_getinfo(curl_handle,
+                                              CURLINFO_APPCONNECT_TIME,
+                                              &doubleinfo)));
+        fprintf(stdout, "app_connect %0.6f ", doubleinfo);
+
+        assert((CURLE_OK == curl_easy_getinfo(curl_handle,
                                               CURLINFO_PRETRANSFER_TIME,
                                               &doubleinfo)));
-        fprintf(stdout, "pre %0.6f ", doubleinfo);
+        fprintf(stdout, "pretransfer %0.6f ", doubleinfo);
 
         assert((CURLE_OK == curl_easy_getinfo(curl_handle,
                                               CURLINFO_STARTTRANSFER_TIME,
                                               &doubleinfo)));
-        fprintf(stdout, "start %0.6f ", doubleinfo);
+        fprintf(stdout, "starttransfer %0.6f ", doubleinfo);
 
         assert(
             (CURLE_OK == curl_easy_getinfo(curl_handle, CURLINFO_RESPONSE_CODE,
