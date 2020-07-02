@@ -67,6 +67,7 @@ int main(int argc, char *argv[]) {
         fprintf(stdout, "%s.%03d ", buffer, millisec);
       }
 #endif
+      curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
 
       /* client.Get() */
       res = curl_easy_perform(curl_handle);
