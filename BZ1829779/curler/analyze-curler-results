@@ -17,7 +17,7 @@ declare -a colname=("DNS Lookup"
 		    "TLS Handshake"
 		    "Server Processing"
 		    "Content Transfer"
-		    "GET Complete")
+		    "Completed")
 
 drop_dns_outliers=0
 highlight_filter=0.5
@@ -197,11 +197,12 @@ echo
 select COUNT(*) OVER (ROWS UNBOUNDED PRECEDING) AS count,
        queryid,
        timestamp,
-       printf("%.6f", time_namelookup) AS "DNS Lookup",
-       printf("%.6f", time_connect - time_namelookup) AS "TCP Connection",
-       printf("%.6f", time_app_connect - time_connect) AS "TLS Handshake",
-       printf("%.6f", time_starttransfer - time_pretransfer) AS "Server Processing",
-       printf("%.6f", time_total - time_starttransfer) AS "Content Transfer",
+       printf("%.6f", ${colval[0]}) AS "${colname[0]}",
+       printf("%.6f", ${colval[1]}) AS "${colname[1]}",
+       printf("%.6f", ${colval[2]}) AS "${colname[2]}",
+       printf("%.6f", ${colval[3]}) AS "${colname[3]}",
+       printf("%.6f", ${colval[4]}) AS "${colname[4]}",
+       printf("%.6f", ${colval[5]}) AS "${colname[5]}",
        port,
        http_code,
        printf("%.6f", time_total) AS "TOTAL"
