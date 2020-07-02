@@ -160,7 +160,7 @@ for i in $bins; do
 .headers on
 .mode column
 
-SELECT CAST(histo.bin * 1000 AS INTEGER) as "bin-$i(ms)",
+SELECT printf("%.6f", histo.bin) as "bin-$i",
        histo.bincount,
        histo.accumcount,
        Cast(Sum(bincount)
