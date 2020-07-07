@@ -134,19 +134,6 @@ SET time_app_connect = time_connect
 WHERE time_app_connect == 0.0;
 EOF
 
-for i in "${!colname[@]}"; do
-    "$thisdir/sqlite3" "$db" <<EOF
-INSERT INTO summary(Name, Min, Max, Avg, Median, Stdev)
-SELECT "${colname[$i]}",
-       Min(${colval[$i]}),
-       Max(${colval[$i]}),
-       Avg(${colval[$i]}),
-       Median(${colval[$i]}),
-       Stdev(${colval[$i]})
-FROM results;
-EOF
-done
-
 if [[ $drop_outliers > 0 ]]; then
     count=$("$thisdir/sqlite3" "$db" "SELECT COUNT(*) FROM results WHERE time_total >= $drop_outliers")
     echo "Dropping $count outliers >= $drop_outliers"
@@ -159,6 +146,19 @@ if [[ $highlight_outliers == 0 ]]; then
     # highlight_filter=$count
     :
 fi
+
+for i in "${!colname[@]}"; do
+    "$thisdir/sqlite3" "$db" <<EOF
+INSERT INTO summary(Name, Min, Max, Avg, Median, Stdev)
+SELECT "${colname[$i]}",
+       Min(${colval[$i]}),
+       Max(${colval[$i]}),
+       Avg(${colval[$i]}),
+       Median(${colval[$i]}),
+       Stdev(${colval[$i]})
+FROM results;
+EOF
+done
 
 for i in $bins; do
     echo
