@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+
+# 2020/07/07 02:31:26.941517 c-complete 9 host 192.168.0.8 port 47044
+# queryid 8 busytime 0.000000 readbody 0.000002000 writeresp 0.000000800 total 0.000053201
+
+thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
+results_file=${1:?no-results-file}
+
+t=$(mktemp)
+db=$(mktemp)
+
+awk '/c-complete/ { print $4, $6, $8, $10, $12, $14, $16, $18 }' $results_file > $t
+
+"$thisdir/../curler/sqlite3" "$db" <<EOF
+CREATE TABLE results (
+        connectionid INTEGER PRIMARY KEY,
+	host TEXT,
+	port INTEGER,
+	queryid INTERGER,
+	busytime REAL,
+	readbody REAL,
+	writeresp REAL,
+	total REAL);
+.separator " "
+.import $t results
+EOF
+
+"$thisdir/../curler/sqlite3" "$db" <<EOF
+.headers on
+.mode column
+select connectionid, host, port, queryid,
+printf("%.6f", readbody) as readbody,
+printf("%.6f", writeresp) as writeresp,
+printf("%.6f", max(total)) as "total(max)"
+from results
+EOF
