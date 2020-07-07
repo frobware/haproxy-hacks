@@ -35,3 +35,22 @@ printf("%.6f", writeresp) as writeresp,
 printf("%.6f", max(total)) as "total(max)"
 from results
 EOF
+
+echo
+"$thisdir/../curler/sqlite3" "$db" <<EOF
+.headers on
+.mode column
+SELECT port as "portusage>1", COUNT(1) as count
+FROM results
+GROUP BY port
+HAVING count > 1
+ORDER BY count ASC
+EOF
+
+echo
+"$thisdir/../curler/sqlite3" "$db" <<EOF
+.headers on
+.mode column
+SELECT COUNT(DISTINCT port)
+FROM results
+EOF
