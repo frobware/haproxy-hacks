@@ -100,10 +100,7 @@ int main(int argc, char *argv[]) {
     if (res != CURLE_OK) {
       fprintf(stderr, "curl_easy_perform() failed: %s\n",
               curl_easy_strerror(res));
-      if (!reuse) {
-        curl_easy_cleanup(curl_handle); // End a libcurl easy handle
-      }
-      continue;
+      exit(EXIT_FAILURE);
     }
 
     if (i == 0) {
