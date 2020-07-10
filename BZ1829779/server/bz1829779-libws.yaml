@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: bz1829779-libws
+  spec:
+    selector:
+      app: bz1829779-libws
+    ports:
+      - port: 7681
+        name: http
+        targetPort: 7681
+        protocol: TCP
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: bz1829779-libws
+    labels:
+      app: bz1829779-libws
+  spec:
+    replicas: 1
+    template:
+      metadata:
+        name: bz1829779-libws
+        labels:
+          app: bz1829779-libws
+      spec:
+        containers:
+        - command:
+          - /libwebsockets-test-server
+          image: docker.io/frobware/libwebsockets-test-server
+          imagePullPolicy: IfNotPresent
+          name: server
+    selector:
+      matchLabels:
+        app: bz1829779-libws
