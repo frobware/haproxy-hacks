@@ -32,6 +32,11 @@ int main(int argc, char *argv[]) {
   CURL *curl_handle = NULL;
   CURLcode res;
   int i, n = 10, reuse = 1;
+  char buffer[26];
+  int millisec;
+  struct tm *tm_info;
+  struct timeval tv;
+  char urlbuf[8192];
 
   if (argc < 2) {
     fprintf(stderr, "usage: <host>\n");
@@ -47,9 +52,6 @@ int main(int argc, char *argv[]) {
   if (getenv("R") != NULL) {
     reuse = atoi(getenv("R"));
   }
-
-  char urlbuf[8192];
-  assert(strlen(argv[1]) < 8000);
 
   for (i = 0; i <= n; i++) {
     if (curl_handle == NULL) {
@@ -67,46 +69,35 @@ int main(int argc, char *argv[]) {
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
 
-    if (i > 0) {
-      fprintf(stdout, "%d ", i);
+    gettimeofday(&tv, NULL);
+    millisec = lrint(tv.tv_usec / 1000.0);
+    if (millisec >= 1000) {
+      millisec -= 1000;
+      tv.tv_sec++;
     }
 
-#ifndef NOTIMESTAMP
-    {
-      char buffer[26];
-      int millisec;
-      struct tm *tm_info;
-      struct timeval tv;
+    tm_info = localtime(&tv.tv_sec);
+    strftime(buffer, 26, "%H:%M:%S", tm_info);
 
-      gettimeofday(&tv, NULL);
-      millisec = lrint(tv.tv_usec / 1000.0);
-      if (millisec >= 1000) {
-        millisec -= 1000;
-        tv.tv_sec++;
-      }
-
-      tm_info = localtime(&tv.tv_sec);
-      strftime(buffer, 26, "%H:%M:%S", tm_info);
-      if (i > 0) {
-	fprintf(stdout, "%s.%03d ", buffer, millisec);
-      }
-    }
-#endif
     curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
 
     /* client.Get() */
     res = curl_easy_perform(curl_handle);
 
     if (res != CURLE_OK) {
-      fprintf(stderr, "curl_easy_perform() failed: %s\n",
-              curl_easy_strerror(res));
-      exit(EXIT_FAILURE);
+      fprintf(stderr, "%ld: curl_easy_perform() failed: %s (error=%zd)\n",
+              i+1, curl_easy_strerror(res), (size_t)res);
+      goto out;
     }
 
     if (i == 0) {
-      /* absorb cost of namelookup */
+      /* absorb cost of namelookup, process loading, et al. First
+	 result always skews the results. */
       continue;
     }
+
+      fprintf(stdout, "%d ", i+1);
+	fprintf(stdout, "%s.%03d ", buffer, millisec);
 
     getinfo_or_die(curl_handle, CURLINFO_NAMELOOKUP_TIME, &doubleinfo);
     fprintf(stdout, "namelookup %0.6f ", doubleinfo);
@@ -132,6 +123,7 @@ int main(int argc, char *argv[]) {
     getinfo_or_die(curl_handle, CURLINFO_TOTAL_TIME, &doubleinfo);
     fprintf(stdout, "total %0.6f\n", doubleinfo);
 
+  out:
     if (!reuse) {
       curl_easy_cleanup(curl_handle); // End a libcurl easy handle
       curl_handle = NULL;
