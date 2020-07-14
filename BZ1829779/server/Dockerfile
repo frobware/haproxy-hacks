@@ -1,6 +1,5 @@
 FROM docker.io/centos:7
-
-WORKDIR /workdir
-COPY ./server /workdir
-EXPOSE 3264
-ENTRYPOINT ["/workdir/server"]
+USER root
+COPY libwebsockets/build/bin/libwebsockets-test-server /
+EXPOSE 7681
+ENTRYPOINT ["/libwebsockets-test-server"]
