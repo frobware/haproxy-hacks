@@ -27,7 +27,6 @@ keep_db=0
 order_by_field="queryid";
 bins="total"
 summary=0
-limit=15
 
 PARAMS=""
 while (( "$#" )); do
@@ -72,15 +71,6 @@ while (( "$#" )); do
 	-k|--keep-db)
 	    keep_db=1
 	    shift
-	    ;;
-	-l|--limit)
-	    if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
-		limit=$2
-		shift 2
-	    else
-		echo "Error: Argument for $1 is missing" >&2
-		exit 1
-	    fi
 	    ;;
 	-o|--order-by)
 	    if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
@@ -216,7 +206,6 @@ select
 FROM results
 WHERE $time_field >= $highlight_filter
 ORDER BY $order_by_field
-LIMIT $limit
 EOF
 
 rm "$t"
