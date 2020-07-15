@@ -85,19 +85,19 @@ int main(int argc, char *argv[]) {
     res = curl_easy_perform(curl_handle);
 
     if (res != CURLE_OK) {
-      fprintf(stderr, "%ld: curl_easy_perform() failed: %s (error=%zd)\n",
-              i+1, curl_easy_strerror(res), (size_t)res);
+      fprintf(stderr, "%ld: curl_easy_perform() failed: %s (error=%zd)\n", i,
+              curl_easy_strerror(res), (size_t)res);
       goto out;
     }
 
     if (i == 0) {
       /* absorb cost of namelookup, process loading, et al. First
-	 result always skews the results. */
+         result always skews the results. */
       continue;
     }
 
-      fprintf(stdout, "%d ", i+1);
-	fprintf(stdout, "%s.%03d ", buffer, millisec);
+    fprintf(stdout, "%d ", i);
+    fprintf(stdout, "%s.%03d ", buffer, millisec);
 
     getinfo_or_die(curl_handle, CURLINFO_NAMELOOKUP_TIME, &doubleinfo);
     fprintf(stdout, "namelookup %0.6f ", doubleinfo);
