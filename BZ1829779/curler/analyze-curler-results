@@ -208,6 +208,15 @@ WHERE $time_field >= $highlight_filter
 ORDER BY $order_by_field
 EOF
 
+echo
+"$thisdir/sqlite3" "$db" <<EOF
+.headers on
+.mode column
+select count(http_code) as "count(http_code != 200)"
+FROM results
+WHERE http_code != 200;
+EOF
+
 rm "$t"
 
 if [ $keep_db -eq 1 ]; then
