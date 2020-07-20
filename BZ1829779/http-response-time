@@ -15,16 +15,14 @@ set -o pipefail
 
 pcap_file=${1:?no pcap file specified}
 tmpfile=$(mktemp)
+thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 tshark -r ${pcap_file} -Y "http.time" | awk '{printf "%.3f\n", $12}' > $tmpfile
 
-sqlite3 <<EOF
+"$thisdir/curler/sqlite3" <<EOF
 .separator " "
 .headers on
 .mode column
-#https://github.com/Oeffner/SQLiteHistograms
-.load ./histograms
-
 CREATE TABLE results (time_total REAL);
 .import $tmpfile results
 
