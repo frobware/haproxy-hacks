@@ -1,0 +1,102 @@
+From 26bacf8b15691a0bc3b4296d626d1a4ce02c578f Mon Sep 17 00:00:00 2001
+From: Andrew McDermott <amcdermo@redhat.com>
+Date: Fri, 17 Jul 2020 16:38:09 +0100
+Subject: [PATCH] Allow remote debugging via delve - DO NOT MERGE THIS COMMIT
+
+---
+ Makefile                              | 15 ++++++++++++---
+ images/router/haproxy/Dockerfile      | 17 ++++++++++++-----
+ images/router/haproxy/Dockerfile.rhel |  6 +++++-
+ 3 files changed, 29 insertions(+), 9 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 6404787..6312d85 100644
+--- a/Makefile
++++ b/Makefile
+@@ -5,9 +5,7 @@ MAIN_PACKAGE=$(PACKAGE)/cmd/openshift-router
+ 
+ BIN=$(lastword $(subst /, ,$(MAIN_PACKAGE)))
+ 
+-ifneq ($(DELVE),)
+ GO_GCFLAGS ?= -gcflags=all="-N -l"
+-endif
+ 
+ SOURCE_GIT_TAG ?=$(shell git describe --long --tags --abbrev=7 --match 'v[0-9]*' 2>/dev/null || echo 'v0.0.0-unknown')
+ SOURCE_GIT_COMMIT ?=$(shell git rev-parse --short "HEAD^{commit}" 2>/dev/null)
+@@ -20,7 +18,7 @@ define version-ldflags
+ -X $(1).buildDate="$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')"
+ endef
+ GO_LD_EXTRAFLAGS ?=
+-GO_LDFLAGS ?=-ldflags "-s -w $(call version-ldflags,$(PACKAGE)/pkg/version) $(GO_LD_EXTRAFLAGS)"
++GO_LDFLAGS ?=-ldflags "$(call version-ldflags,$(PACKAGE)/pkg/version) $(GO_LD_EXTRAFLAGS)"
+ 
+ GO=GO111MODULE=on GOFLAGS=-mod=vendor go
+ GO_BUILD_RECIPE=CGO_ENABLED=0 $(GO) build -o $(BIN) $(GO_GCFLAGS) $(GO_LDFLAGS) $(MAIN_PACKAGE)
+@@ -43,3 +41,14 @@ check:
+ verify:
+ 	hack/verify-gofmt.sh
+ 	hack/verify-deps.sh
++
++new-dev-image: build
++	imagebuilder -t frobware/openshift-router-endpointslices:latest -f images/router/haproxy/Dockerfile .
++
++push-dev-image:
++	docker push frobware/openshift-router-endpointslices:latest
++
++set-dev-image:
++	oc -n openshift-ingress scale --replicas=0 deployment/router-default
++	oc -n openshift-ingress set image deployment/router-default router=frobware/openshift-router-endpointslices:latest
++	oc -n openshift-ingress scale --replicas=1 deployment/router-default
+diff --git a/images/router/haproxy/Dockerfile b/images/router/haproxy/Dockerfile
+index b49f3fe..ca5c979 100644
+--- a/images/router/haproxy/Dockerfile
++++ b/images/router/haproxy/Dockerfile
+@@ -1,5 +1,9 @@
+-FROM registry.svc.ci.openshift.org/openshift/origin-v4.0:base-router
+-RUN INSTALL_PKGS="haproxy20 rsyslog sysvinit-tools" && \
++FROM centos:7
++USER root
++RUN yum install -y https://github.com/frobware/haproxy-hacks/raw/master/RPMs/rhaos-4.5-rhel-7-build-haproxy20-2.0.14-1.el7.x86_64.rpm
++RUN haproxy -vv
++
++RUN INSTALL_PKGS="procps-ng socat rsyslog sysvinit-tools" && \
+     yum install -y $INSTALL_PKGS && \
+     rpm -V $INSTALL_PKGS && \
+     yum clean all && \
+@@ -10,12 +14,15 @@ RUN INSTALL_PKGS="haproxy20 rsyslog sysvinit-tools" && \
+     chown -R :0 /var/lib/haproxy && \
+     chmod -R g+w /var/lib/haproxy
+ COPY images/router/haproxy/ /var/lib/haproxy/
++COPY dlv /usr/bin/dlv
++COPY openshift-router /usr/bin/openshift-router
+ LABEL io.k8s.display-name="OpenShift HAProxy Router" \
+       io.k8s.description="This component offers ingress to an OpenShift cluster via Ingress and Route rules." \
+       io.openshift.tags="openshift,router,haproxy"
+ USER 1001
+-EXPOSE 80 443
++EXPOSE 80 443 7000
+ WORKDIR /var/lib/haproxy/conf
+-ENV TEMPLATE_FILE=/var/lib/haproxy/conf/haproxy-config.template \
++ENV XDG_CONFIG_HOME=/tmp \
++    TEMPLATE_FILE=/var/lib/haproxy/conf/haproxy-config.template \
+     RELOAD_SCRIPT=/var/lib/haproxy/reload-haproxy
+-ENTRYPOINT ["/usr/bin/openshift-router", "--v=2"]
++ENTRYPOINT ["/usr/bin/dlv", "exec", "--log", "--api-version=2", "--headless", "--accept-multiclient", "--continue", "--listen=:7000", "/usr/bin/openshift-router", "--", "--v=4"]
+diff --git a/images/router/haproxy/Dockerfile.rhel b/images/router/haproxy/Dockerfile.rhel
+index f42ec58..7346ce8 100644
+--- a/images/router/haproxy/Dockerfile.rhel
++++ b/images/router/haproxy/Dockerfile.rhel
+@@ -1,5 +1,9 @@
+ FROM registry.svc.ci.openshift.org/ocp/4.0:base-router
+-RUN INSTALL_PKGS="haproxy20 rsyslog sysvinit-tools" && \
++
++RUN yum install -y https://github.com/frobware/haproxy-hacks/raw/master/RPMs/rhaos-4.5-rhel-7-build-haproxy20-2.0.14-1.el7.x86_64.rpm
++RUN haproxy -vv
++
++RUN INSTALL_PKGS="rsyslog sysvinit-tools" && \
+     yum install -y $INSTALL_PKGS && \
+     rpm -V $INSTALL_PKGS && \
+     yum clean all && \
+-- 
+2.26.2
+
