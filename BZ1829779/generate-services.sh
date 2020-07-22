@@ -9,7 +9,7 @@ metadata:
   name: helloworld-${i}
 spec:
   selector:
-    app: helloworld-1
+    app: helloworld-${i}
   ports:
   - name: http
     port: 80
