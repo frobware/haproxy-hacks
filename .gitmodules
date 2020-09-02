@@ -1,0 +1,6 @@
+[submodule "BZ1829779/sqlite-histogram/SQLiteHistograms"]
+	path = BZ1829779/sqlite-histogram/SQLiteHistograms
+	url = https://github.com/Oeffner/SQLiteHistograms
+[submodule "BZ1829779/server/libwebsockets"]
+	path = BZ1829779/server/libwebsockets
+	url = https://github.com/warmcat/libwebsockets
