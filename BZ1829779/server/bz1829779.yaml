@@ -37,6 +37,7 @@ items:
         	"net/http"
         	"net/url"
         	"os"
+        	"sync"
         	"sync/atomic"
         	"time"
         )
@@ -62,6 +63,8 @@ items:
         func init() {
         	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
         }
+        var maxTimeInSeconds float64
+        var maxTimeLock sync.Mutex
         func main() {
         	connectionCh := make(chan bool)
         	doTicker := lookupEnv("TICKER", "false") == "true"
@@ -92,7 +95,7 @@ items:
         		if doTicker {
         			connectionCh <- true
         		}
-        		log.Printf("connection %v host %v port %v\n", n, host, port)
+        		// log.Printf("connection %v host %v port %v\n", n, host, port)
         		readAllStart := time.Now()
         		bytes, err := ioutil.ReadAll(r.Body)
         		if err != nil {
@@ -126,15 +129,21 @@ items:
         				queryid = val[0]
         			}
         		}
-        		log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
-        			n,
-        			host,
-        			port,
-        			queryid,
-        			busyTime.Seconds(),
-        			readAllDone.Sub(readAllStart).Seconds(),
-        			writeDone.Sub(writeStart).Seconds(),
-        			time.Now().Sub(handleConnStart).Seconds())
+        		maxTimeLock.Lock()
+        		defer maxTimeLock.Unlock()
+        		t := time.Now().Sub(handleConnStart).Seconds()
+        		if t > maxTimeInSeconds {
+        			maxTimeInSeconds = t
+        			log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
+        				n,
+        				host,
+        				port,
+        				queryid,
+        				busyTime.Seconds(),
+        				readAllDone.Sub(readAllStart).Seconds(),
+        				writeDone.Sub(writeStart).Seconds(),
+        				maxTimeInSeconds)
+        		}
         	})
         	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
         		fmt.Fprint(w, "ready")
@@ -198,6 +207,24 @@ items:
     tls:
       termination: edge
       insecureEdgeTerminationPolicy: Redirect
+      key: |-
+        -----BEGIN EC PRIVATE KEY-----
+        MHcCAQEEIAW+ecg2cZR47ItbI898N3nJduh9UJNv+b0cOwH/Z1BEoAoGCCqGSM49
+        AwEHoUQDQgAEx0/5sEgiUPFdcbd4dSllkul8s68RQ5WxIjfwWYMdfYLiLLqP1lkz
+        4UYpwAW/t63qBx3jRhPgkUxh5saJP9Qu5Q==
+        -----END EC PRIVATE KEY-----
+      certificate: |-
+        -----BEGIN CERTIFICATE-----
+        MIIBgTCCASagAwIBAgIRALutWdExjxX8fWljW+lcYbswCgYIKoZIzj0EAwIwJDEQ
+        MA4GA1UEChMHUmVkIEhhdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0yMDA1MTExMDU2
+        NThaGA8yMTIwMDQxNzEwNTY1OFowJjEQMA4GA1UEChMHUmVkIEhhdDESMBAGA1UE
+        AwwJdGVzdF9jZXJ0MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEx0/5sEgiUPFd
+        cbd4dSllkul8s68RQ5WxIjfwWYMdfYLiLLqP1lkz4UYpwAW/t63qBx3jRhPgkUxh
+        5saJP9Qu5aM1MDMwDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsGAQUFBwMB
+        MAwGA1UdEwEB/wQCMAAwCgYIKoZIzj0EAwIDSQAwRgIhAOIx8885y8tX/Vv94UGx
+        hWC/O1Hzi15kOT0WQ/UKUMjMAiEA40uW9P6k+i1cDwgfBBMzgDFQa9GAb4FqM8Wr
+        PaUMdqg=
+        -----END CERTIFICATE-----
     to:
       kind: Service
       name: bz1829779
