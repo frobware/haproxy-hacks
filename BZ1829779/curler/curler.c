@@ -31,7 +31,7 @@ void getinfo_or_die(CURL *curl, CURLINFO info, ...) {
 int main(int argc, char *argv[]) {
   CURL *curl_handle = NULL;
   CURLcode res;
-  int i, n = 10, reuse = 1;
+  int i, n = 10, reuse = 0;
   char buffer[26];
   int millisec;
   struct tm *tm_info;
