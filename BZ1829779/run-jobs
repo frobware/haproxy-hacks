@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+set -eu
+
+jobdir="results"
+
+rm -rf "$jobdir"
+mkdir -p "$jobdir"
+mkdir -p "$jobdir/streams"
+
+while read streamid; do
+    echo "/root/split /root/infra1.pcap ${streamid} $jobdir/streams/${streamid}.pcap" >> "${jobdir}/jobs"
+done < all-streams
+
+parallel --eta --bar --keep-order --joblog "${jobdir}/joblog.dat" --jobs "${P:-$(nproc)}" < "${jobdir}/jobs" > /dev/null || true
