@@ -1,0 +1,11 @@
+#!/bin/bash
+# Take the input capture file as a command-line argument to the script
+set -x
+
+IN_PCAP_FILE=$1
+OUT_PCAP_FILE=FullConv-${IN_PCAP_FILE}
+
+tshark -r $IN_PCAP_FILE -2 -R "tcp.stream==$2" -w $3
+
+# Apply the stream ID filter and write out the filtered capture file
+#tshark -r $IN_PCAP_FILE -R "${TSHARK_FILTER}" -w $OUT_PCAP_FILE
