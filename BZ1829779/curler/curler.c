@@ -95,6 +95,7 @@ int main(int argc, char *argv[]) {
     strftime(buffer, 26, "%H:%M:%S", tm_info);
 
     curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl_handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 
     /* client.Get() */
     res = curl_easy_perform(curl_handle);
