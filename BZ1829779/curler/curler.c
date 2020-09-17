@@ -1,5 +1,6 @@
 #include <curl/curl.h>
 #include <math.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,8 +9,17 @@
 #undef NDEBUG
 #include <assert.h>
 
+volatile sig_atomic_t done = 0;
+
+static void sigterm_handler(int signum) {
+  done = 1;
+}
+
 static size_t write_cb(void *data, size_t size, size_t nmemb, void *userp) {
   size_t realsize = size * nmemb;
+#if 0
+  fprintf(stdout, "%*s\n", size, (char *)data);
+#endif
   return realsize;
 }
 
@@ -31,12 +41,17 @@ void getinfo_or_die(CURL *curl, CURLINFO info, ...) {
 int main(int argc, char *argv[]) {
   CURL *curl_handle = NULL;
   CURLcode res;
-  int i, n = 10, reuse = 0;
+  int i, n = -1, reuse = 0;
   char buffer[26];
   int millisec;
   struct tm *tm_info;
   struct timeval tv;
   char urlbuf[8192];
+
+  struct sigaction action;
+  memset(&action, 0, sizeof(action));
+  action.sa_handler = sigterm_handler;
+  sigaction(SIGTERM, &action, NULL);
 
   if (argc < 2) {
     fprintf(stderr, "usage: <host>\n");
@@ -53,7 +68,7 @@ int main(int argc, char *argv[]) {
     reuse = atoi(getenv("R"));
   }
 
-  for (i = 0; i <= n; i++) {
+  for (i = 0; !done && (n == -1 || i <= n); i++) {
     if (curl_handle == NULL) {
       curl_handle = curl_easy_init();
       assert(curl_handle);
