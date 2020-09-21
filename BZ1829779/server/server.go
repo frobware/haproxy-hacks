@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -41,9 +40,6 @@ var randomSrc = rand.NewSource(time.Now().Unix())
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 }
-
-var maxTimeInSeconds float64
-var maxTimeLock sync.Mutex
 
 func main() {
 	connectionCh := make(chan bool)
@@ -80,7 +76,7 @@ func main() {
 		if doTicker {
 			connectionCh <- true
 		}
-		// log.Printf("connection %v host %v port %v\n", n, host, port)
+		log.Printf("connection %v host %v port %v\n", n, host, port)
 
 		readAllStart := time.Now()
 		bytes, err := ioutil.ReadAll(r.Body)
@@ -121,23 +117,15 @@ func main() {
 			}
 		}
 
-		maxTimeLock.Lock()
-		defer maxTimeLock.Unlock()
-
-		t := time.Now().Sub(handleConnStart).Seconds()
-
-		if t > maxTimeInSeconds {
-			maxTimeInSeconds = t
-			log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
-				n,
-				host,
-				port,
-				queryid,
-				busyTime.Seconds(),
-				readAllDone.Sub(readAllStart).Seconds(),
-				writeDone.Sub(writeStart).Seconds(),
-				maxTimeInSeconds)
-		}
+		log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
+			n,
+			host,
+			port,
+			queryid,
+			busyTime.Seconds(),
+			readAllDone.Sub(readAllStart).Seconds(),
+			writeDone.Sub(writeStart).Seconds(),
+			time.Now().Sub(handleConnStart).Seconds())
 	})
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
