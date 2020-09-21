@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -e
+set -u
+set -o pipefail
+
+: ${N:=100}
+
+url=${1:?no URL specified}
+jobdir="curl-tracer-$(date +%Y-%m-%d-%H%M%S.%3N)-N${N}"
+
+shift
+
+mkdir -p "${jobdir}"
+echo "Results: ${jobdir}.tar.gz"
+
+exec 1<>${jobdir}/summary
+
+i=0
+echo "curl -k -L -s --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -w \"${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total}\n\" $@ \"$url\"" > $jobdir/command
+
+while :
+do
+    i=$(( i + 1))
+    curl -k -L -s --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -w "${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total}\n" "$@" "$url";
+    [[ $N -ne -1 ]] && [[ $i -ge $N ]] && break
+done
+
+tar zcf "${jobdir}.tar.gz" "$jobdir"
