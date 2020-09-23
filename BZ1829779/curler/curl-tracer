@@ -7,7 +7,7 @@ set -o pipefail
 : ${N:=100}
 
 url=${1:?no URL specified}
-route=$(echo $url | sed -e 's/:/-/g' -e 's/\//-/g')
+route=$(echo $url | sed -e 's/:/-/g' -e 's/\//-/g' | sed -e 's/-$//')
 jobdir="curl-tracer-$(date +%Y-%m-%d-%H%M%S.%3N)-N${N}-${route}"
 
 shift
