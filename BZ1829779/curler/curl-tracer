@@ -7,24 +7,30 @@ set -o pipefail
 : ${N:=100}
 
 url=${1:?no URL specified}
-route=$(echo $url | sed -e 's/:/-/g' -e 's/\//-/g' | sed -e 's/-$//')
-jobdir="curl-tracer-$(date +%Y-%m-%d-%H%M%S.%3N)-N${N}-${route}"
+token=$(date +%s%3N)
+date=$(date +%Y-%m-%d-%H%M%S.%3N)
+route=$(echo "$url" | sed -e 's/:/-/g' -e 's/\//-/g' | sed -e 's/-$//')
+tmpdir=$(mktemp -d)
+jobdir="curl-tracer-${date}-N${N}-${route}"
 
 shift
-
+pushd "${tmpdir}" >/dev/null 2>&1
 mkdir -p "${jobdir}"
-echo "Results: ${jobdir}.tar.gz"
-
-exec 1<>${jobdir}/summary
 
 i=0
-echo "curl -k -L -s --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -w \"${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total}\n\" $@ \"$url\"" > $jobdir/command
+echo "curl -k -L --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -w ${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total}" "$@" "$url" > "$jobdir/command"
+
+exec 1<>"${jobdir}/summary"
 
 while :
 do
-    i=$(( i + 1))
-    curl -k -L -s --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -w "${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=$i" || /bin/true
+    i=$(( i + 1 ))
+    curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=${i}&token=${token}" || /bin/true
     [[ $N -ne -1 ]] && [[ $i -ge $N ]] && break
 done
 
+exec 1>&0
 tar zcf "${jobdir}.tar.gz" "$jobdir"
+echo "Summary: ${tmpdir}/${jobdir}/summary"
+echo "Results: ${tmpdir}/${jobdir}.tar.gz"
+echo "sha1sum: $(sha1sum "${tmpdir}/${jobdir}.tar.gz")"
