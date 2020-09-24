@@ -117,7 +117,14 @@ func main() {
 			}
 		}
 
-		log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f\n",
+		token := "0"
+		if val, ok := rs.Params["token"]; ok {
+			if len(val) > 0 {
+				token = val[0]
+			}
+		}
+
+		log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f token %q\n",
 			n,
 			host,
 			port,
@@ -125,7 +132,8 @@ func main() {
 			busyTime.Seconds(),
 			readAllDone.Sub(readAllStart).Seconds(),
 			writeDone.Sub(writeStart).Seconds(),
-			time.Now().Sub(handleConnStart).Seconds())
+			time.Now().Sub(handleConnStart).Seconds(),
+			token)
 	})
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
