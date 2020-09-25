@@ -124,7 +124,7 @@ func main() {
 			}
 		}
 
-		log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f token %q\n",
+		log.Printf("c-complete %v host %v port %v queryid %v busytime %f readbody %.9f writeresp %.9f total %.9f token %v\n",
 			n,
 			host,
 			port,
