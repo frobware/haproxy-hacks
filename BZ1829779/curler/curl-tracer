@@ -8,10 +8,6 @@ srcdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 function finalize_results() {
     exec 1>&0
-    tar zcf "${jobdir}.tar.gz" "$jobdir"
-    echo "Summary: ${jobdir}/summary"
-    echo "Results: ${jobdir}.tar.gz"
-    echo "sha1sum: $(sha1sum "${jobdir}.tar.gz")"
     if [[ $R -eq 1 ]]; then
 	cp -a "$jobdir/summary" "$jobdir/summary.tmp"
 	rm -f "$jobdir/summary"
@@ -20,6 +16,11 @@ function finalize_results() {
 	    i=$(( i + 1 ))
 	done < "$jobdir/summary.tmp"
     fi
+    rm -f "$jobdir/summary.tmp"
+    tar zcf "${jobdir}.tar.gz" "$jobdir"
+    echo "Summary: ${jobdir}/summary"
+    echo "Results: ${jobdir}.tar.gz"
+    echo "sha1sum: $(sha1sum "${jobdir}.tar.gz")"
     if [[ $A -eq 1 ]]; then
 	if [[ -f "$srcdir/analyze-curler-results" ]]; then
 	    exec "$srcdir/analyze-curler-results" "$jobdir/summary"
@@ -53,12 +54,6 @@ trap finalize_results EXIT
 
 if [[ $R -eq 1 ]]; then
     curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "$(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=[1-$N]&token=${token}" || /bin/true
-    cp -a "$jobdir/summary" "$jobdir/summary.tmp"
-    rm -f "$jobdir/summary"
-    while read -r; do
-	echo "$i $REPLY" >> "$jobdir/summary"
-	i=$(( i + 1 ))
-    done < "$jobdir/summary.tmp"
 else
     while [[ $N -eq -1 ]] || [[ $i -lt $N ]];
     do
