@@ -15,6 +15,8 @@ function finalize_results() {
 : ${N:=100}
 
 url=${1:?no URL specified}
+shift;
+
 token=$(date +%s)
 date=$(date +%Y-%m-%d-%H%M%S.%3N)
 route=$(echo "$url" | sed -e 's/:/-/g' -e 's/\//-/g' | sed -e 's/-$//')
@@ -28,10 +30,8 @@ echo "curl -k -L --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --ou
 exec 1<>"${jobdir}/summary"
 trap finalize_results EXIT
 
-while :
+while [[ $N -eq -1 ]] || [[ $i -lt $N ]];
 do
-    i=$(( i + 1 ))
     curl -o /dev/null -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=${i}&token=${token}" || /bin/true
-    [[ $N -ne -1 ]] && [[ $i -eq $N ]] && break
+    i=$(( i + 1 ))
 done
-
