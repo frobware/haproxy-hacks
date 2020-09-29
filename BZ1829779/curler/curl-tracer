@@ -44,7 +44,7 @@ fi
 token=$(date +%s)
 date=$(date +%Y-%m-%d-%H%M%S.%3N)
 route=$(echo "$url" | sed -e 's/:/-/g' -e 's/\//-/g' | sed -e 's/-$//')
-jobdir="curl-tracer-${date}-R{$R}-N${N}-${route}"
+jobdir="curl-tracer-${date}-R${R}-N${N}-${route}"
 
 mkdir -p "${jobdir}"
 
