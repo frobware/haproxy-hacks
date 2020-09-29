@@ -4,7 +4,7 @@ set -e
 set -u
 set -o pipefail
 
-srcdir="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd -P)"
+srcdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 function finalize_results() {
     exec 1>&0
@@ -12,14 +12,31 @@ function finalize_results() {
     echo "Summary: ${jobdir}/summary"
     echo "Results: ${jobdir}.tar.gz"
     echo "sha1sum: $(sha1sum "${jobdir}.tar.gz")"
+    if [[ $R -eq 1 ]]; then
+	cp -a "$jobdir/summary" "$jobdir/summary.tmp"
+	rm -f "$jobdir/summary"
+	while read -r; do
+	    echo "$i $REPLY" >> "$jobdir/summary"
+	    i=$(( i + 1 ))
+	done < "$jobdir/summary.tmp"
+    fi
+    if [[ $A -eq 1 ]]; then
+	if [[ -f "$srcdir/analyze-curler-results" ]]; then
+	    exec "$srcdir/analyze-curler-results" "$jobdir/summary"
+	fi
+    fi
 }
 
-: ${A:=0}
-: ${R:=0}
-: ${N:=100}
+: "${A:=0}"
+: "${R:=0}"
+: "${N:=100}"
 
 url=${1:?no URL specified}
 shift;
+
+if [[ $R -eq 1 ]] && [[ $N -eq -1 ]]; then
+    N=$(( 2**31 ))		# dunno. Just try and make this a lot.
+fi
 
 token=$(date +%s)
 date=$(date +%Y-%m-%d-%H%M%S.%3N)
@@ -29,31 +46,23 @@ jobdir="curl-tracer-${date}-N${N}-${route}"
 mkdir -p "${jobdir}"
 
 i=0
-echo "curl -k -L --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -w ${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total}" "$@" "$url" > "$jobdir/command"
+echo "curl -k -L --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -w ${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total}" "$@" "$url/?queryid=[1-$N]" > "$jobdir/command"
 
 exec 1<>"${jobdir}/summary"
 trap finalize_results EXIT
 
 if [[ $R -eq 1 ]]; then
-    curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "$(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=[1-$N]" || /bin/true
-    cp -a $jobdir/summary $jobdir/summary.tmp
-    rm -f $jobdir/summary
-    while read; do
-	echo "$i $REPLY" >> $jobdir/summary
+    curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "$(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=[1-$N]&token=${token}" || /bin/true
+    cp -a "$jobdir/summary" "$jobdir/summary.tmp"
+    rm -f "$jobdir/summary"
+    while read -r; do
+	echo "$i $REPLY" >> "$jobdir/summary"
 	i=$(( i + 1 ))
-    done < $jobdir/summary.tmp
+    done < "$jobdir/summary.tmp"
 else
     while [[ $N -eq -1 ]] || [[ $i -lt $N ]];
     do
 	curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=${i}&token=${token}" || /bin/true
 	i=$(( i + 1 ))
     done
-fi
-
-exec 1>&0
-
-if [[ $A -eq 1 ]]; then
-    if [[ -f "$srcdir/analyze-curler-results" ]]; then
-	"$srcdir/analyze-curler-results" $jobdir/summary
-    fi
 fi
