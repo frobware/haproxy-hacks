@@ -55,11 +55,11 @@ exec 1<>"${jobdir}/summary"
 trap finalize_results EXIT INT
 
 if [[ $R -eq 1 ]]; then
-    curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "$(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=[1-$N]&token=${token}" || /bin/true
+    curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "$(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url?queryid=[1-$N]&token=${token}" || /bin/true
 else
     while [[ $N -eq -1 ]] || [[ $i -lt $N ]];
     do
-	curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url/?queryid=${i}&token=${token}" || /bin/true
+	curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url?queryid=${i}&token=${token}" || /bin/true
 	i=$(( i + 1 ))
     done
 fi
