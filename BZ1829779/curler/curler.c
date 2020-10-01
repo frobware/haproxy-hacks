@@ -1,29 +1,59 @@
-#include <curl/curl.h>
+#include <assert.h>
+#include <errno.h>
 #include <math.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
-#undef NDEBUG
-#include <assert.h>
+#include <curl/curl.h>
+
+#define NELEMENTS(A) ((sizeof(A) / sizeof(A[0])))
+
+enum info_tag { LONGINFO = 1, DOUBLEINFO };
+
+union typeinfo {
+  long longinfo;
+  double doubleinfo;
+};
+
+struct output_field {
+  const char *name;
+  CURLINFO info;
+  enum info_tag val_type;
+  union typeinfo val;
+};
+
+static struct output_field output_fields[] = {
+    {"namelookup", CURLINFO_NAMELOOKUP_TIME, DOUBLEINFO},
+    {"connect", CURLINFO_CONNECT_TIME, DOUBLEINFO},
+    {"app_connect", CURLINFO_APPCONNECT_TIME, DOUBLEINFO},
+    {"pretransfer", CURLINFO_PRETRANSFER_TIME, DOUBLEINFO},
+    {"starttransfer", CURLINFO_STARTTRANSFER_TIME, DOUBLEINFO},
+    {"http_code", CURLINFO_RESPONSE_CODE, LONGINFO},
+    {"port", CURLINFO_LOCAL_PORT, LONGINFO},
+    {"total", CURLINFO_TOTAL_TIME, DOUBLEINFO},
+    {"num_connects", CURLINFO_NUM_CONNECTS, LONGINFO},
+};
 
 volatile sig_atomic_t done = 0;
+static void sigterm_handler(int signum) { done = 1; }
 
-static void sigterm_handler(int signum) {
-  done = 1;
-}
+static int write_result;
 
 static size_t write_cb(void *data, size_t size, size_t nmemb, void *userp) {
   size_t realsize = size * nmemb;
-#if 0
-  fprintf(stdout, "%*s\n", size, (char *)data);
-#endif
+
+  if (write_result) {
+    fprintf(stdout, "%*s", (int)size, (char *)data);
+  }
+
   return realsize;
 }
 
-void getinfo_or_die(CURL *curl, CURLINFO info, ...) {
+static void getinfo_or_die(CURL *curl, CURLINFO info, ...) {
   va_list arg;
   void *paramp;
   CURLcode result;
@@ -38,23 +68,59 @@ void getinfo_or_die(CURL *curl, CURLINFO info, ...) {
   }
 }
 
-int main(int argc, char *argv[]) {
-  CURL *curl_handle = NULL;
-  CURLcode res;
-  int i, n = -1, reuse = 0;
-  char buffer[26];
-  int millisec;
+static char *mprintf(const char *fmt, ...) {
+  size_t size = 0;
+  char *p = NULL;
+  va_list ap;
+
+  /* Determine required size. */
+  va_start(ap, fmt);
+  size = vsnprintf(p, size, fmt, ap);
+  va_end(ap);
+
+  size++; /* For '\0' */
+
+  if ((p = malloc(size)) == NULL) {
+    return NULL;
+  }
+
+  va_start(ap, fmt);
+  size = vsnprintf(p, size, fmt, ap);
+  va_end(ap);
+
+  return p;
+}
+
+static void current_time(char *s, size_t sz, const char *strftime_fmt,
+                         int *milliseconds) {
   struct tm *tm_info;
   struct timeval tv;
-  char urlbuf[8192];
 
+  gettimeofday(&tv, NULL);
+  *milliseconds = lrint(tv.tv_usec / 1000.0);
+
+  if (*milliseconds >= 1000) {
+    *milliseconds -= 1000;
+    tv.tv_sec++;
+  }
+
+  tm_info = localtime(&tv.tv_sec);
+  strftime(s, sz, strftime_fmt, tm_info);
+}
+
+int main(int argc, char *argv[]) {
+  CURL *curl_handle = NULL;
+  CURLcode curl_rc;
+  size_t i, n = -1;
+  int reuse = 0;
+  char time_buffer[1024];
+  char *url = NULL;
+  char *user_agent = NULL;
+  int milliseconds;
   struct sigaction action;
-  memset(&action, 0, sizeof(action));
-  action.sa_handler = sigterm_handler;
-  sigaction(SIGTERM, &action, NULL);
 
   if (argc < 2) {
-    fprintf(stderr, "usage: <host>\n");
+    fprintf(stderr, "usage: <URL>\n");
     exit(EXIT_FAILURE);
   }
 
@@ -64,87 +130,119 @@ int main(int argc, char *argv[]) {
     n = atoi(getenv("N"));
   }
 
+  if (getenv("W") != NULL) {
+    write_result = atoi(getenv("W"));
+  }
+
   if (getenv("R") != NULL) {
     reuse = atoi(getenv("R"));
   }
 
-  for (i = 0; !done && (n == -1 || i <= n); i++) {
+  if (getenv("O") != NULL) {
+    current_time(time_buffer, sizeof(time_buffer) - 1, "%Y-%m-%d-%H%M%S",
+                 &milliseconds);
+
+    char *stdout_filename = mprintf("curler-R%d-%s.stdout", reuse, time_buffer);
+    char *stderr_filename = mprintf("curler-R%d-%s.stderr", reuse, time_buffer);
+
+    FILE *new_stdout = fopen(stdout_filename, "w");
+    if (new_stdout == NULL) {
+      fprintf(stderr, "failed to open \"%s\": %s\n", stdout_filename,
+              strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+
+    FILE *new_stderr = fopen(stderr_filename, "w");
+    if (new_stderr == NULL) {
+      fprintf(stderr, "failed to open \"%s\": %s\n", stderr_filename,
+              strerror(errno));
+      exit(EXIT_FAILURE);
+    }
+
+    fprintf(stdout, "reopened stdout to %s\n", stdout_filename);
+    fprintf(stdout, "reopened stderr to %s\n", stderr_filename);
+
+    if ((stdout = freopen(stdout_filename, "w", stdout)) == NULL) {
+      perror("freopen stdout");
+      exit(EXIT_FAILURE);
+    }
+
+    if ((stderr = freopen(stderr_filename, "w", stderr)) == NULL) {
+      perror("freopen stderr");
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  memset(&action, 0, sizeof(action));
+  action.sa_handler = sigterm_handler;
+  sigaction(SIGTERM, &action, NULL);
+
+  for (i = 0; !done && (n == -1 || i < n); i++) {
+    if (url != NULL) {
+      free(url);
+    }
+
+    if (user_agent != NULL) {
+      free(user_agent);
+    }
+
     if (curl_handle == NULL) {
       curl_handle = curl_easy_init();
       assert(curl_handle);
     }
 
-    long longinfo;
-    double doubleinfo;
+    url = mprintf("%s?queryid=%ld", argv[1], i);
+    user_agent = mprintf("curler/queryid=%ld", i);
 
-    sprintf(urlbuf, "%s/?queryid=%d", argv[1], i);
-    curl_easy_setopt(curl_handle, CURLOPT_URL, urlbuf);
+    curl_easy_setopt(curl_handle, CURLOPT_URL, url);
+    curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, user_agent);
+    curl_easy_setopt(curl_handle, CURLOPT_BUFFERSIZE, 102400L);
     curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_cb);
-
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(curl_handle, CURLOPT_SSL_VERIFYHOST, 0L);
-
-    gettimeofday(&tv, NULL);
-    millisec = lrint(tv.tv_usec / 1000.0);
-    if (millisec >= 1000) {
-      millisec -= 1000;
-      tv.tv_sec++;
-    }
-
-    tm_info = localtime(&tv.tv_sec);
-    strftime(buffer, 26, "%H:%M:%S", tm_info);
-
     curl_easy_setopt(curl_handle, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl_handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+    curl_easy_setopt(curl_handle, CURLOPT_NOPROGRESS, 1L);
+
+    current_time(time_buffer, sizeof(time_buffer) - 1, "%H:%M:%S",
+                 &milliseconds);
 
     /* client.Get() */
-    res = curl_easy_perform(curl_handle);
+    curl_rc = curl_easy_perform(curl_handle);
 
-    if (res != CURLE_OK) {
-      fprintf(stderr, "%ld: curl_easy_perform() failed: %s (error=%zd)\n", i,
-              curl_easy_strerror(res), (size_t)res);
-      goto out;
+    if (curl_rc != CURLE_OK) {
+      fprintf(stderr, "%zd: curl_easy_perform() failed: %s (error=%zd)\n", i,
+              curl_easy_strerror(curl_rc), (size_t)curl_rc);
+      goto easy_perform_cleanup;
     }
 
-#if 0
-    if (i == 0) {
-      /* absorb cost of namelookup, process loading, et al. First
-         result always skews the results. */
-      continue;
+    fprintf(stdout, "%zd ", i);
+    fprintf(stdout, "%s.%03d ", time_buffer, milliseconds);
+
+    for (int i = 0; i < NELEMENTS(output_fields); i++) {
+      switch (output_fields[i].val_type) {
+      case DOUBLEINFO:
+        getinfo_or_die(curl_handle, output_fields[i].info,
+                       &output_fields[i].val.doubleinfo);
+        fprintf(stdout, "%s %.06f", output_fields[i].name,
+                output_fields[i].val.doubleinfo);
+        break;
+      case LONGINFO:
+        getinfo_or_die(curl_handle, output_fields[i].info,
+                       &output_fields[i].val.longinfo);
+        fprintf(stdout, "%s %ld", output_fields[i].name,
+                output_fields[i].val.longinfo);
+        break;
+      }
+
+      if (i + 1 < NELEMENTS(output_fields)) {
+        fprintf(stdout, " ");
+      } else {
+        fprintf(stdout, "\n");
+      }
     }
-#endif
 
-    fprintf(stdout, "%d ", i);
-    fprintf(stdout, "%s.%03d ", buffer, millisec);
-
-    getinfo_or_die(curl_handle, CURLINFO_NAMELOOKUP_TIME, &doubleinfo);
-    fprintf(stdout, "namelookup %0.6f ", doubleinfo);
-
-    getinfo_or_die(curl_handle, CURLINFO_CONNECT_TIME, &doubleinfo);
-    fprintf(stdout, "connect %0.6f ", doubleinfo);
-
-    getinfo_or_die(curl_handle, CURLINFO_APPCONNECT_TIME, &doubleinfo);
-    fprintf(stdout, "app_connect %0.6f ", doubleinfo);
-
-    getinfo_or_die(curl_handle, CURLINFO_PRETRANSFER_TIME, &doubleinfo);
-    fprintf(stdout, "pretransfer %0.6f ", doubleinfo);
-
-    getinfo_or_die(curl_handle, CURLINFO_STARTTRANSFER_TIME, &doubleinfo);
-    fprintf(stdout, "starttransfer %0.6f ", doubleinfo);
-
-    getinfo_or_die(curl_handle, CURLINFO_RESPONSE_CODE, &longinfo);
-    fprintf(stdout, "http_code %03ld ", longinfo);
-
-    getinfo_or_die(curl_handle, CURLINFO_LOCAL_PORT, &longinfo);
-    fprintf(stdout, "port %ld ", longinfo);
-
-    getinfo_or_die(curl_handle, CURLINFO_TOTAL_TIME, &doubleinfo);
-    fprintf(stdout, "total %0.6f ", doubleinfo);
-
-    getinfo_or_die(curl_handle, CURLINFO_NUM_CONNECTS, &longinfo);
-    fprintf(stdout, "num_connects %ld\n", longinfo);
-
-  out:
+  easy_perform_cleanup:
     if (!reuse) {
       curl_easy_cleanup(curl_handle); // End a libcurl easy handle
       curl_handle = NULL;
