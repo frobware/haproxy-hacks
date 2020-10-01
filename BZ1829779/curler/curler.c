@@ -159,8 +159,8 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
 
-    fprintf(stdout, "reopened stdout to %s\n", stdout_filename);
-    fprintf(stdout, "reopened stderr to %s\n", stderr_filename);
+    fprintf(stdout, "reopened stdout to \"%s\"\n", stdout_filename);
+    fprintf(stdout, "reopened stderr to \"%s\"\n", stderr_filename);
 
     if ((stdout = freopen(stdout_filename, "w", stdout)) == NULL) {
       perror("freopen stdout");
@@ -248,6 +248,9 @@ int main(int argc, char *argv[]) {
       curl_handle = NULL;
     }
   }
+
+  fflush(stdout);
+  fflush(stderr);
 
   curl_global_cleanup();
 
