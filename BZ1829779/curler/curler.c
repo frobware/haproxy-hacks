@@ -106,11 +106,13 @@ int main(int argc, char *argv[]) {
       goto out;
     }
 
+#if 0
     if (i == 0) {
       /* absorb cost of namelookup, process loading, et al. First
          result always skews the results. */
       continue;
     }
+#endif
 
     fprintf(stdout, "%d ", i);
     fprintf(stdout, "%s.%03d ", buffer, millisec);
@@ -137,7 +139,10 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "port %ld ", longinfo);
 
     getinfo_or_die(curl_handle, CURLINFO_TOTAL_TIME, &doubleinfo);
-    fprintf(stdout, "total %0.6f\n", doubleinfo);
+    fprintf(stdout, "total %0.6f ", doubleinfo);
+
+    getinfo_or_die(curl_handle, CURLINFO_NUM_CONNECTS, &longinfo);
+    fprintf(stdout, "num_connects %ld\n", longinfo);
 
   out:
     if (!reuse) {
