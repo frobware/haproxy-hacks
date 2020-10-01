@@ -28,6 +28,7 @@ function finalize_results() {
 	    exec "$srcdir/analyze-curler-results" "$jobdir/summary"
 	fi
     fi
+    exit 0
 }
 
 : "${A:=0}"
@@ -52,7 +53,7 @@ i=0
 echo "curl -k -L --trace-time --trace-ascii ${jobdir}/trace-output-$i.trace --output ${jobdir}/curl-output-$i.stdout -w ${i} $(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total}" "$@" "$url/?queryid=[1-$N]" > "$jobdir/command"
 
 exec 1<>"${jobdir}/summary"
-trap finalize_results EXIT INT
+trap finalize_results EXIT
 
 if [[ $R -eq 1 ]]; then
     curl -k -L -s --trace-time --trace-ascii "${jobdir}/trace-output-$i.trace" --output "${jobdir}/curl-output-$i.stdout" -w "$(date +%H:%M:%S.%3N) namelookup %{time_namelookup} connect %{time_connect} app_connect %{time_appconnect} pretransfer %{time_pretransfer} starttransfer %{time_starttransfer} status %{http_code} port %{local_port} total %{time_total} num_connects %{num_connects}\n" "$@" "$url?queryid=[1-$N]&token=${token}" || /bin/true
