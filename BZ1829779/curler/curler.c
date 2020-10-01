@@ -219,7 +219,7 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "%zd ", i);
     fprintf(stdout, "%s.%03d ", time_buffer, milliseconds);
 
-    for (int i = 0; i < NELEMENTS(output_fields); i++) {
+    for (i = 0; i < NELEMENTS(output_fields); i++) {
       switch (output_fields[i].val_type) {
       case DOUBLEINFO:
         getinfo_or_die(curl_handle, output_fields[i].info,
