@@ -111,7 +111,7 @@ static void current_time(char *s, size_t sz, const char *strftime_fmt,
 int main(int argc, char *argv[]) {
   CURL *curl_handle = NULL;
   CURLcode curl_rc;
-  size_t i, n = -1;
+  size_t i, j, n = -1;
   int reuse = 0;
   char time_buffer[1024];
   char *url = NULL;
@@ -159,8 +159,8 @@ int main(int argc, char *argv[]) {
       exit(EXIT_FAILURE);
     }
 
-    fprintf(stdout, "reopened stdout to \"%s\"\n", stdout_filename);
-    fprintf(stdout, "reopened stderr to \"%s\"\n", stderr_filename);
+    fprintf(stdout, "reopening stdout to \"%s\"\n", stdout_filename);
+    fprintf(stdout, "reopening stderr to \"%s\"\n", stderr_filename);
 
     if ((stdout = freopen(stdout_filename, "w", stdout)) == NULL) {
       perror("freopen stdout");
@@ -191,8 +191,8 @@ int main(int argc, char *argv[]) {
       assert(curl_handle);
     }
 
-    url = mprintf("%s?queryid=%ld", argv[1], i);
-    user_agent = mprintf("curler/queryid=%ld", i);
+    url = mprintf("%s?queryid=%zd", argv[1], i);
+    user_agent = mprintf("curler/queryid=%zd", i);
 
     curl_easy_setopt(curl_handle, CURLOPT_URL, url);
     curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, user_agent);
@@ -219,23 +219,23 @@ int main(int argc, char *argv[]) {
     fprintf(stdout, "%zd ", i);
     fprintf(stdout, "%s.%03d ", time_buffer, milliseconds);
 
-    for (i = 0; i < NELEMENTS(output_fields); i++) {
-      switch (output_fields[i].val_type) {
+    for (j = 0; j < NELEMENTS(output_fields); j++) {
+      switch (output_fields[j].val_type) {
       case DOUBLEINFO:
-        getinfo_or_die(curl_handle, output_fields[i].info,
-                       &output_fields[i].val.doubleinfo);
-        fprintf(stdout, "%s %.06f", output_fields[i].name,
-                output_fields[i].val.doubleinfo);
+        getinfo_or_die(curl_handle, output_fields[j].info,
+                       &output_fields[j].val.doubleinfo);
+        fprintf(stdout, "%s %.06f", output_fields[j].name,
+                output_fields[j].val.doubleinfo);
         break;
       case LONGINFO:
-        getinfo_or_die(curl_handle, output_fields[i].info,
-                       &output_fields[i].val.longinfo);
-        fprintf(stdout, "%s %ld", output_fields[i].name,
-                output_fields[i].val.longinfo);
+        getinfo_or_die(curl_handle, output_fields[j].info,
+                       &output_fields[j].val.longinfo);
+        fprintf(stdout, "%s %ld", output_fields[j].name,
+                output_fields[j].val.longinfo);
         break;
       }
 
-      if (i + 1 < NELEMENTS(output_fields)) {
+      if (j + 1 < NELEMENTS(output_fields)) {
         fprintf(stdout, " ");
       } else {
         fprintf(stdout, "\n");
