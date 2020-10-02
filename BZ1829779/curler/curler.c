@@ -176,6 +176,7 @@ int main(int argc, char *argv[]) {
   memset(&action, 0, sizeof(action));
   action.sa_handler = sigterm_handler;
   sigaction(SIGTERM, &action, NULL);
+  sigaction(SIGINT, &action, NULL);
 
   for (i = 0; !done && (n == -1 || i < n); i++) {
     if (url != NULL) {
