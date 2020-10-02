@@ -122,6 +122,7 @@ CREATE TABLE results (queryid INTEGER PRIMARY KEY,
 UPDATE results
 SET time_app_connect = time_connect
 WHERE time_app_connect == 0.0;
+DELETE FROM results WHERE rowid IN (SELECT rowid FROM results limit 1);
 EOF
 
 if [[ $drop_outliers > 0 ]]; then
