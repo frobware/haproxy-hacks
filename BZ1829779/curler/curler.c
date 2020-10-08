@@ -212,7 +212,9 @@ int main(int argc, char *argv[]) {
     curl_rc = curl_easy_perform(curl_handle);
 
     if (curl_rc != CURLE_OK) {
-      fprintf(stderr, "%zd: curl_easy_perform() failed: %s (error=%zd)\n", i,
+      fprintf(stderr, "%zd %s.%03d curl_easy_perform() failed: %s (error=%zd)\n",
+	      i,
+	      time_buffer, milliseconds,
               curl_easy_strerror(curl_rc), (size_t)curl_rc);
       goto easy_perform_cleanup;
     }
