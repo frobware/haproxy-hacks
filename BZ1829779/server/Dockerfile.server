@@ -1,0 +1,13 @@
+# docker build -f Dockerfile.server -t frobware/bz1829779-server .
+# docker run -it --rm frobware/bz1829779-server
+
+FROM golang:1.15 AS builder
+WORKDIR /go/src
+COPY server.go .
+RUN GOOS=linux CGO_ENABLED=0 go build -a server.go
+
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+WORKDIR /root/
+COPY --from=builder /go/src/server .
+CMD ["./server"]
