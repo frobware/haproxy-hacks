@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  labels:
+    app: django-psql-example
+    template: django-psql-example
+    type: shard1
+  name: django-psql-example
+  namespace: test-sharding
+spec:
+  host: django-psql-example-test-sharding.shard1.apps.amcdermo-2021-01-14-0857.gcp.devcluster.openshift.com
+  subdomain: ""
+  to:
+    kind: Service
+    name: django-psql-example
+    weight: 100
+  wildcardPolicy: None

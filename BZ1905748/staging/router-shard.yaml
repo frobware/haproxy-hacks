@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: operator.openshift.io/v1
+  kind: IngressController
+  metadata:
+    name: staging
+    namespace: openshift-ingress-operator
+  spec:
+    replicas: 1
+    domain: staging.apps.amcdermo-2021-01-15-0830.gcp.devcluster.openshift.com
+    endpointPublishingStrategy:
+      type: LoadBalancerService
+    nodePlacement:
+      nodeSelector:
+        matchLabels:
+          node-role.kubernetes.io/worker: ""
+    routeSelector:
+      matchLabels:
+        type: staging
+  status: {}

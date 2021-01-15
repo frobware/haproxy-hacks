@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: hello-staging2-insecure
+    labels:
+      app: hello-staging2
+      type: staging
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: hello-staging2
+    host: hello-staging2-insecure.staging.apps.amcdermo-2021-01-15-0830.gcp.devcluster.openshift.com
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: hello-staging2-edge
+    labels:
+      app: hello-staging2
+      type: staging
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: hello-staging2
+    host: hello-staging2-edge.staging.apps.amcdermo-2021-01-15-0830.gcp.devcluster.openshift.com
+    
