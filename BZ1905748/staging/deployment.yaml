@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: hello-staging
+  spec:
+    selector:
+      app: hello-staging
+    ports:
+      - port: 8080
+        name: 8080-http
+        targetPort: 8080
+        protocol: TCP
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: hello-staging
+  spec:
+    replicas: 1
+    template:
+      metadata:
+        name: hello-staging
+        labels:
+          app: hello-staging
+      spec:
+        containers:
+        - image: openshift/hello-openshift
+          name: hello
+          ports:
+            - name: "http"
+              containerPort: 8080
+      imagePullPolicy: IfNotPresent
+    selector:
+      matchLabels:
+        app: hello-staging
+        
