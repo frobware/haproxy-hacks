@@ -1,0 +1,94 @@
+* Setup
+
+  https://bugzilla.redhat.com/show_bug.cgi?id=1905748
+
+  Examples taken from https://rcarrata.com/openshift/ocp4_route_sharding/
+
+* Get domain
+
+  #+begin_src sh
+    oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain
+  #+end_src
+
+  #+RESULTS:
+  : apps.amcdermo-2021-01-15-0830.gcp.devcluster.openshift.com
+
+* Add a new ingresscontroller named =staging=
+
+  #+begin_src sh
+    oc apply -f ./staging/router-shard.yaml
+  #+end_src
+
+* List all ingresscontrollers
+
+  #+begin_src sh
+    oc get --all-namespaces ingresscontrollers
+  #+end_src
+
+  #+RESULTS:
+  | NAMESPACE                  | NAME    | AGE  |
+  | openshift-ingress-operator | default | 156m |
+  | openshift-ingress-operator | staging | 2m   |
+
+* Add a route selector to the =default= router
+
+  #+begin_src sh :results pp
+    oc patch -n openshift-ingress-operator ingresscontroller/default --type=merge -p '{"spec":{"routeSelector":{"matchLabels":{"type":"public"}}}}'
+    oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .spec.routeSelector
+  #+end_src
+
+  #+RESULTS:
+  : ingresscontroller.operator.openshift.io/default patched
+  : {
+  :   "matchLabels": {
+  :     "type": "public"
+  :   }
+  : }
+
+* Testing
+
+  Create a new project and deploy an application for testing purposes
+  (in this case, we use the django-psql-example):
+
+  #+begin_src sh :results pp
+    oc new-project test-sharding
+    oc new-app django-psql-example
+  #+end_src
+
+  The new-app deployment creates two pods, a django frontend and a
+  postgresql database, and also a Service and a Route:
+
+  #+begin_src sh
+    oc get route -n test-sharding
+  #+end_src
+
+  This route is exposed by default to the “router-default”, using the
+  *apps. domain route.
+
+  This route is exposed by default to the “default” router, using the
+  =*apps.= domain route. Let’s tweak the route, and add the label that
+  matches to the routeSelector defined into our internal
+  ingresscontroller:
+
+  #+begin_src sh :results pp
+    oc delete route django-psql-example -n test-sharding
+    oc apply -f ./route-django-psql-example.yaml
+  #+end_src
+
+  With a describe of the route, check that the route is created
+  correctly:
+
+  #+begin_src sh :results pp
+    oc describe route django-psql-example -n test-sharding
+  #+end_src
+
+* Debugging locally
+
+  When debugging locally mirror what the dockerfile would do when
+  setting up haproxy in the container.
+
+  #+begin_src sh
+    mkdir -p /tmp/var/lib/haproxy/router/{certs,cacerts,whitelists}
+    mkdir -p /tmp/var/lib/haproxy/{conf/.tmp,run,bin,log}
+    touch /tmp/var/lib/haproxy/conf/{{os_http_be,os_edge_reencrypt_be,os_tcp_be,os_sni_passthrough,os_route_http_redirect,cert_config,os_wildcard_domain}.map,haproxy.config}
+  #+end_src
