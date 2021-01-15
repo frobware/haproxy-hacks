@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: hello-prod
+    labels:
+      app: hello-prod
+      type: public
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: hello-prod
