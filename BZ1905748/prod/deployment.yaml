@@ -5,6 +5,8 @@ items:
   kind: Service
   metadata:
     name: hello-prod
+    labels:
+      app: hello-prod
   spec:
     selector:
       app: hello-prod
