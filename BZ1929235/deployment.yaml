@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: bz1929235
+    labels:
+      app: bz1929235
+  spec:
+    selector:
+      app: bz1929235
+    ports:
+      - port: 8080
+        name: bz1929235
+        protocol: TCP
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: bz1929235
+  spec:
+    selector:
+      matchLabels:
+        app: bz1929235
+    replicas: 12
+    template:
+      metadata:
+        name: bz1929235
+        labels:
+          app: bz1929235
+      spec:
+        containers:
+        - image: nicolaka/netshoot
+          imagePullPolicy: IfNotPresent
+          name: bz1929235
+          command:
+            - /usr/bin/socat
+            - TCP4-LISTEN:8080,reuseaddr,fork
+            - EXEC:'/bin/bash -c \"printf \\\"HTTP/1.0 200 OK\r\n\r\n\\\"; sed -e \\\"/^\r/q\\\"\"'
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            successThreshold: 1
+            timeoutSeconds: 5
+          readinessProbe:
+            failureThreshold: 3
+            httpGet:
+              port: 8080
+              scheme: HTTP
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            successThreshold: 1
+            timeoutSeconds: 10
+          restartPolicy: Always
+        - image: nicolaka/netshoot
+          imagePullPolicy: IfNotPresent
+          name: curler
+          env:
+          - name: TEST_URL
+            value: "https://www.redhat.com"
+          command: ["/bin/bash", "-c"]
+          args:
+            - touch /tmp/healthy; while :; do curl -s -m 5 -o /dev/null -L -k -w 'status=%{http_code}\n' ${TEST_URL}; sleep 10; done
+          livenessProbe:
+            failureThreshold: 5
+            exec:
+              command:
+              - cat
+              - /tmp/healthy
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          readinessProbe:
+            failureThreshold: 3
+            exec:
+              command:
+              - cat
+              - /tmp/healthy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            successThreshold: 1
+            timeoutSeconds: 10
+          restartPolicy: Always
