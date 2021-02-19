@@ -30,13 +30,9 @@ items:
           app: bz1929235
       spec:
         containers:
-        - image: nicolaka/netshoot
+        - image: openshift/hello-openshift
           imagePullPolicy: IfNotPresent
           name: bz1929235
-          command:
-            - /usr/bin/socat
-            - TCP4-LISTEN:8080,reuseaddr,fork
-            - EXEC:'/bin/bash -c \"printf \\\"HTTP/1.0 200 OK\r\n\r\n\\\"; sed -e \\\"/^\r/q\\\"\"'
           ports:
           - containerPort: 8080
             protocol: TCP
