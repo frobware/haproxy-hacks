@@ -1,0 +1,115 @@
+https://bugzilla.redhat.com/show_bug.cgi?id=1936712
+
+* tuned info
+
+https://docs.openshift.com/container-platform/4.7/scalability_and_performance/using-node-tuning-operator.html  
+
+#+begin_src sh
+oc apply -f- <<_EOF_
+apiVersion: tuned.openshift.io/v1
+kind: Tuned
+metadata:
+  name: ingress
+  namespace: openshift-cluster-node-tuning-operator
+spec:
+  profile:
+  - data: |
+      [main]
+      summary=A custom OpenShift ingress profile
+      include=openshift-node
+      [sysctl]
+      net.ipv4.ip_local_port_range="1024 65535"
+      net.ipv4.tcp_tw_reuse=1
+    name: openshift-ingress
+  recommend:
+  - match:
+    - label: node-role.kubernetes.io/master
+    - label: node-role.kubernetes.io/worker
+    priority: 10
+    profile: openshift-ingress
+_EOF_
++end_src
+
+sysctl -a | grep _tw
+
+#+RESULTS:
+: tuned.tuned.openshift.io/ingress configured
+
+* Useful info on `net.ipv4.tcp_tw_reuse`:
+
+https://forum.vyos.io/t/linux-tcp-tw-reuse-2-how-is-this-set-and-what-is-the-significance/5286/2
+
+oc apply -f https://raw.githubusercontent.com/frobware/haproxy-hacks/master/BZ1829779/server/bz1829779.yaml
+
+Build of https://github.com/jmencak/mb
+
+http://file.rdu.redhat.com/~amcdermo/mb
+
+kubectl run tmp-shell --rm -i --tty --image centos -- /bin/bash
+
+What about reloads?
+
+AWS/SDN
+
+[root@tmp-shell /]# ./mb -i requests.json -d 5
+Time: 5.08s
+Sent: 3.53MiB, 710.23kiB/s
+Recv: 16.49MiB, 3.24MiB/s
+Hits: 21366, 4203.88/s
+
+Azure/SDN
+
+[root@tmp-shell /]# ./mb -i request.json
+Time: 5.07s
+Sent: 3.58MiB, 723.57kiB/s
+Recv: 15.75MiB, 3.11MiB/s
+Hits: 19572, 3859.07/s
+
+[root@tmp-shell /]# ./mb -i request.json
+Time: 5.03s
+Sent: 3.72MiB, 758.83kiB/s
+Recv: 16.35MiB, 3.25MiB/s
+Hits: 20343, 4047.11/s
+
+[root@tmp-shell /]# ./mb -i request.json -d 30
+Time: 30.08s
+Sent: 22.77MiB, 775.21kiB/s
+Recv: 100.28MiB, 3.33MiB/s
+Hits: 124361, 4134.46/s
+[root@tmp-shell /]#
+
+* Thu Apr 29 11:17:41 BST 2021
+
+  Scale down default ingress controller to easily find ss stats
+  related to invocation of mb(1).
+
+  #+begin_src shell
+    oc scale --replicas=1 -n openshift-ingress-operator ingresscontrollers/default
+  #+end_src
+
+  #+RESULTS:
+  : ingresscontroller.operator.openshift.io/default scaled
+
+  In another shell:
+  #+begin_src shell
+    kubectl run tmp-shell --rm -i --tty --image centos -- /bin/bash
+  #+end_src
+
+  #+begin_src shell
+    oc cp mb tmp-shell:mb
+    oc cp requests.json tmp-shell:requests.json
+  #+end_src
+
+  #+RESULTS:
+
+  #+begin_src shell
+    kubectl exec tmp-shell -- ./mb -i requests.json -d 30
+  #+end_src
+
+  #+RESULTS:
+  | Time: 30.02s   |             |
+  | Sent: 10.14MiB | 345.87kiB/s |
+  | Recv: 48.03MiB | 1.60MiB/s   |
+  | Hits: 62547    | 2083.35/s   |
+
+while :; do ss -tan state time-wait | wc -l; sleep 1; done

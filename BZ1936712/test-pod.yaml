@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: tmp-shell
+  labels:
+    app: tmp-shell
+spec:
+  containers:
+  - name: centos
+    image: centos
+    imagePullPolicy: IfNotPresent
+    command: ["sleep"]
+    args: ["infinity"]
+  # nodeSelector:
+  #   tuned.openshift.io/ingress-node-label: "gofaster"
+  #   node.kubernetes.io/worker: ""
