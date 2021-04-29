@@ -1,0 +1,15 @@
+[
+    {
+	"scheme": "http",
+	"host": "bz1829779-insecure-default.apps.sgreene-aws-cluster-edns.devcluster.openshift.com",
+	"port": 80,
+	"method": "GET",
+	"path": "/",
+	"delay": {
+	    "min": 0,
+	    "max": 0
+	},
+	"keep-alive-requests": 1,
+	"clients": 500
+    },
+]
