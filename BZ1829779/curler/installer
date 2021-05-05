@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+if mountpoint -q /target; then
+    cp -v /build/curler /target
+else
+    echo "/target is not a mountpoint."
+    echo "- re-run this container with -v /tmp:/target"
+fi

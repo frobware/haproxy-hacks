@@ -3,13 +3,11 @@ project (CURLER)
 
 enable_language(C)
 
-#set(CMAKE_C_COMPILER clang)
-#set(CMAKE_BUILD_TYPE Debug)
+set(CMAKE_MAKE_PROGRAM make)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FindPkgConfig)
-#find_package(CURL REQUIRED)
-find_package(CURL REQUIRED COMPONENTS libcurl MODULE)
+find_package(CURL REQUIRED)
 
 add_executable (curler curler.c)
 include_directories(${CURL_INCLUDE_DIR})

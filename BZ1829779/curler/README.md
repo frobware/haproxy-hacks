@@ -1,4 +1,4 @@
-Prerequisites
+# Build a dynamically linked copy of curler via Docker
 
-yum groupinstall -y "Development Tools"
-yum install -y pkg-config libcurl-devel cmake
+    $ make -f Makefile build run
+    $ file /tmp/curler
