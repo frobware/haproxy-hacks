@@ -16,3 +16,6 @@ run-client:
 
 verify:
 	@echo HOST=$(HOST)
+
+enable-router-logging:
+	oc -n openshift-ingress-operator patch ingresscontroller/default --type=merge --patch='{"spec":{"logging":{"access":{"destination":{"type":"Container"}}}}}'
