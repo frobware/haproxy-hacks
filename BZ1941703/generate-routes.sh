@@ -1,60 +1,20 @@
+#!/bin/bash
+
+for i in $(seq ${1:-1} ${2:-10}); do
+cat <<-EOF
+---
 apiVersion: v1
 kind: List
 items:
-- apiVersion: v1
-  kind: Service
-  metadata:
-    name: bz1941703
-    labels:
-      app: bz1941703
-  spec:
-    selector:
-      app: bz1941703
-    ports:
-      - port: 8080
-        name: http
-        targetPort: 8080
-        protocol: TCP
-- apiVersion: apps/v1
-  kind: Deployment
-  metadata:
-    name: bz1941703
-  spec:
-    replicas: 1
-    template:
-      metadata:
-        name: bz1941703
-        labels:
-          app: bz1941703
-      spec:
-        containers:
-          - image: quay.io/amcdermo/bz1941703
-            imagePullPolicy: Always
-            name: bz1941703
-            ports:
-              - name: "http"
-                containerPort: 8080
-    selector:
-      matchLabels:
-        app: bz1941703
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: bz1941703-insecure
     labels:
-      app: bz1941703
+      app: helloworld-1
+    name: helloworld-${i}-edge
   spec:
     port:
       targetPort: 8080
-    to:
-      kind: Service
-      name: bz1941703
-- apiVersion: route.openshift.io/v1
-  kind: Route
-  metadata:
-    name: bz1941703-edge
-    labels:
-      app: bz1941703
     tls:
       termination: edge
       insecureEdgeTerminationPolicy: Redirect
@@ -76,24 +36,24 @@ items:
         hWC/O1Hzi15kOT0WQ/UKUMjMAiEA40uW9P6k+i1cDwgfBBMzgDFQa9GAb4FqM8Wr
         PaUMdqg=
         -----END CERTIFICATE-----
-  spec:
-    port:
-      targetPort: 8080
     to:
       kind: Service
-      name: bz1941703
+      name: helloworld-1
+      weight: 100
+    wildcardPolicy: None
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: bz1941703-passthrough
     labels:
-      app: bz1941703
-    tls:
-      termination: passthrough
-      insecureEdgeTerminationPolicy: Redirect
+      app: helloworld-1
+    name: helloworld-${i}-insecure
   spec:
     port:
       targetPort: 8080
     to:
       kind: Service
-      name: bz1941703
+      name: helloworld-1
+      weight: 100
+    wildcardPolicy: None
+EOF
+done
