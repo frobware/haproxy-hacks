@@ -104,3 +104,5 @@ func main() {
 		time.Sleep(*interval)
 	}
 }
+
+// pod:container_memory_usage_bytes:sum{namespace="openshift-ingress"}
