@@ -1,0 +1,58 @@
+
+* https://github.com/frobware/haproxy-hacks/tree/master/BZ1690146
+
+  Not useful
+
+* https://github.com/frobware/haproxy-hacks/tree/master/BZ1743291
+
+* https://github.com/frobware/haproxy-hacks/tree/master/BZ1829779
+
+  This is good. Needs TLC.
+
+  Needs to have a dockerfile for pre-built sqlite.
+
+  Alternative is to consider metrics for latency.
+
+  Could we do this with the canary route?
+
+* https://github.com/frobware/haproxy-hacks/blob/master/BZ1841454
+
+  Analysis script may be useful for looking at curl errors.
+
+* https://github.com/frobware/haproxy-hacks/blob/master/BZ1895772/haproxy-established-connections.sh
+
+  Yes!
+
+  But we should move this to the router so that we get this live and in prod.
+
+* https://github.com/frobware/haproxy-hacks/blob/master/BZ1905100/what-disconnected.pl
+
+  Useful for analyzing BZ1895772.
+  
+  Go program for both of these: BZ1905100 and BZ1895772.
+
+  Correlate with services on the cluster (e.g., oauth/console).
+
+  Alternative is to consider metrics.
+
+* https://github.com/frobware/haproxy-hacks/tree/master/BZ1905748
+
+  sharding examples. do we already have this in the docs?
+
+* https://github.com/frobware/haproxy-hacks/tree/master/BZ1929821
+
+  Create lots of routes. THIS IS THE ONE.
+  Script to force haproxy reload.
+  
+* https://github.com/frobware/haproxy-hacks/tree/master/BZ1936712
+
+  Trying to set a specific sysctl.
+  Would be useful to retry this and make it work -- we didn't get this to work end to end.
+
+* https://github.com/frobware/haproxy-hacks/tree/master/BZ1941703
+
+  websocket problem generator. Leaves open websockets.
+
+  
+  
+  
