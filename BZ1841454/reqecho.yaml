@@ -17,8 +17,12 @@ items:
         containers:
         - name: bz1841454-reqecho
           # https://github.com/frobware/reqecho
-          image: frobware/reqecho:latest
-          imagePullPolicy: Always
+          # image: frobware/reqecho:latest
+          image: solsson/http-echo
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: PORT
+            value: "8080"
     selector:
       matchLabels:
         app: bz1841454-reqecho
