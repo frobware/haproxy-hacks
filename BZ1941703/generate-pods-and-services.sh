@@ -11,8 +11,8 @@ metadata:
 spec:
   containers:
   - name: helloworld-1
-    image: openshift/hello-openshift
-    imagePullPolicy: IfNotPresent
+    image: quay.io/openshift/origin-hello-openshift
+    imagePullPolicy: Always
     env:
     - name: RESPONSE
       value: "helloworld-1"
