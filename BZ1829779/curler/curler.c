@@ -26,7 +26,8 @@ struct output_field {
   union typeinfo val;
 };
 
-static struct output_field output_fields[] = {
+/* Order is significant, particularly "http_code" */
+static struct output_field output_fields[] = { 
     {"namelookup", CURLINFO_NAMELOOKUP_TIME, DOUBLEINFO},
     {"connect", CURLINFO_CONNECT_TIME, DOUBLEINFO},
     {"app_connect", CURLINFO_APPCONNECT_TIME, DOUBLEINFO},
@@ -42,6 +43,12 @@ volatile sig_atomic_t done = 0;
 static void sigterm_handler(int signum) { done = 1; }
 
 static int write_result;
+
+// When R=1 (port reuse) we get -1 from libcurl for the port number
+// for calls>1. This is a sentinel value and records the first port
+// number so that we can substitute the actual port number that was
+// obtained in the first call.
+static long first_port = -1;
 
 static size_t write_cb(void *data, size_t size, size_t nmemb, void *userp) {
   size_t realsize = size * nmemb;
@@ -233,6 +240,14 @@ int main(int argc, char *argv[]) {
       case LONGINFO:
         getinfo_or_die(curl_handle, output_fields[j].info,
                        &output_fields[j].val.longinfo);
+	if (j == 6) {
+	  if (first_port == -1) {		/* PORT */
+	    first_port = output_fields[j].val.longinfo;
+	  }
+	  if (output_fields[j].val.longinfo == -1) {
+	    output_fields[j].val.longinfo = first_port;
+	  }
+	}
         fprintf(stdout, "%s %ld", output_fields[j].name,
                 output_fields[j].val.longinfo);
         break;
