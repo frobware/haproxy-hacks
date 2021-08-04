@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+set -eu
+set -o pipefail
+
+routes="$(oc get routes -o json | jq -r '.items[].metadata.name')"
+
+function add_hsts_annotation() {
+    local route=$1
+    local value=$2
+    echo "annotate $route $value"
+    oc annotate --overwrite route $route "haproxy.router.openshift.io/hsts_header"="$value"
+}
+
+for route in $routes; do
+    host="$(oc get routes $route -o json | jq -r '.spec.host')"
+    echo "route=$route, host=$host"
+    
+    add_hsts_annotation $route "max-age=99999"
+    sleep 10
+    curl -i -s -k -L http://"$host" | grep "strict-transport-security: max-age=99999"
+
+    add_hsts_annotation $route "max-age=99998"
+    sleep 10
+    curl -i -s -k -L http://"$host" | grep "strict-transport-security: max-age=99998"
+
+    add_hsts_annotation $route "max-age=99997"
+    sleep 10
+    curl -i -s -k -L http://"$host" | grep "strict-transport-security: max-age=99997"
+done
