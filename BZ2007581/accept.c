@@ -22,7 +22,10 @@
 
 static int (*real_accept4)(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
 static int (*real_close)(int fd);
+
+#if 0
 static sighandler_t (*real_signal)(int signum, sighandler_t handler);
+#endif
 
 struct intercepted_accept {
 	time_t accept_time;
@@ -32,11 +35,13 @@ struct intercepted_accept {
 	int fd;			/* sanity check */
 };
 
-static struct intercepted_accept accepted_fds[65536];
+static struct intercepted_accept accepted_fds[65536*2];
 
 static pthread_mutex_t accepted_fds_lock;
 static pthread_t dump_handler_tid;
-static char *socket_path;
+static const char *socket_path;
+static int dumper_listen_fd;
+static int terminate;
 
 #define LOCK_ACCEPTED_FDS						\
 	do {								\
@@ -98,17 +103,55 @@ static char *write_inetaddr_as_str(const struct sockaddr *sa, char *s, size_t ma
 }
 #endif
 
+static int write_connection_state(int fd)
+{
+	int rc = 0;
+	char msg[8192];
+	char tbuf[256] = { '\0' };
+	struct tm tm_tmp;
+
+	LOCK_ACCEPTED_FDS;
+
+	for (size_t i = 0; i < NELEMENTS(accepted_fds); i++) {
+		if (accepted_fds[i].fd == -1) {
+			continue;
+		}
+
+		*tbuf = '\0';
+		localtime_r(&accepted_fds[i].accept_time, &tm_tmp);
+		strftime(tbuf, sizeof(tbuf), "%FT%T.%3S", &tm_tmp);
+		int n = snprintf(msg, sizeof(msg), "%s [haproxy:%d] %d %s%s%s:%d\n",
+				 tbuf,
+				 getpid(),
+				 accepted_fds[i].fd,
+				 accepted_fds[i].family == AF_INET6 ? "[" : "",
+				 accepted_fds[i].address,
+				 accepted_fds[i].family == AF_INET6 ? "]" : "",
+				 accepted_fds[i].port);
+		if (n > 0) {
+			int wrote = write(fd, msg, n);
+			if (wrote != n) {
+				rc = -1;
+				break;
+			}
+		}
+	}
+
+	UNLOCK_ACCEPTED_FDS;
+
+	return rc;
+}
+
 static void *dump_handler(void *userarg)
 {
 	struct sockaddr_un addr;
-	int fd;
 
 	if (socket_path == NULL) {
 		perror("no socket path");
 		return NULL;
 	}
 
-	if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+	if ((dumper_listen_fd = socket(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0)) == -1) {
 		perror("socket error");
 		return NULL;
 	}
@@ -120,60 +163,54 @@ static void *dump_handler(void *userarg)
 
 	fprintf(stderr, "dumper socket: %s\n", addr.sun_path);
 
-	if (bind(fd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+	if (bind(dumper_listen_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
 		perror("bind error");
 		return NULL;
 	}
 
-	if (listen(fd, 5) == -1) {
+	if (listen(dumper_listen_fd, 5) == -1) {
 		perror("listen error");
-		exit(-1);
+		exit(EXIT_FAILURE);
 	}
 
-	while (1) {
+	while (!terminate) {
 		int cl;
-		int rc;		/* result code */
 		char buf[100];
 
-		if ((cl = accept(fd, NULL, NULL)) == -1) {
+		if ((cl = accept4(dumper_listen_fd, NULL, NULL, 0)) == -1) {
+			if (terminate) {
+				return NULL;
+			}
 			perror("accept error");
 			continue;
 		}
 
-		rc = read(cl, buf, sizeof buf);
-		if (rc == -1) {
+		fprintf(stderr, "new debug client: %d\n", cl);
+		
+		if (terminate) {
+			close(cl);
+			return NULL;
+		}
+
+		if (read(cl, buf, sizeof(buf)) == -1) {
 			perror("read");
-			close(cl);
+		} else {
+			if (write_connection_state(cl) == -1) {
+				perror("write");
+			}
 		}
 
-		char msg[8192];
-		char tbuf[256] = { '\0' };
-		struct tm tm_tmp;
-
-		LOCK_ACCEPTED_FDS;
-		for (size_t i = 0; i < NELEMENTS(accepted_fds); i++) {
-			if (accepted_fds[i].fd == -1) {
-				continue;
-			}
-			*tbuf = '\0';
-			localtime_r(&accepted_fds[i].accept_time, &tm_tmp);
-			strftime(tbuf, sizeof(tbuf), "%FT%T.%6S", &tm_tmp);
-			int n = snprintf(msg, sizeof msg, "%s [haproxy:%d] %d %s%s%s:%d\n",
-					 tbuf,
-					 getpid(),
-					 accepted_fds[i].fd,
-					 accepted_fds[i].family == AF_INET6 ? "[" : "",
-					 accepted_fds[i].address,
-					 accepted_fds[i].family == AF_INET6 ? "]" : "",
-					 accepted_fds[i].port);
-			if (n > 0) {
-				write(cl, msg, n);
-			}
-			close(cl);
-		}
-		UNLOCK_ACCEPTED_FDS;
+		close(cl);
 	}
-	close(fd);
+
+	if (socket_path != NULL && *socket_path) {
+		fprintf(stderr, "unlinking %s\n", socket_path);
+		unlink(socket_path);
+	}
+
+	fprintf(stderr, "INTERCEPTED: dumper exiting\n");
+	pthread_exit(NULL);
+	return NULL;
 }
 
 #if 0
@@ -191,11 +228,34 @@ sighandler_t signal(int signum, sighandler_t handler)
 
 static void sig_handler(int signum)
 {
+	fprintf(stderr, "SIGNAL %d\n", signum);
+ 
 	if (signum == SIGTERM || signum == SIGINT) {
-		if (socket_path != NULL && *socket_path) {
-			fprintf(stderr, "unlinking %s\n", socket_path);
-			unlink(socket_path);
+		terminate = 1;
+#if 1
+		int fd;
+
+		if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+			perror("socket error");
+			exit(-1);
 		}
+
+		struct sockaddr_un addr;
+		memset(&addr, 0, sizeof(addr));
+		addr.sun_family = AF_UNIX;
+		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
+
+		if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+			perror("connect error");
+			exit(-1);
+		}
+#endif
+		/* close(dumper_listen_fd); */
+		void *retval = NULL;
+		fprintf(stderr, "Waiting for thread exit\n");
+		pthread_join(dump_handler_tid, &retval);
+		fprintf(stderr, "Waiting for thread has exited\n");
+
 		/* restore default handler. */
 		signal(signum, SIG_DFL);
 		/* re-raise for default behaviour. */
@@ -203,7 +263,7 @@ static void sig_handler(int signum)
 	}
 }
 
-static void __attribute__((constructor)) setup(void)
+static void __attribute__((constructor (101))) setup(void)
 {
 	fprintf(stderr, "INTERCEPT constructor\n");
 
@@ -219,21 +279,23 @@ static void __attribute__((constructor)) setup(void)
 	}
 	UNLOCK_ACCEPTED_FDS;
 
-	if ((real_close = dlsym(RTLD_NEXT, "close")) == NULL) {
-		perror("dlsym close");
-		exit(EXIT_FAILURE);
-	}
-
 	if ((real_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
 		perror("dlsym accept4");
 		exit(EXIT_FAILURE);
 	}
 
+	if ((real_close = dlsym(RTLD_NEXT, "close")) == NULL) {
+		perror("dlsym close");
+		exit(EXIT_FAILURE);
+	}
+
+#if 0
 	if ((real_signal = dlsym(RTLD_NEXT, "signal")) == NULL) {
 		perror("dlsym signal");
 		exit(EXIT_FAILURE);
 	}
-
+#endif
+	
 	if (pthread_create(&dump_handler_tid, NULL, &dump_handler, NULL) != 0) {
 		perror("pthread_create");
 		exit(EXIT_FAILURE);
@@ -249,31 +311,29 @@ static void __attribute__((constructor)) setup(void)
 	 * 22 (SIGTTOU)
 	 */
 	if (signal(SIGTERM, sig_handler) == SIG_ERR) {
-		perror("SIGTERM registration failed");
+		perror("signal handler for SIGTERM registration failed");
 		exit(EXIT_FAILURE);
 	}
 	if (signal(SIGINT, sig_handler) == SIG_ERR) {
-		perror("SIGINT registration failed");
+		perror("signal handler for SIGINT registration failed");
 		exit(EXIT_FAILURE);
 	}
-	fprintf(stderr, "size of static map %zd\n", sizeof(accepted_fds));
 }
 
+/* INTERPOSER */
 int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 {
 	int fd = real_accept4(sockfd, sa, addrlen, flags);
 
 	fprintf(stderr, "INTERCEPTED %d accept4\n", fd);
 
-	if (fd == -1) {
-		return -1;
-	}
-
-	if (fd > NELEMENTS(accepted_fds)) {
+	if ((sa == NULL || addrlen == 0) ||
+	    (fd < 0 || fd >= NELEMENTS(accepted_fds))) {
 		return fd;	/* we have finite space. */
 	}
-		
+
 	LOCK_ACCEPTED_FDS;
+	assert(accepted_fds[fd].fd == -1);
 	switch(sa->sa_family) {
 	case AF_INET:
 		accepted_fds[fd].fd = fd;
@@ -295,17 +355,21 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 	return fd;
 }
 
+/* INTERPOSER */
 int close(int fd)
 {
+	int rc;
 	assert(real_close != NULL);
-
 	LOCK_ACCEPTED_FDS;
-	if (accepted_fds[fd].fd == fd) {;
-		fprintf(stderr, "INTERCEPTED %d close\n", fd);
-		accepted_fds[fd].fd = -1; /* clear */
+	if (fd >= 0 && fd <= NELEMENTS(accepted_fds)) {
+		if (accepted_fds[fd].fd == fd) {;
+			fprintf(stderr, "INTERCEPTED %d closed\n", fd);
+			accepted_fds[fd].fd = -1; /* clear */
+		}
 	}
 	UNLOCK_ACCEPTED_FDS;
-
-	return real_close(fd);
+	rc = real_close(fd);
+	fprintf(stderr, "INTERCEPTED %d close (%p) = %d\n", fd, real_close, rc);
+	return rc;
 }
 

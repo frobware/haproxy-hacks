@@ -1,4 +1,4 @@
-CFLAGS = -g -shared -fPIC -Werror -Wall
+CFLAGS = -g -ggdb3 -shared -fPIC -Werror -Wall
 
 all: libaccept.so
 
