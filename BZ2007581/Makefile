@@ -1,4 +1,4 @@
-CFLAGS = -g -ggdb3 -shared -fPIC -Wall -Werror
+CFLAGS = -g -ggdb3 -shared -fPIC -Wall -Werror -Wl,-init,init
 
 #-fsanitize=address
 
@@ -11,7 +11,7 @@ libaccept.so: accept.o
 test: libaccept.so
 	LD_PRELOAD=./$^ ls
 
-*.o *.c: Makefile
+libaccept.so *.o *.c: Makefile
 
 clean:
 	$(RM) libaccept.so accept.o

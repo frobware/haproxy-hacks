@@ -25,6 +25,7 @@
 static int (*real_accept)(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
 static int (*real_accept4)(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
 static int (*real_close)(int fd);
+static pid_t (*real_fork)();
 
 struct intercepted_accept {
 	struct timespec accept_time;
@@ -173,8 +174,10 @@ static void *connection_state_handler(void *userarg)
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
+#if 0
 	unlink(addr.sun_path);
-
+#endif
+	
 	if (bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
 		perror("bind error");
 		return NULL;
@@ -211,6 +214,8 @@ static void *connection_state_handler(void *userarg)
 
 static void signal_handler(int signum)
 {
+	fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER signal %d\n", "haproxy", getpid(), signum);
+
 	if (*socket_path != '\0') {
 		fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER unlinking %s\n", "haproxy", getpid(), socket_path);
 		if (unlink(socket_path) != 0) {
@@ -296,6 +301,10 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags)
 /* libc interposer */
 int close(int fd)
 {
+	if (real_close == NULL) {
+		return -1;
+	}
+	
 	assert(real_close != NULL);
 
 	if (initialised) {
@@ -311,6 +320,14 @@ int close(int fd)
 	return rc;
 }
 
+/* libc interposer */
+pid_t fork(void)
+{
+	fprintf(stderr, "intercepting fork\n");
+	return 0;
+	//return real_fork();
+}
+
 static void __attribute__((destructor)) teardown(void) {
 	if (*socket_path != '\0') {
 		fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER unlinking %s\n", "haproxy", getpid(), socket_path);
@@ -320,11 +337,97 @@ static void __attribute__((destructor)) teardown(void) {
 	}
 }
 
+static int(*o_execve)(const char *path, char *const argv[], char *const envp[]) = NULL;
+static char *sopath;
+extern char **environ;
+
+void initx(void)
+{
+	fprintf(stderr, "ahem\n");
+
+	int i, j;
+	static const char *ldpreload = "LD_PRELOAD";
+	// First save the value of LD_PRELOAD
+	int len = strlen(getenv(ldpreload));
+	sopath = (char*) malloc(len+1);
+	strcpy(sopath, getenv(ldpreload));
+	// unsetenv() has a weird behavior, this is a custom implementation
+	// Look for LD_PRELOAD variable
+	for(i = 0; environ[i]; i++)
+	{
+		int found = 1;
+		for(j = 0; ldpreload[j] != '\0' && environ[i][j] != '\0'; j++)
+			if(ldpreload[j] != environ[i][j]) {
+				found = 0;
+				break;
+			}
+		if(found) {
+			// Set to zero the variable
+			for(j = 0; environ[i][j] != '\0'; j++)
+				environ[i][j] = '\0';
+			break;
+			// Free that memory
+			free((void*)environ[i]);
+		}
+	}
+	// Remove the string pointer from environ
+	for(j = i; environ[j]; j++)
+		environ[j] = environ[j+1];
+
+}
+
+int execve(const char *path, char *const argv[], char *const envp[])
+{
+	int i, j, ldi = -1, r;
+	char** new_env;
+	if(!o_execve)
+		o_execve = dlsym(RTLD_NEXT,"execve");
+	// Look if the provided environment already contains LD_PRELOAD
+	for(i = 0; envp[i]; i++)
+	{
+		if(strstr(envp[i], "LD_PRELOAD"))
+			ldi = i;
+	}
+	// If it doesn't, add it at the end
+	if(ldi == -1)
+	{
+		ldi = i;
+		i++;
+	}
+	// Create a new environment
+	new_env = (char**) malloc((i+1)*sizeof(char*));
+	// Copy the old environment in the new one, except for LD_PRELOAD
+	for(j = 0; j < i; j++)
+	{
+		// Overwrite or create the LD_PRELOAD variable
+		if(j == ldi)
+		{
+			new_env[j] = (char*) malloc(256);
+			strcpy(new_env[j], "LD_PRELOAD=");
+			strcat(new_env[j], sopath);
+		}
+		else
+			new_env[j] = (char*) envp[j];
+	}
+	// That string array is NULL terminated
+	new_env[i] = NULL;
+	r = o_execve(path, argv, new_env);
+	free(new_env[ldi]);
+	free(new_env);
+	return r;
+}
+
+
 static void __attribute__((constructor (101))) setup(void)
 {
 	pthread_t connection_state_tid;
 
 	snprintf(socket_path, sizeof(socket_path), "/tmp/haproxy-%d.connections", getpid());
+
+	if ((real_fork = dlsym(RTLD_NEXT, "fork")) == NULL) {
+		perror("dlsym fork error; cannot continue");
+		exit(EXIT_FAILURE); /* has to be fatal */
+	}
 
 	if ((real_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
 		perror("dlsym accept4 error; cannot continue");
