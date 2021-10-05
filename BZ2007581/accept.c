@@ -4,17 +4,18 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <signal.h>
+#include <string.h>
 #include <time.h>
 #include <dlfcn.h>
 #include <sys/time.h>
 #include <unistd.h>
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
 #include <pthread.h>
-#include <limits.h>
 
 #undef NDEBUG			/* always want an assert to fire */
 #include <assert.h>
@@ -26,10 +27,12 @@ static int (*real_close)(int fd);
 
 struct intercepted_accept {
 	struct timespec accept_time;
-	char address[INET6_ADDRSTRLEN];
-	int port;
+	char local_address[INET6_ADDRSTRLEN];
+	int local_port;
 	int family;
 	int fd;			/* sanity check */
+	char peer_address[INET6_ADDRSTRLEN];
+	int peer_port;
 };
 
 
@@ -71,7 +74,7 @@ static size_t human_time(const struct timespec *ts, char *s, size_t sz) {
 	int mins = ts->tv_sec / 60 % 60;
 	int secs = ts->tv_sec % 60;
 
-	return snprintf(s, sz, "%3d day%s %2d hour%s %2d minute%s %2d sec%s",
+	return snprintf(s, sz, "%d day%s %2d hour%s %2d minute%s %2d sec%s",
 			days,
 			days > 0 ? "s" : "",
 			hours,
@@ -83,20 +86,20 @@ static size_t human_time(const struct timespec *ts, char *s, size_t sz) {
 }
 
 #if 0
-static char *write_inetaddr_as_str(const struct sockaddr *sa, char *s, size_t maxlen, int *port)
+static char *write_inetaddr_as_str(const struct sockaddr *sa, char *s, size_t sz, int *port)
 {
 	switch(sa->sa_family) {
 	case AF_INET:
-		inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr), s, maxlen);
+		inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr), s, sz);
 		*port = ((struct sockaddr_in *)sa)->sin_port;
 		break;
 
 	case AF_INET6:
-		inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr), s, maxlen);
+		inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr), s, sz);
 		*port = ((struct sockaddr_in6 *)sa)->sin6_port;
 		break;
 	default:
-		strncpy(s, "Unknown AF", maxlen);
+		strncpy(s, "Unknown AF", sz);
 		return NULL;
 	}
 
@@ -127,13 +130,18 @@ static int write_connection_state(int fd)
 		timespec_diff(&current_time, &accepted_fds[i].accept_time, &elapsed_time);
 		human_time(&elapsed_time, timebuf, sizeof(timebuf));
 
-		int n = snprintf(msg, sizeof(msg), "pid:%d %d %s%s%s %d %s\n",
+		int n = snprintf(msg, sizeof(msg), "pid:%d fd:%d %s%s%s:%d %s%s%s:%d %ld secs (%s)\n",
 				 getpid(),
 				 accepted_fds[i].fd,
 				 accepted_fds[i].family == AF_INET6 ? "[" : "",
-				 accepted_fds[i].address,
+				 accepted_fds[i].local_address,
 				 accepted_fds[i].family == AF_INET6 ? "]" : "",
-				 accepted_fds[i].port,
+				 accepted_fds[i].local_port,
+				 accepted_fds[i].family == AF_INET6 ? "[" : "",
+				 accepted_fds[i].peer_address,
+				 accepted_fds[i].family == AF_INET6 ? "]" : "",
+				 accepted_fds[i].peer_port,
+				 elapsed_time.tv_sec,
 				 timebuf);
 		if (n > 0) {
 			int wrote = write(fd, msg, n);
@@ -147,7 +155,7 @@ static int write_connection_state(int fd)
 	return 0;
 }
 
-static void *dump_handler(void *userarg)
+static void *connection_state_handler(void *userarg)
 {
 	if (!initialised) {
 		return NULL;
@@ -210,7 +218,7 @@ static void sig_handler(int signum)
 
 	/* re-raise this signal for default behaviour. */
 	if (kill(getpid(), signum) != 0) {
-		exit(0);	/* last gasp saloon. */
+		exit(0);	/* last gasp! */
 	}
 }
 
@@ -234,20 +242,32 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 
 	LOCK_ACCEPTED_FDS;
 	assert(accepted_fds[fd].fd == -1); /* sanity check; set in close() */
+	memset(&accepted_fds[fd], 0, sizeof(accepted_fds[fd]));
 	accepted_fds[fd].family = sa->sa_family;
+
+	struct sockaddr peer_addr;
+	socklen_t peer_addr_len = sizeof(peer_addr);
 
 	switch(sa->sa_family) {
 	case AF_INET:
 		accepted_fds[fd].fd = fd;
 		clock_gettime(CLOCK_MONOTONIC, &accepted_fds[fd].accept_time);
-		inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr), accepted_fds[fd].address, sizeof accepted_fds[fd].address);
-		accepted_fds[fd].port = ((struct sockaddr_in *)sa)->sin_port;
+		accepted_fds[fd].local_port = ((struct sockaddr_in *)sa)->sin_port;
+		inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr), accepted_fds[fd].local_address, sizeof(accepted_fds[fd].local_address));
+		if (getpeername(fd, &peer_addr, &peer_addr_len) == 0) {
+			accepted_fds[fd].peer_port = ((struct sockaddr_in *)&peer_addr)->sin_port;
+			inet_ntop(AF_INET, &(((struct sockaddr_in *)&peer_addr)->sin_addr), accepted_fds[fd].peer_address, sizeof(accepted_fds[fd].peer_address));
+		}
 		break;
 	case AF_INET6:
 		accepted_fds[fd].fd = fd;
 		clock_gettime(CLOCK_MONOTONIC, &accepted_fds[fd].accept_time);
-		inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr), accepted_fds[fd].address, sizeof accepted_fds[fd].address);
-		accepted_fds[fd].port = ((struct sockaddr_in *)sa)->sin_port;
+		accepted_fds[fd].local_port = ((struct sockaddr_in *)sa)->sin_port;
+		inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr), accepted_fds[fd].local_address, sizeof(accepted_fds[fd].local_address));
+		if (getpeername(fd, &peer_addr, &peer_addr_len) == 0) {
+			accepted_fds[fd].peer_port = ((struct sockaddr_in *)&peer_addr)->sin_port;
+			inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)&peer_addr)->sin6_addr), accepted_fds[fd].peer_address, sizeof(accepted_fds[fd].peer_address));
+		}
 		break;
 	}
 
@@ -260,7 +280,6 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 int close(int fd)
 {
 	assert(real_close != NULL);
-	int rc = real_close(fd);
 
 	if (initialised) {
 		if (fd >= 0 && fd <= NELEMENTS(accepted_fds)) {
@@ -270,8 +289,8 @@ int close(int fd)
 		}
 	}
 
+	int rc = real_close(fd);
 	fprintf(stderr, "**** ACCEPT-INTERPOSER close(%d) = %d\n", fd, rc);
-
 	return rc;
 }
 
@@ -286,7 +305,7 @@ static void __attribute__((destructor)) teardown(void) {
 
 static void __attribute__((constructor)) setup(void)
 {
-	pthread_t dump_handler_tid;
+	pthread_t connection_state_tid;
 
 	if ((real_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
 		perror("dlsym accept4 error; cannot continue");
@@ -299,10 +318,12 @@ static void __attribute__((constructor)) setup(void)
 	}
 
 	if (snprintf(socket_path, sizeof(socket_path), "/tmp/haproxy-%d.connections", getpid()) < 1) {
+		assert(0);
 		return;
 	}
 
 	if (atexit(teardown) != 0) {
+		assert(0);
 		perror("atexit");
 		return;
 	}
@@ -313,8 +334,9 @@ static void __attribute__((constructor)) setup(void)
 	}
 	UNLOCK_ACCEPTED_FDS;
 
-	if (pthread_create(&dump_handler_tid, NULL, &dump_handler, NULL) != 0) {
+	if (pthread_create(&connection_state_tid, NULL, &connection_state_handler, NULL) != 0) {
 		perror("pthread_create");
+		assert(0);
 		return;
 	}
 
