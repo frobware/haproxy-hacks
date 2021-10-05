@@ -186,17 +186,6 @@ static void *connection_state_handler(void *userarg)
 	}
 
 	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
 
 	while (1) {
 		int cl;
