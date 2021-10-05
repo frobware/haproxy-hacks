@@ -199,7 +199,7 @@ static void *dump_handler(void *userarg)
 static void sig_handler(int signum)
 {
 	if (*socket_path != '\0') {
-		fprintf(stderr, "unlinking %s\n", socket_path);
+		fprintf(stderr, "**** ACCEPT-INTERPOSER unlinking %s\n", socket_path);
 		if (unlink(socket_path) != 0) {
 			perror("unlink");
 		}
@@ -225,7 +225,7 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 		return fd;
 	}
 
-	fprintf(stderr, "**** ACCEPT-INTERPOSER accept4 = %d\n", fd);
+	fprintf(stderr, "**** ACCEPT-INTERPOSER accept4() = %d\n", fd);
 
 	if ((sa == NULL || addrlen == 0) ||
 	    (fd < 0 || fd >= NELEMENTS(accepted_fds))) {
@@ -276,10 +276,8 @@ int close(int fd)
 }
 
 static void __attribute__((destructor)) teardown(void) {
-	fprintf(stderr, "INTERCEPT destructor\n");
-
 	if (*socket_path != '\0') {
-		fprintf(stderr, "unlinking %s\n", socket_path);
+		fprintf(stderr, "**** ACCEPT-INTERPOSER unlinking %s\n", socket_path);
 		if (unlink(socket_path) != 0) {
 			perror("unlink");
 		}
