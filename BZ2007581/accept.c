@@ -2,10 +2,11 @@
 
 #define _GNU_SOURCE
 #include <stdio.h>
-#include <stdlib.h>
-#include <dlfcn.h>
-#include <time.h>
 #include <stdarg.h>
+#include <stdlib.h>
+#include <time.h>
+#include <dlfcn.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <signal.h>
 #include <sys/types.h>
@@ -28,7 +29,7 @@ static sighandler_t (*real_signal)(int signum, sighandler_t handler);
 #endif
 
 struct intercepted_accept {
-	time_t accept_time;
+	struct timespec accept_time;
 	char address[INET6_ADDRSTRLEN];
 	int port;
 	int family;
@@ -57,6 +58,7 @@ static int terminate;
 		}							\
 	} while (0)
 
+
 static char *mprintf(const char *fmt, ...)
 {
 	size_t size = 0;
@@ -79,6 +81,33 @@ static char *mprintf(const char *fmt, ...)
 	va_end(ap);
 
 	return p;
+}
+
+/* Return a - b */
+static void timespec_diff(const struct timespec *a, const struct timespec *b, struct timespec *result) {
+	result->tv_sec  = a->tv_sec  - b->tv_sec;
+	result->tv_nsec = a->tv_nsec - b->tv_nsec;
+	if (result->tv_nsec < 0) {
+		--result->tv_sec;
+		result->tv_nsec += 1000000000L;
+	}
+}
+
+static size_t human_time(const struct timespec *ts, char *s, size_t sz) {
+	int days = ts->tv_sec / 60 / 60 / 24;
+	int hours = ts->tv_sec / 60 / 60 % 24;
+	int mins = ts->tv_sec / 60 % 60;
+	int secs = ts->tv_sec % 60;
+
+	return snprintf(s, sz, "%3d day%s %2d hour%s %2d minute%s %2d sec%s",
+			days,
+			days > 0 ? "s" : "",
+			hours,
+			hours > 0 ? "s" : "",
+			mins,
+			mins > 0 ? "s" : "",
+			secs,
+			secs > 0 ? "s" : "");
 }
 
 #if 0
@@ -105,42 +134,45 @@ static char *write_inetaddr_as_str(const struct sockaddr *sa, char *s, size_t ma
 
 static int write_connection_state(int fd)
 {
-	int rc = 0;
 	char msg[8192];
-	char tbuf[256] = { '\0' };
-	struct tm tm_tmp;
+	struct timespec elapsed_time;
 
 	LOCK_ACCEPTED_FDS;
-
 	for (size_t i = 0; i < NELEMENTS(accepted_fds); i++) {
 		if (accepted_fds[i].fd == -1) {
 			continue;
 		}
+		if (!(accepted_fds[i].family == AF_INET || accepted_fds[i].family == AF_INET6)) {
+			continue;
+		}
 
-		*tbuf = '\0';
-		localtime_r(&accepted_fds[i].accept_time, &tm_tmp);
-		strftime(tbuf, sizeof(tbuf), "%FT%T.%3S", &tm_tmp);
-		int n = snprintf(msg, sizeof(msg), "%s [haproxy:%d] %d %s%s%s:%d\n",
-				 tbuf,
+		char timebuf[256] = { '\0' };
+		struct timespec current_time = { 0, 0 };
+
+		clock_gettime(CLOCK_MONOTONIC, &current_time);
+		timespec_diff(&current_time, &accepted_fds[i].accept_time, &elapsed_time);
+		human_time(&elapsed_time, timebuf, sizeof(timebuf));
+		
+		int n = snprintf(msg, sizeof(msg), "[haproxy:%d] %d %s%s%s %d %s\n",
 				 getpid(),
 				 accepted_fds[i].fd,
 				 accepted_fds[i].family == AF_INET6 ? "[" : "",
 				 accepted_fds[i].address,
 				 accepted_fds[i].family == AF_INET6 ? "]" : "",
-				 accepted_fds[i].port);
+				 accepted_fds[i].port,
+				 timebuf);
 		if (n > 0) {
 			int wrote = write(fd, msg, n);
 			if (wrote != n) {
-				rc = -1;
-				break;
+				return -1;
 			}
 		}
 	}
-
 	UNLOCK_ACCEPTED_FDS;
 
-	return rc;
+	return 0;
 }
+
 
 static void *dump_handler(void *userarg)
 {
@@ -175,7 +207,9 @@ static void *dump_handler(void *userarg)
 
 	while (!terminate) {
 		int cl;
+#if 0
 		char buf[100];
+#endif
 
 		if ((cl = accept4(dumper_listen_fd, NULL, NULL, 0)) == -1) {
 			if (terminate) {
@@ -186,12 +220,16 @@ static void *dump_handler(void *userarg)
 		}
 
 		fprintf(stderr, "new debug client: %d\n", cl);
-		
+
 		if (terminate) {
 			close(cl);
 			return NULL;
 		}
 
+		if (write_connection_state(cl) == -1) {
+			perror("write");
+		}
+#if 0
 		if (read(cl, buf, sizeof(buf)) == -1) {
 			perror("read");
 		} else {
@@ -199,7 +237,7 @@ static void *dump_handler(void *userarg)
 				perror("write");
 			}
 		}
-
+#endif
 		close(cl);
 	}
 
@@ -226,45 +264,69 @@ sighandler_t signal(int signum, sighandler_t handler)
 }
 #endif
 
-static void sig_handler(int signum)
-{
-	fprintf(stderr, "SIGNAL %d\n", signum);
- 
-	if (signum == SIGTERM || signum == SIGINT) {
-		terminate = 1;
-#if 1
-		int fd;
+static void __attribute__((destructor)) teardown(void) {
+	fprintf(stderr, "INTERCEPT destructor\n");
 
-		if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-			perror("socket error");
-			exit(-1);
-		}
-
-		struct sockaddr_un addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sun_family = AF_UNIX;
-		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
-
-		if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-			perror("connect error");
-			exit(-1);
-		}
-#endif
-		/* close(dumper_listen_fd); */
-		void *retval = NULL;
-		fprintf(stderr, "Waiting for thread exit\n");
-		pthread_join(dump_handler_tid, &retval);
-		fprintf(stderr, "Waiting for thread has exited\n");
-
-		/* restore default handler. */
-		signal(signum, SIG_DFL);
-		/* re-raise for default behaviour. */
-		kill(getpid(), signum);
+	if (socket_path != NULL && *socket_path) {
+		fprintf(stderr, "unlinking %s\n", socket_path);
+		unlink(socket_path);
 	}
 }
 
-static void __attribute__((constructor (101))) setup(void)
+static void sig_handler(int signum)
 {
+	fprintf(stderr, "SIGNAL %d\n", signum);
+
+	terminate = 1;
+#if 1
+	int fd;
+
+	if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+		perror("socket error");
+		exit(-1);
+	}
+
+	struct sockaddr_un addr;
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
+
+	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+		perror("connect error");
+		exit(-1);
+	}
+#endif
+
+	/* close(dumper_listen_fd); */
+	void *retval = NULL;
+	fprintf(stderr, "Waiting for thread exit\n");
+	pthread_join(dump_handler_tid, &retval);
+	fprintf(stderr, "Waiting for thread has exited\n");
+
+	/* remove the named socket */
+	teardown();
+
+	/* restore default handler. */
+	signal(signum, SIG_DFL);
+
+	/* re-raise this signal for default behaviour. */
+	kill(getpid(), signum);
+}
+
+static void __attribute__((constructor)) setup(void)
+{
+	long a;
+	int i;
+
+	a = sysconf(_SC_ATEXIT_MAX);
+	printf("ATEXIT_MAX = %ld\n", a);
+
+	i = atexit(teardown);
+	if (i != 0) {
+		fprintf(stderr, "cannot set exit function\n");
+		exit(EXIT_FAILURE);
+	}
+
 	fprintf(stderr, "INTERCEPT constructor\n");
 
 	socket_path = mprintf("/tmp/haproxy.sock.connections", getpid());
@@ -295,7 +357,7 @@ static void __attribute__((constructor (101))) setup(void)
 		exit(EXIT_FAILURE);
 	}
 #endif
-	
+
 	if (pthread_create(&dump_handler_tid, NULL, &dump_handler, NULL) != 0) {
 		perror("pthread_create");
 		exit(EXIT_FAILURE);
@@ -310,6 +372,9 @@ static void __attribute__((constructor (101))) setup(void)
 	 * 21 (SIGTTIN)
 	 * 22 (SIGTTOU)
 	 */
+
+	/* We register signal handlers so that we cleanup the socket
+	 * path that is created. */
 	if (signal(SIGTERM, sig_handler) == SIG_ERR) {
 		perror("signal handler for SIGTERM registration failed");
 		exit(EXIT_FAILURE);
@@ -320,7 +385,7 @@ static void __attribute__((constructor (101))) setup(void)
 	}
 }
 
-/* INTERPOSER */
+/* libc interposer */
 int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 {
 	int fd = real_accept4(sockfd, sa, addrlen, flags);
@@ -334,28 +399,29 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 
 	LOCK_ACCEPTED_FDS;
 	assert(accepted_fds[fd].fd == -1);
+	accepted_fds[fd].family = sa->sa_family;
+
 	switch(sa->sa_family) {
 	case AF_INET:
 		accepted_fds[fd].fd = fd;
-		accepted_fds[fd].accept_time = time(NULL);
+		clock_gettime(CLOCK_MONOTONIC, &accepted_fds[fd].accept_time);
 		inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr), accepted_fds[fd].address, sizeof accepted_fds[fd].address);
 		accepted_fds[fd].port = ((struct sockaddr_in *)sa)->sin_port;
-		accepted_fds[fd].family = sa->sa_family;
 		break;
 	case AF_INET6:
 		accepted_fds[fd].fd = fd;
-		accepted_fds[fd].accept_time = time(NULL);
+		clock_gettime(CLOCK_MONOTONIC, &accepted_fds[fd].accept_time);
 		inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr), accepted_fds[fd].address, sizeof accepted_fds[fd].address);
 		accepted_fds[fd].port = ((struct sockaddr_in *)sa)->sin_port;
-		accepted_fds[fd].family = sa->sa_family;
 		break;
 	}
+
 	UNLOCK_ACCEPTED_FDS;
 
 	return fd;
 }
 
-/* INTERPOSER */
+/* libc interposer */
 int close(int fd)
 {
 	int rc;
@@ -372,4 +438,3 @@ int close(int fd)
 	fprintf(stderr, "INTERCEPTED %d close (%p) = %d\n", fd, real_close, rc);
 	return rc;
 }
-

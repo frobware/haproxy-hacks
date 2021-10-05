@@ -1,9 +1,12 @@
-CFLAGS = -g -ggdb3 -shared -fPIC -Werror -Wall
+CFLAGS = -g -ggdb3 -shared -fPIC -Wall
+
+#-fsanitize=address
 
 all: libaccept.so
 
 libaccept.so: accept.o
-	$(LINK.c) -o $@ $^ -ldl -lpthread
+	$(LINK.c) -o $@ accept.o -ldl -lpthread
+#-lasan
 
 test: libaccept.so
 	LD_PRELOAD=./$^ ls
@@ -11,4 +14,4 @@ test: libaccept.so
 *.o *.c: Makefile
 
 clean:
-	$(RM) lib*.o *.o
+	$(RM) libaccept.so accept.o
