@@ -13,8 +13,8 @@
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <arpa/inet.h>
-
 #include <pthread.h>
+#include <limits.h>
 
 #undef NDEBUG			/* always want an assert to fire */
 #include <assert.h>
@@ -24,10 +24,6 @@
 static int (*real_accept4)(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
 static int (*real_close)(int fd);
 
-#if 0
-static sighandler_t (*real_signal)(int signum, sighandler_t handler);
-#endif
-
 struct intercepted_accept {
 	struct timespec accept_time;
 	char address[INET6_ADDRSTRLEN];
@@ -36,13 +32,12 @@ struct intercepted_accept {
 	int fd;			/* sanity check */
 };
 
-static struct intercepted_accept accepted_fds[65536*2];
 
 static pthread_mutex_t accepted_fds_lock;
-static pthread_t dump_handler_tid;
-static const char *socket_path;
-static int dumper_listen_fd;
-static int terminate;
+static struct intercepted_accept accepted_fds[65536*2];
+
+static char socket_path[PATH_MAX];
+static int initialised;
 
 #define LOCK_ACCEPTED_FDS						\
 	do {								\
@@ -59,30 +54,6 @@ static int terminate;
 	} while (0)
 
 
-static char *mprintf(const char *fmt, ...)
-{
-	size_t size = 0;
-	char *p = NULL;
-	va_list ap;
-
-	/* Determine required size. */
-	va_start(ap, fmt);
-	size = vsnprintf(p, size, fmt, ap);
-	va_end(ap);
-
-	size++; /* For '\0' */
-
-	if ((p = malloc(size)) == NULL) {
-		return NULL;
-	}
-
-	va_start(ap, fmt);
-	size = vsnprintf(p, size, fmt, ap);
-	va_end(ap);
-
-	return p;
-}
-
 /* Return a - b */
 static void timespec_diff(const struct timespec *a, const struct timespec *b, struct timespec *result) {
 	result->tv_sec  = a->tv_sec  - b->tv_sec;
@@ -93,6 +64,7 @@ static void timespec_diff(const struct timespec *a, const struct timespec *b, st
 	}
 }
 
+/* Format time as: days hours mins secs. */
 static size_t human_time(const struct timespec *ts, char *s, size_t sz) {
 	int days = ts->tv_sec / 60 / 60 / 24;
 	int hours = ts->tv_sec / 60 / 60 % 24;
@@ -142,7 +114,9 @@ static int write_connection_state(int fd)
 		if (accepted_fds[i].fd == -1) {
 			continue;
 		}
-		if (!(accepted_fds[i].family == AF_INET || accepted_fds[i].family == AF_INET6)) {
+
+		if (!(accepted_fds[i].family == AF_INET ||
+		      accepted_fds[i].family == AF_INET6)) {
 			continue;
 		}
 
@@ -152,8 +126,8 @@ static int write_connection_state(int fd)
 		clock_gettime(CLOCK_MONOTONIC, &current_time);
 		timespec_diff(&current_time, &accepted_fds[i].accept_time, &elapsed_time);
 		human_time(&elapsed_time, timebuf, sizeof(timebuf));
-		
-		int n = snprintf(msg, sizeof(msg), "[haproxy:%d] %d %s%s%s %d %s\n",
+
+		int n = snprintf(msg, sizeof(msg), "pid:%d %d %s%s%s %d %s\n",
 				 getpid(),
 				 accepted_fds[i].fd,
 				 accepted_fds[i].family == AF_INET6 ? "[" : "",
@@ -173,17 +147,16 @@ static int write_connection_state(int fd)
 	return 0;
 }
 
-
 static void *dump_handler(void *userarg)
 {
-	struct sockaddr_un addr;
-
-	if (socket_path == NULL) {
-		perror("no socket path");
+	if (!initialised) {
 		return NULL;
 	}
 
-	if ((dumper_listen_fd = socket(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0)) == -1) {
+	int listen_fd;
+	struct sockaddr_un addr;
+
+	if ((listen_fd = socket(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0)) == -1) {
 		perror("socket error");
 		return NULL;
 	}
@@ -191,214 +164,76 @@ static void *dump_handler(void *userarg)
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
-	unlink(socket_path);
+	unlink(addr.sun_path);
 
-	fprintf(stderr, "dumper socket: %s\n", addr.sun_path);
-
-	if (bind(dumper_listen_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
+	if (bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
 		perror("bind error");
 		return NULL;
 	}
 
-	if (listen(dumper_listen_fd, 5) == -1) {
+	if (listen(listen_fd, 5) == -1) {
 		perror("listen error");
-		exit(EXIT_FAILURE);
+		return NULL;
 	}
 
-	while (!terminate) {
+	while (1) {
 		int cl;
-#if 0
-		char buf[100];
-#endif
 
-		if ((cl = accept4(dumper_listen_fd, NULL, NULL, 0)) == -1) {
-			if (terminate) {
-				return NULL;
-			}
+		if ((cl = accept(listen_fd, NULL, NULL)) == -1) {
 			perror("accept error");
 			continue;
-		}
-
-		fprintf(stderr, "new debug client: %d\n", cl);
-
-		if (terminate) {
-			close(cl);
-			return NULL;
 		}
 
 		if (write_connection_state(cl) == -1) {
 			perror("write");
 		}
-#if 0
-		if (read(cl, buf, sizeof(buf)) == -1) {
-			perror("read");
-		} else {
-			if (write_connection_state(cl) == -1) {
-				perror("write");
-			}
-		}
-#endif
-		close(cl);
+
+		real_close(cl);
 	}
 
-	if (socket_path != NULL && *socket_path) {
-		fprintf(stderr, "unlinking %s\n", socket_path);
-		unlink(socket_path);
-	}
-
-	fprintf(stderr, "INTERCEPTED: dumper exiting\n");
+	fprintf(stderr, "**** ACCEPT-INTERPOSER: dumper exiting\n");
 	pthread_exit(NULL);
 	return NULL;
 }
 
-#if 0
-// This exists to verify that HAProxy doesn't register a signal
-// handler for either SIGTERM or SIGINT. This shim uses TERM and INT
-// to clean up the socket pathname it creates. Uncomment this to
-// verify that the signum's that HAProxy registers do not include
-// SIGTERM or SIGINT.
-sighandler_t signal(int signum, sighandler_t handler)
-{
-	fprintf(stderr, "SIGNAL %d\n", signum);
-	return real_signal(signum, handler);
-}
-#endif
-
-static void __attribute__((destructor)) teardown(void) {
-	fprintf(stderr, "INTERCEPT destructor\n");
-
-	if (socket_path != NULL && *socket_path) {
-		fprintf(stderr, "unlinking %s\n", socket_path);
-		unlink(socket_path);
-	}
-}
-
 static void sig_handler(int signum)
 {
-	fprintf(stderr, "SIGNAL %d\n", signum);
-
-	terminate = 1;
-#if 1
-	int fd;
-
-	if ((fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-		perror("socket error");
-		exit(-1);
+	if (*socket_path != '\0') {
+		fprintf(stderr, "unlinking %s\n", socket_path);
+		if (unlink(socket_path) != 0) {
+			perror("unlink");
+		}
 	}
-
-	struct sockaddr_un addr;
-	memset(&addr, 0, sizeof(addr));
-	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
-
-	if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-		perror("connect error");
-		exit(-1);
-	}
-#endif
-
-	/* close(dumper_listen_fd); */
-	void *retval = NULL;
-	fprintf(stderr, "Waiting for thread exit\n");
-	pthread_join(dump_handler_tid, &retval);
-	fprintf(stderr, "Waiting for thread has exited\n");
-
-	/* remove the named socket */
-	teardown();
 
 	/* restore default handler. */
 	signal(signum, SIG_DFL);
 
 	/* re-raise this signal for default behaviour. */
-	kill(getpid(), signum);
-}
-
-static void __attribute__((constructor)) setup(void)
-{
-	long a;
-	int i;
-
-	a = sysconf(_SC_ATEXIT_MAX);
-	printf("ATEXIT_MAX = %ld\n", a);
-
-	i = atexit(teardown);
-	if (i != 0) {
-		fprintf(stderr, "cannot set exit function\n");
-		exit(EXIT_FAILURE);
-	}
-
-	fprintf(stderr, "INTERCEPT constructor\n");
-
-	socket_path = mprintf("/tmp/haproxy.sock.connections", getpid());
-	if (socket_path == NULL) {
-		perror("malloc");
-		exit(EXIT_FAILURE);
-	}
-
-	LOCK_ACCEPTED_FDS;
-	for (size_t i = 0; i < NELEMENTS(accepted_fds); i++) {
-		accepted_fds[i].fd = -1;	/* cleared */
-	}
-	UNLOCK_ACCEPTED_FDS;
-
-	if ((real_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
-		perror("dlsym accept4");
-		exit(EXIT_FAILURE);
-	}
-
-	if ((real_close = dlsym(RTLD_NEXT, "close")) == NULL) {
-		perror("dlsym close");
-		exit(EXIT_FAILURE);
-	}
-
-#if 0
-	if ((real_signal = dlsym(RTLD_NEXT, "signal")) == NULL) {
-		perror("dlsym signal");
-		exit(EXIT_FAILURE);
-	}
-#endif
-
-	if (pthread_create(&dump_handler_tid, NULL, &dump_handler, NULL) != 0) {
-		perror("pthread_create");
-		exit(EXIT_FAILURE);
-	}
-
-	/* HAProxy doesn't register SIGTERM or SIGINT. It does register:
-	 *  1 (SIGHUP)
-	 *  3 (SIGQUIT)
-	 * 10 (SIGUSR1)
-	 * 12 (SIGUSR2)
-	 * 13 (SIGPIPE)
-	 * 21 (SIGTTIN)
-	 * 22 (SIGTTOU)
-	 */
-
-	/* We register signal handlers so that we cleanup the socket
-	 * path that is created. */
-	if (signal(SIGTERM, sig_handler) == SIG_ERR) {
-		perror("signal handler for SIGTERM registration failed");
-		exit(EXIT_FAILURE);
-	}
-	if (signal(SIGINT, sig_handler) == SIG_ERR) {
-		perror("signal handler for SIGINT registration failed");
-		exit(EXIT_FAILURE);
+	if (kill(getpid(), signum) != 0) {
+		exit(0);	/* last gasp saloon. */
 	}
 }
 
 /* libc interposer */
 int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 {
+	assert(real_accept4 != NULL);
+
 	int fd = real_accept4(sockfd, sa, addrlen, flags);
 
-	fprintf(stderr, "INTERCEPTED %d accept4\n", fd);
+	if (!initialised) {
+		return fd;
+	}
+
+	fprintf(stderr, "**** ACCEPT-INTERPOSER accept4 = %d\n", fd);
 
 	if ((sa == NULL || addrlen == 0) ||
 	    (fd < 0 || fd >= NELEMENTS(accepted_fds))) {
-		return fd;	/* we have finite space. */
+		return fd;
 	}
 
 	LOCK_ACCEPTED_FDS;
-	assert(accepted_fds[fd].fd == -1);
+	assert(accepted_fds[fd].fd == -1); /* sanity check; set in close() */
 	accepted_fds[fd].family = sa->sa_family;
 
 	switch(sa->sa_family) {
@@ -424,17 +259,92 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *addrlen, int flags)
 /* libc interposer */
 int close(int fd)
 {
-	int rc;
 	assert(real_close != NULL);
-	LOCK_ACCEPTED_FDS;
-	if (fd >= 0 && fd <= NELEMENTS(accepted_fds)) {
-		if (accepted_fds[fd].fd == fd) {;
-			fprintf(stderr, "INTERCEPTED %d closed\n", fd);
+	int rc = real_close(fd);
+
+	if (initialised) {
+		if (fd >= 0 && fd <= NELEMENTS(accepted_fds)) {
+			LOCK_ACCEPTED_FDS;
 			accepted_fds[fd].fd = -1; /* clear */
+			UNLOCK_ACCEPTED_FDS;
 		}
 	}
-	UNLOCK_ACCEPTED_FDS;
-	rc = real_close(fd);
-	fprintf(stderr, "INTERCEPTED %d close (%p) = %d\n", fd, real_close, rc);
+
+	fprintf(stderr, "**** ACCEPT-INTERPOSER close(%d) = %d\n", fd, rc);
+
 	return rc;
+}
+
+static void __attribute__((destructor)) teardown(void) {
+	fprintf(stderr, "INTERCEPT destructor\n");
+
+	if (*socket_path != '\0') {
+		fprintf(stderr, "unlinking %s\n", socket_path);
+		if (unlink(socket_path) != 0) {
+			perror("unlink");
+		}
+	}
+}
+
+static void __attribute__((constructor)) setup(void)
+{
+	pthread_t dump_handler_tid;
+
+	if ((real_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
+		perror("dlsym accept4 error; cannot continue");
+		exit(EXIT_FAILURE);
+	}
+
+	if ((real_close = dlsym(RTLD_NEXT, "close")) == NULL) {
+		perror("dlsym close error; cannot continue");
+		exit(EXIT_FAILURE);
+	}
+
+	if (snprintf(socket_path, sizeof(socket_path), "/tmp/haproxy-%d.connections", getpid()) < 1) {
+		return;
+	}
+
+	if (atexit(teardown) != 0) {
+		perror("atexit");
+		return;
+	}
+
+	LOCK_ACCEPTED_FDS;
+	for (size_t i = 0; i < NELEMENTS(accepted_fds); i++) {
+		accepted_fds[i].fd = -1;	/* cleared */
+	}
+	UNLOCK_ACCEPTED_FDS;
+
+	if (pthread_create(&dump_handler_tid, NULL, &dump_handler, NULL) != 0) {
+		perror("pthread_create");
+		return;
+	}
+
+	/* HAProxy doesn't register SIGTERM or SIGINT. It does register:
+	 *  1 (SIGHUP)
+	 *  3 (SIGQUIT)
+	 * 10 (SIGUSR1)
+	 * 12 (SIGUSR2)
+	 * 13 (SIGPIPE)
+	 * 21 (SIGTTIN)
+	 * 22 (SIGTTOU)
+	 */
+
+	/*
+	 * We register signal handlers so that we cleanup the socket
+	 * path that is created.
+	 */
+	if (signal(SIGTERM, sig_handler) == SIG_ERR) {
+		perror("signal handler for SIGTERM registration failed");
+		exit(EXIT_FAILURE);
+	}
+
+	if (signal(SIGINT, sig_handler) == SIG_ERR) {
+		perror("signal handler for SIGINT registration failed");
+		exit(EXIT_FAILURE);
+	}
+
+	initialised = 1;
+	fprintf(stderr, "**** ACCEPT-INTERPOSER is initialised\n");
+	return;
 }

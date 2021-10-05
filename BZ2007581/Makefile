@@ -1,4 +1,4 @@
-CFLAGS = -g -ggdb3 -shared -fPIC -Wall
+CFLAGS = -g -ggdb3 -shared -fPIC -Wall -Werror
 
 #-fsanitize=address
 
