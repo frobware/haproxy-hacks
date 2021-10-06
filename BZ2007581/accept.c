@@ -1,66 +1,98 @@
 /* accept4/close interceptor */
 
 #define _GNU_SOURCE
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <limits.h>
-#include <signal.h>
-#include <string.h>
-#include <time.h>
-#include <dlfcn.h>
-#include <sys/time.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <arpa/inet.h>
+#include <dlfcn.h>
+#include <limits.h>
 #include <pthread.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <signal.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <time.h>
 
-#undef NDEBUG			/* always want an assert to fire */
+#undef NDEBUG /* always want an assert to fire */
 #include <assert.h>
 
 #define NELEMENTS(A) ((sizeof(A) / sizeof(A[0])))
 
-static int (*real_accept)(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
-static int (*real_accept4)(int sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
-static int (*real_close)(int fd);
-static pid_t (*real_fork)();
+extern const char * const sys_errlist[];
+
+/* interposed functions. */
+static int (*libc_accept)(int sockfd, struct sockaddr *addr,
+			  socklen_t *addrlen);
+static int (*libc_accept4)(int sockfd, struct sockaddr *addr,
+			   socklen_t *addrlen, int flags);
+static int (*libc_close)(int fd);
+static sighandler_t (*libc_signal)(int signum, sighandler_t handler);
+static void (*libc_exit)(int status);
+static void (*libc__exit)(int status);
+static int (*pthread_pthread_sigmask)(int how, const sigset_t *set, sigset_t *oldset);
+static pid_t (*libc_fork)();
+
+static volatile int terminate;
 
 struct intercepted_accept {
 	struct timespec accept_time;
 	char local_address[INET6_ADDRSTRLEN];
 	int local_port;
 	int family;
-	int fd;			/* sanity check */
+	int fd; /* sanity check */
 	char peer_address[INET6_ADDRSTRLEN];
 	int peer_port;
 };
 
 static pthread_mutex_t fdtab_lock;
-static struct intercepted_accept fdtab[65536*2];
+static struct intercepted_accept fdtab[65536 * 2];
 
-static char socket_path[PATH_MAX];
 static volatile int initialised;
+static volatile int listen_fd;
+static const FILE *fp_dbg;
 
-#define LOCK_FDTAB						\
-	do {							\
-		if (pthread_mutex_lock(&fdtab_lock) == -1) {	\
-			perror("pthread_mutex_lock");		\
-		}						\
+#if 0
+#define LOCK_FDTAB							\
+	do {								\
+		if (pthread_mutex_lock(&fdtab_lock) != 0) {		\
+			DBG("error: pthread_mutex_lock: %s\n", sys_errlist[errno]); \
+		}							\
 	} while (0)
 
-#define UNLOCK_FDTAB						\
-	do {							\
-		if (pthread_mutex_unlock(&fdtab_lock) == -1) {	\
-			perror("pthread_mutex_unlock");		\
-		}						\
+#define UNLOCK_FDTAB							\
+	do {								\
+		if (pthread_mutex_unlock(&fdtab_lock) != 0) {		\
+			DBG("error: pthread_mutex_unlock: %s\n", sys_errlist[errno]); \
+		}							\
 	} while (0)
+#endif
 
+#define LOCK_FDTAB
+#define UNLOCK_FDTAB
+
+#define DBG(fmt, ...)						\
+	do {							\
+		if (fp_dbg) fprintf(stderr, "[%d] %s:%d:%s(): "	\
+				    fmt,			\
+				    getpid(),			\
+				    __FILE__,			\
+				    __LINE__,			\
+				    __func__,			\
+				    ##__VA_ARGS__);		\
+	} while (0)
 
 /* Return a - b */
-static void timespec_sub(const struct timespec *a, const struct timespec *b, struct timespec *result) {
-	result->tv_sec  = a->tv_sec  - b->tv_sec;
+static void timespec_sub(const struct timespec *a, const struct timespec *b,
+			 struct timespec *result) {
+	result->tv_sec = a->tv_sec - b->tv_sec;
 	result->tv_nsec = a->tv_nsec - b->tv_nsec;
 	if (result->tv_nsec < 0) {
 		--result->tv_sec;
@@ -75,15 +107,31 @@ static size_t human_time(const struct timespec *ts, char *s, size_t sz) {
 	int mins = ts->tv_sec / 60 % 60;
 	int secs = ts->tv_sec % 60;
 
-	return snprintf(s, sz, "%d day%s, %2d hour%s, %2d minute%s, %2d sec%s",
-			days,
-			days > 0 ? "s" : "s",
-			hours,
-			hours > 0 ? "s" : "s",
-			mins,
-			mins > 0 ? "s" : "s",
-			secs,
-			secs > 0 ? "s" : "s");
+	return snprintf(s, sz, "%d day%s, %2d hour%s, %2d minute%s, %2d sec%s", days,
+			days > 0 ? "s" : "s", hours, hours > 0 ? "s" : "s", mins,
+			mins > 0 ? "s" : "s", secs, secs > 0 ? "s" : "s");
+}
+
+static void cleanup(void)
+{
+	char socket_path[PATH_MAX];
+	snprintf(socket_path, sizeof(socket_path), "/tmp/haproxy-%d.connections", getpid());
+
+	DBG("unlink %s\n", socket_path);
+
+	struct stat sb;
+
+	if (stat(socket_path, &sb) == 0) {
+		if (unlink(socket_path) != 0) {
+			DBG("error: unlink: %s\n", sys_errlist[errno]);
+		}
+	}
+}
+
+static void exit_handler(int exit_code, void *ignore)
+{
+	cleanup();
+	DBG("exit_code %d\n", exit_code);
 }
 
 #if 0
@@ -108,8 +156,7 @@ static char *write_inetaddr_as_str(const struct sockaddr *sa, char *s, size_t sz
 }
 #endif
 
-static int write_connection_state_locked(int fd)
-{
+static int write_connection_state_locked(int fd) {
 	char msg[8192];
 	struct timespec elapsed_time;
 
@@ -119,31 +166,24 @@ static int write_connection_state_locked(int fd)
 			continue;
 		}
 
-		if (!(fdtab[i].family == AF_INET ||
-		      fdtab[i].family == AF_INET6)) {
+		if (!(fdtab[i].family == AF_INET || fdtab[i].family == AF_INET6)) {
 			continue;
 		}
 
-		char timebuf[256] = { '\0' };
-		struct timespec current_time = { 0, 0 };
+		char timebuf[256] = {'\0'};
+		struct timespec current_time = {0, 0};
 
 		clock_gettime(CLOCK_MONOTONIC, &current_time);
 		timespec_sub(&current_time, &fdtab[i].accept_time, &elapsed_time);
 		human_time(&elapsed_time, timebuf, sizeof(timebuf));
 
-		int n = snprintf(msg, sizeof(msg), "pid:%d fd:%d %s%s%s:%d %s%s%s:%d %ld secs (%s)\n",
-				 getpid(),
-				 fdtab[i].fd,
-				 fdtab[i].family == AF_INET6 ? "[" : "",
-				 fdtab[i].local_address,
-				 fdtab[i].family == AF_INET6 ? "]" : "",
-				 fdtab[i].local_port,
-				 fdtab[i].family == AF_INET6 ? "[" : "",
-				 fdtab[i].peer_address,
-				 fdtab[i].family == AF_INET6 ? "]" : "",
-				 fdtab[i].peer_port,
-				 elapsed_time.tv_sec,
-				 timebuf);
+		int n = snprintf(
+			msg, sizeof(msg), "pid:%d fd:%d %s%s%s:%d %s%s%s:%d %ld secs (%s)\n",
+			getpid(), fdtab[i].fd, fdtab[i].family == AF_INET6 ? "[" : "",
+			fdtab[i].local_address, fdtab[i].family == AF_INET6 ? "]" : "",
+			fdtab[i].local_port, fdtab[i].family == AF_INET6 ? "[" : "",
+			fdtab[i].peer_address, fdtab[i].family == AF_INET6 ? "]" : "",
+			fdtab[i].peer_port, elapsed_time.tv_sec, timebuf);
 		if (n > 0) {
 			int wrote = write(fd, msg, n);
 			if (wrote != n) {
@@ -156,302 +196,121 @@ static int write_connection_state_locked(int fd)
 	return 0;
 }
 
-static void *connection_state_handler(void *userarg)
-{
-	if (!initialised) {
+static void *connection_state_handler(void *userarg) {
+	struct sockaddr_un addr;
+
+	memset(&addr, 0, sizeof(addr));
+	addr.sun_family = AF_UNIX;
+	snprintf(addr.sun_path, sizeof(addr.sun_path)-1, "/tmp/haproxy-%d.connections", getpid());
+
+	if ((listen_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
+		DBG("error: socket: %s\n", sys_errlist[errno]);
+		return NULL;
+	}
+
+	unlink(addr.sun_path);
+
+	if (bind(listen_fd, &addr, sizeof(addr)) != 0) {
+		DBG("error: bind(%s): %s\n", addr.sun_path, sys_errlist[errno]);
 		assert(0);
 		return NULL;
 	}
 
-	int listen_fd;
-	struct sockaddr_un addr;
-
-	if ((listen_fd = socket(AF_UNIX, SOCK_STREAM|SOCK_CLOEXEC, 0)) == -1) {
-		perror("socket error");
+	if (listen(listen_fd, 5) != 0) {
+		DBG("error: listen: %s\n", sys_errlist[errno]);
+		assert(0);
 		return NULL;
 	}
 
-	memset(&addr, 0, sizeof(addr));
-	addr.sun_family = AF_UNIX;
-	strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
-#if 0
-	unlink(addr.sun_path);
-#endif
-	
-	if (bind(listen_fd, (struct sockaddr *)&addr, sizeof(addr)) == -1) {
-		perror("bind error");
-		return NULL;
-	}
-
-	if (listen(listen_fd, 5) == -1) {
-		perror("listen error");
-		return NULL;
-	}
-
-	fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER listening at: %s\n", "haproxy", getpid(), addr.sun_path);
+	DBG("listening for debug connections on %d (%s)\n", listen_fd, addr.sun_path);
+	pthread_setname_np(pthread_self(), "DEBUG");
 
 	while (1) {
 		int cl;
 
-		if ((cl = real_accept(listen_fd, NULL, NULL)) == -1) {
-			perror("accept error");
+		if ((cl = libc_accept4(listen_fd, NULL, NULL, 0)) == -1) {
+			DBG("error: accept (%s): %s\n", addr.sun_path, sys_errlist[errno]);
+			libc_close(cl);
 			continue;
 		}
+#if 0
+		if (!terminate) {
+			break;
+		}
+#endif
+		DBG("accepted new debug client fd %d\n", cl);
 
-		fprintf(stdout, "[%s:%d] **** ACCEPT-INTERPOSER new debug connection: %d\n", "haproxy", getpid(), cl);
-		
-		if (write_connection_state_locked(cl) == -1) {
-			perror("write");
+		if (write_connection_state_locked(cl) != 0) {
+			DBG("error: write: %s\n", sys_errlist[errno]);
 		}
 
-		real_close(cl);
+		libc_close(cl);
 	}
 
-	fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER: connection_state_handler exited\n", "haproxy", getpid());
+	DBG("thread exit\n");
+	cleanup();
 	pthread_exit(NULL);
 	return NULL;
 }
 
-static void signal_handler(int signum)
-{
-	fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER signal %d\n", "haproxy", getpid(), signum);
+static void signal_handler(int signum) {
+	cleanup();
 
-	if (*socket_path != '\0') {
-		fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER unlinking %s\n", "haproxy", getpid(), socket_path);
-		if (unlink(socket_path) != 0) {
-			perror("unlink");
-		}
-	}
-
-	/* restore default handler. */
+	/* restore default handler and redeliver. */
 	signal(signum, SIG_DFL);
 
-	/* re-raise this signal for default behaviour. */
-	if (kill(getpid(), signum) != 0) {
+	if (raise(signum) != 0) {
 		exit(0);
 	}
 }
 
-/* libc interposer */
-int accept(int sockfd, struct sockaddr *sa, socklen_t *salen)
-{
-	assert(real_accept != NULL);
-	return accept4(sockfd, sa, salen, 0);
-}
+static __attribute__((constructor)) void setup(void) {
+	assert(initialised == 0);
+	fp_dbg = stderr;
 
-/* libc interposer */
-int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags)
-{
-	assert(real_accept4 != NULL);
-
-	int clientfd = real_accept4(sockfd, sa, salen, flags);
-
-	if (!initialised || clientfd == -1) {
-		return clientfd;
-	}
-
-	fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER accept4() = %d\n", "haproxy", getpid(), clientfd);
-
-	if ((sa == NULL || salen == NULL || *salen == 0) ||
-	    (clientfd < 0 || clientfd >= NELEMENTS(fdtab))) {
-		return clientfd;
-	}
-
-	LOCK_FDTAB;
-	assert(fdtab[clientfd].fd == -1); /* sanity check; set in close() */
-	memset(&fdtab[clientfd], 0, sizeof(fdtab[clientfd]));
-
-	struct sockaddr local_addr;
-	socklen_t local_addrlen = sizeof(local_addr);
-
-	clock_gettime(CLOCK_MONOTONIC, &fdtab[clientfd].accept_time);
-
-	switch(sa->sa_family) {
-	case AF_INET:
-		fdtab[clientfd].family = sa->sa_family;
-		fdtab[clientfd].fd = clientfd;
-		if (getsockname(sockfd, &local_addr, &local_addrlen) == 0) {
-			fdtab[clientfd].local_port = ntohs(((struct sockaddr_in *)&local_addr)->sin_port);
-			inet_ntop(AF_INET, &(((struct sockaddr_in *)&local_addr)->sin_addr), fdtab[clientfd].local_address, sizeof(fdtab[clientfd].local_address));
-		}
-                fdtab[clientfd].peer_port = ntohs(((struct sockaddr_in *)sa)->sin_port);
-		inet_ntop(sa->sa_family, &((struct sockaddr_in *)sa)->sin_addr, fdtab[clientfd].peer_address, sizeof(fdtab[clientfd].peer_address));
-                printf("%s %d\n", fdtab[clientfd].peer_address, fdtab[clientfd].peer_port);
-                printf("%s %d\n", fdtab[clientfd].local_address, fdtab[clientfd].local_port);
-		break;
-	case AF_INET6:
-		fdtab[clientfd].family = sa->sa_family;
-		fdtab[clientfd].fd = clientfd;
-		if (getsockname(sockfd, &local_addr, &local_addrlen) == 0) {
-			fdtab[clientfd].local_port = ntohs(((struct sockaddr_in6 *)&local_addr)->sin6_port);
-			inet_ntop(AF_INET, &(((struct sockaddr_in6 *)&local_addr)->sin6_addr), fdtab[clientfd].local_address, sizeof(fdtab[clientfd].local_address));
-		}
-                fdtab[clientfd].peer_port = ntohs(((struct sockaddr_in6 *)sa)->sin6_port);
-		inet_ntop(sa->sa_family, &((struct sockaddr_in6 *)sa)->sin6_addr, fdtab[clientfd].peer_address, sizeof(fdtab[clientfd].peer_address));
-                printf("%s %d\n", fdtab[clientfd].peer_address, fdtab[clientfd].peer_port);
-                printf("%s %d\n", fdtab[clientfd].local_address, fdtab[clientfd].local_port);
-		break;
-	}
-
-	UNLOCK_FDTAB;
-
-	return clientfd;
-}
-
-/* libc interposer */
-int close(int fd)
-{
-	if (real_close == NULL) {
-		return -1;
-	}
-	
-	assert(real_close != NULL);
-
-	if (initialised) {
-		if (fd >= 0 && fd <= NELEMENTS(fdtab)) {
-			LOCK_FDTAB;
-			fdtab[fd].fd = -1; /* clear */
-			UNLOCK_FDTAB;
-		}
-	}
-
-	int rc = real_close(fd);
-	fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER close(%d) = %d\n", "haproxy", getpid(), fd, rc);
-	return rc;
-}
-
-/* libc interposer */
-pid_t fork(void)
-{
-	fprintf(stderr, "intercepting fork\n");
-	return 0;
-	//return real_fork();
-}
-
-static void __attribute__((destructor)) teardown(void) {
-	if (*socket_path != '\0') {
-		fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER unlinking %s\n", "haproxy", getpid(), socket_path);
-		if (unlink(socket_path) != 0) {
-			perror("unlink");
-		}
-	}
-}
-
-static int(*o_execve)(const char *path, char *const argv[], char *const envp[]) = NULL;
-static char *sopath;
-extern char **environ;
-
-void initx(void)
-{
-	fprintf(stderr, "ahem\n");
-
-	int i, j;
-	static const char *ldpreload = "LD_PRELOAD";
-	// First save the value of LD_PRELOAD
-	int len = strlen(getenv(ldpreload));
-	sopath = (char*) malloc(len+1);
-	strcpy(sopath, getenv(ldpreload));
-	// unsetenv() has a weird behavior, this is a custom implementation
-	// Look for LD_PRELOAD variable
-	for(i = 0; environ[i]; i++)
-	{
-		int found = 1;
-		for(j = 0; ldpreload[j] != '\0' && environ[i][j] != '\0'; j++)
-			if(ldpreload[j] != environ[i][j]) {
-				found = 0;
-				break;
-			}
-		if(found) {
-			// Set to zero the variable
-			for(j = 0; environ[i][j] != '\0'; j++)
-				environ[i][j] = '\0';
-			break;
-			// Free that memory
-			free((void*)environ[i]);
-		}
-	}
-	// Remove the string pointer from environ
-	for(j = i; environ[j]; j++)
-		environ[j] = environ[j+1];
-
-}
-
-int execve(const char *path, char *const argv[], char *const envp[])
-{
-	int i, j, ldi = -1, r;
-	char** new_env;
-	if(!o_execve)
-		o_execve = dlsym(RTLD_NEXT,"execve");
-	// Look if the provided environment already contains LD_PRELOAD
-	for(i = 0; envp[i]; i++)
-	{
-		if(strstr(envp[i], "LD_PRELOAD"))
-			ldi = i;
-	}
-	// If it doesn't, add it at the end
-	if(ldi == -1)
-	{
-		ldi = i;
-		i++;
-	}
-	// Create a new environment
-	new_env = (char**) malloc((i+1)*sizeof(char*));
-	// Copy the old environment in the new one, except for LD_PRELOAD
-	for(j = 0; j < i; j++)
-	{
-		// Overwrite or create the LD_PRELOAD variable
-		if(j == ldi)
-		{
-			new_env[j] = (char*) malloc(256);
-			strcpy(new_env[j], "LD_PRELOAD=");
-			strcat(new_env[j], sopath);
-		}
-		else
-			new_env[j] = (char*) envp[j];
-	}
-	// That string array is NULL terminated
-	new_env[i] = NULL;
-	r = o_execve(path, argv, new_env);
-	free(new_env[ldi]);
-	free(new_env);
-	return r;
-}
-
-
-static void __attribute__((constructor (101))) setup(void)
-{
-	pthread_t connection_state_tid;
-
-	snprintf(socket_path, sizeof(socket_path), "/tmp/haproxy-%d.connections", getpid());
-
-	if ((real_fork = dlsym(RTLD_NEXT, "fork")) == NULL) {
-		perror("dlsym fork error; cannot continue");
+	if ((pthread_pthread_sigmask = dlsym(RTLD_NEXT, "pthread_sigmask")) == NULL) {
+		DBG("error: dlsym(pthread_sigmask): %s\n", sys_errlist[errno]);
 		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
-	if ((real_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
-		perror("dlsym accept4 error; cannot continue");
+	if ((libc_fork = dlsym(RTLD_NEXT, "fork")) == NULL) {
+		DBG("error: dlsym(fork): %s\n", sys_errlist[errno]);
 		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
-	if ((real_accept = dlsym(RTLD_NEXT, "accept")) == NULL) {
-		perror("dlsym accept error; cannot continue");
+	if ((libc_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
+		DBG("error: dlsym(accept4): %s\n", sys_errlist[errno]);
 		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
-	if ((real_close = dlsym(RTLD_NEXT, "close")) == NULL) {
-		perror("dlsym close error; cannot continue");
+	if ((libc_accept = dlsym(RTLD_NEXT, "accept")) == NULL) {
+		DBG("error: dlsym(accept): %s\n", sys_errlist[errno]);
 		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
-	if (atexit(teardown) != 0) {
-		perror("atexit");
-		return;
+	if ((libc_close = dlsym(RTLD_NEXT, "close")) == NULL) {
+		DBG("error: dlsym(close): %s\n", sys_errlist[errno]);
+		exit(EXIT_FAILURE); /* has to be fatal */
+	}
+
+	if ((libc_exit = dlsym(RTLD_NEXT, "exit")) == NULL) {
+		DBG("error: dlsym(exit): %s\n", sys_errlist[errno]);
+		exit(EXIT_FAILURE); /* has to be fatal */
+	}
+
+	if ((libc__exit = dlsym(RTLD_NEXT, "_exit")) == NULL) {
+		DBG("error: dlsym(_exit): %s\n", sys_errlist[errno]);
+		exit(EXIT_FAILURE); /* has to be fatal */
+	}
+
+	if ((libc_signal = dlsym(RTLD_NEXT, "signal")) == NULL) {
+		DBG("error: dlsym(signal): %s\n", sys_errlist[errno]);
+		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
 	LOCK_FDTAB;
 	for (size_t i = 0; i < NELEMENTS(fdtab); i++) {
-		fdtab[i].fd = -1;	/* cleared */
+		fdtab[i].fd = -1; /* cleared */
 	}
 	UNLOCK_FDTAB;
 
@@ -469,23 +328,186 @@ static void __attribute__((constructor (101))) setup(void)
 	 * We register SIGTERM and SIGINT so that we cleanup the
 	 * socket path that is created.
 	 */
+#if 0
 	if (signal(SIGTERM, signal_handler) == SIG_ERR) {
-		perror("signal handler for SIGTERM registration failed");
+		DBG("error: signal(SIGTERM): %s\n", sys_errlist[errno]);
 		return;
 	}
 
 	if (signal(SIGINT, signal_handler) == SIG_ERR) {
-		perror("signal handler for SIGINT registration failed");
+		DBG("error: signal(SIGINT): %s\n", sys_errlist[errno]);
 		return;
 	}
-
-	initialised = 1;
-
+#endif
+	
+	pthread_t connection_state_tid;
 	if (pthread_create(&connection_state_tid, NULL, &connection_state_handler, NULL) != 0) {
-		perror("pthread_create");
-		return;
+		DBG("error: pthread_create: %s\n", sys_errlist[errno]);
 	}
 
-	fprintf(stderr, "[%s:%d] **** ACCEPT-INTERPOSER is initialised\n", "haproxy", getpid());
+	if (on_exit(exit_handler, NULL) != 0) {
+		abort();
+	}
+
+	if (atexit(cleanup) != 0) {
+		abort();
+	}
+	
+	initialised = 1;
+	DBG("ACCEPT-INTERPOSER initialised\n");
 	return;
+}
+
+/* libc interposer */
+int accept(int sockfd, struct sockaddr *sa, socklen_t *salen) {
+	assert(libc_accept != NULL);
+	return accept4(sockfd, sa, salen, 0);
+}
+
+/* libc interposer */
+int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags) {
+	assert(libc_accept4 != NULL);
+
+	if (listen_fd == 0) {
+		pthread_t connection_state_tid;
+		if (pthread_create(&connection_state_tid, NULL, &connection_state_handler,
+				   NULL) != 0) {
+			DBG("error: pthread_create: %s", sys_errlist[errno]);
+		}
+	}
+
+	int clientfd = libc_accept4(sockfd, sa, salen, flags);
+
+	if (!initialised || clientfd == -1) {
+		return clientfd;
+	}
+
+	DBG("accept4() = %d\n", clientfd);
+
+	if ((sa == NULL || salen == NULL || *salen == 0) ||
+	    (clientfd < 0 || clientfd >= NELEMENTS(fdtab))) {
+		return clientfd;
+	}
+
+	LOCK_FDTAB;
+	assert(fdtab[clientfd].fd == -1); /* sanity check; set in close() */
+	memset(&fdtab[clientfd], 0, sizeof(fdtab[clientfd]));
+
+	struct sockaddr local_addr;
+	socklen_t local_addrlen = sizeof(local_addr);
+
+	clock_gettime(CLOCK_MONOTONIC, &fdtab[clientfd].accept_time);
+
+	switch (sa->sa_family) {
+	case AF_INET:
+		fdtab[clientfd].family = sa->sa_family;
+		fdtab[clientfd].fd = clientfd;
+		if (getsockname(sockfd, &local_addr, &local_addrlen) == 0) {
+			fdtab[clientfd].local_port =
+				ntohs(((struct sockaddr_in *)&local_addr)->sin_port);
+			inet_ntop(AF_INET, &(((struct sockaddr_in *)&local_addr)->sin_addr),
+				  fdtab[clientfd].local_address,
+				  sizeof(fdtab[clientfd].local_address));
+		}
+		fdtab[clientfd].peer_port = ntohs(((struct sockaddr_in *)sa)->sin_port);
+		inet_ntop(sa->sa_family, &((struct sockaddr_in *)sa)->sin_addr,
+			  fdtab[clientfd].peer_address,
+			  sizeof(fdtab[clientfd].peer_address));
+		break;
+	case AF_INET6:
+		fdtab[clientfd].family = sa->sa_family;
+		fdtab[clientfd].fd = clientfd;
+		if (getsockname(sockfd, &local_addr, &local_addrlen) == 0) {
+			fdtab[clientfd].local_port =
+				ntohs(((struct sockaddr_in6 *)&local_addr)->sin6_port);
+			inet_ntop(AF_INET, &(((struct sockaddr_in6 *)&local_addr)->sin6_addr),
+				  fdtab[clientfd].local_address,
+				  sizeof(fdtab[clientfd].local_address));
+		}
+		fdtab[clientfd].peer_port = ntohs(((struct sockaddr_in6 *)sa)->sin6_port);
+		inet_ntop(sa->sa_family, &((struct sockaddr_in6 *)sa)->sin6_addr,
+			  fdtab[clientfd].peer_address,
+			  sizeof(fdtab[clientfd].peer_address));
+		break;
+	}
+
+	UNLOCK_FDTAB;
+
+	return clientfd;
+}
+
+/* libc interposer */
+int close(int fd) {
+	if (libc_close == NULL || fd == -1) {
+		return -1;
+	}
+
+	assert(libc_close != NULL);
+
+	if (initialised) {
+		if (fd >= 0 && fd <= NELEMENTS(fdtab)) {
+			LOCK_FDTAB;
+			fdtab[fd].fd = -1; /* clear */
+			UNLOCK_FDTAB;
+		}
+	}
+
+	int rc = libc_close(fd);
+	DBG("close(%d) = %d\n", fd, rc);
+	return rc;
+}
+
+/* libc interposer */
+pid_t fork(void) {
+	assert(libc_fork != NULL);
+	pid_t pid = libc_fork();
+
+	if (pid == 0) {
+		DBG("new child %d\n", getpid());
+		pthread_t connection_state_tid;
+		if (pthread_create(&connection_state_tid, NULL, &connection_state_handler, NULL) != 0) {
+			DBG("error: pthread_create: %s\n", sys_errlist[errno]);
+		}
+	} else if (pid > 0) {
+		DBG("forked; cleaning up parent %d\n", getppid());
+		cleanup();
+	}
+
+	return pid;
+}
+
+#ifdef INTERPOSE_EXIT
+/* libc interposer */
+void exit(int status) {
+	cleanup();
+	DBG("exit(%d)\n", status);
+	libc_exit(status);
+}
+#endif
+
+#ifdef INTERPOSE__EXIT
+/* libc interposer */
+void _exit(int status) {
+	cleanup();
+	DBG("_exit(%d)\n", status);
+	libc__exit(status);
+}
+#endif
+
+sighandler_t signal(int signum, sighandler_t handler)
+{
+	DBG("signal #%d registered\n", signum);
+	return libc_signal(signum, handler);
+}
+
+int pthread_sigmask(int how, const sigset_t *set, sigset_t *oldset)
+{
+#if 0
+	sigdelset((sigset_t *)set, SIGTERM);
+	sigdelset((sigset_t *)set, SIGINT);
+	DBG("interposing signal #%d\n", SIGTERM);
+	DBG("interposing signal #%d\n", SIGINT);
+#endif
+	assert(pthread_pthread_sigmask != NULL);
+	return pthread_pthread_sigmask(how, set, oldset);
 }
