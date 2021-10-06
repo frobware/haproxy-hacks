@@ -112,25 +112,28 @@ static size_t human_time(const struct timespec *ts, char *s, size_t sz) {
 			mins > 0 ? "s" : "s", secs, secs > 0 ? "s" : "s");
 }
 
-static void cleanup(void)
+static void delete_debug_socket(int pid)
 {
 	char socket_path[PATH_MAX];
-	snprintf(socket_path, sizeof(socket_path), "/tmp/haproxy-%d.connections", getpid());
-
-	DBG("unlink %s\n", socket_path);
+	snprintf(socket_path, sizeof(socket_path), "/tmp/haproxy-%d.connections", pid);
 
 	struct stat sb;
-
 	if (stat(socket_path, &sb) == 0) {
+		DBG("unlink %s\n", socket_path);
 		if (unlink(socket_path) != 0) {
 			DBG("error: unlink: %s\n", sys_errlist[errno]);
 		}
 	}
 }
 
-static void exit_handler(int exit_code, void *ignore)
+static void exit_handler(int exit_code, void *pidptr)
 {
-	cleanup();
+	pid_t pid = getpid();
+
+	if (pidptr != NULL) {
+		pid = *(pid_t *)pidptr;
+	}
+	delete_debug_socket(pid);
 	DBG("exit_code %d\n", exit_code);
 }
 
@@ -248,13 +251,14 @@ static void *connection_state_handler(void *userarg) {
 	}
 
 	DBG("thread exit\n");
-	cleanup();
+	delete_debug_socket(getpid());
 	pthread_exit(NULL);
 	return NULL;
 }
 
 static void signal_handler(int signum) {
-	cleanup();
+	abort();
+	delete_debug_socket(getpid());
 
 	/* restore default handler and redeliver. */
 	signal(signum, SIG_DFL);
@@ -325,7 +329,7 @@ static __attribute__((constructor)) void setup(void) {
 	 */
 
 	/*
-	 * We register SIGTERM and SIGINT so that we cleanup the
+	 * We register SIGTERM and SIGINT so that we delete_debug_socket the
 	 * socket path that is created.
 	 */
 #if 0
@@ -349,10 +353,6 @@ static __attribute__((constructor)) void setup(void) {
 		abort();
 	}
 
-	if (atexit(cleanup) != 0) {
-		abort();
-	}
-	
 	initialised = 1;
 	DBG("ACCEPT-INTERPOSER initialised\n");
 	return;
@@ -469,8 +469,8 @@ pid_t fork(void) {
 			DBG("error: pthread_create: %s\n", sys_errlist[errno]);
 		}
 	} else if (pid > 0) {
-		DBG("forked; cleaning up parent %d\n", getppid());
-		cleanup();
+		DBG("forked; cleaning up parent %d\n", getpid());
+		delete_debug_socket(getpid());
 	}
 
 	return pid;
@@ -479,7 +479,7 @@ pid_t fork(void) {
 #ifdef INTERPOSE_EXIT
 /* libc interposer */
 void exit(int status) {
-	cleanup();
+	delete_debug_socket();
 	DBG("exit(%d)\n", status);
 	libc_exit(status);
 }
@@ -488,7 +488,7 @@ void exit(int status) {
 #ifdef INTERPOSE__EXIT
 /* libc interposer */
 void _exit(int status) {
-	cleanup();
+	delete_debug_socket();
 	DBG("_exit(%d)\n", status);
 	libc__exit(status);
 }
