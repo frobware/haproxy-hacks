@@ -26,21 +26,13 @@
 
 #define NELEMENTS(A) ((sizeof(A) / sizeof(A[0])))
 
-extern const char * const sys_errlist[];
-
 /* interposed functions. */
 static int (*libc_accept)(int sockfd, struct sockaddr *addr,
 			  socklen_t *addrlen);
 static int (*libc_accept4)(int sockfd, struct sockaddr *addr,
 			   socklen_t *addrlen, int flags);
 static int (*libc_close)(int fd);
-static sighandler_t (*libc_signal)(int signum, sighandler_t handler);
-static void (*libc_exit)(int status);
-static void (*libc__exit)(int status);
-static int (*pthread_pthread_sigmask)(int how, const sigset_t *set, sigset_t *oldset);
 static pid_t (*libc_fork)();
-
-static volatile int terminate;
 
 struct intercepted_accept {
 	struct timespec accept_time;
@@ -59,24 +51,21 @@ static volatile int initialised;
 static volatile int listen_fd;
 static const FILE *fp_dbg;
 
-#if 0
 #define LOCK_FDTAB							\
 	do {								\
 		if (pthread_mutex_lock(&fdtab_lock) != 0) {		\
-			DBG("error: pthread_mutex_lock: %s\n", sys_errlist[errno]); \
+			char buf[1024];					\
+			DBG("error: pthread_mutex_lock: %s\n", strerror_r(errno, buf, sizeof buf)); \
 		}							\
 	} while (0)
 
 #define UNLOCK_FDTAB							\
 	do {								\
 		if (pthread_mutex_unlock(&fdtab_lock) != 0) {		\
-			DBG("error: pthread_mutex_unlock: %s\n", sys_errlist[errno]); \
+			char buf[1024];					\
+			DBG("error: pthread_mutex_unlock: %s\n", strerror_r(errno, buf, sizeof buf)); \
 		}							\
 	} while (0)
-#endif
-
-#define LOCK_FDTAB
-#define UNLOCK_FDTAB
 
 #define DBG(fmt, ...)						\
 	do {							\
@@ -121,7 +110,8 @@ static void delete_debug_socket(int pid)
 	if (stat(socket_path, &sb) == 0) {
 		DBG("unlink %s\n", socket_path);
 		if (unlink(socket_path) != 0) {
-			DBG("error: unlink: %s\n", sys_errlist[errno]);
+			char buf[1024];
+			DBG("error: unlink: %s\n", strerror_r(errno, buf, sizeof(buf)));
 		}
 	}
 }
@@ -137,29 +127,8 @@ static void exit_handler(int exit_code, void *pidptr)
 	DBG("exit_code %d\n", exit_code);
 }
 
-#if 0
-static char *write_inetaddr_as_str(const struct sockaddr *sa, char *s, size_t sz, int *port)
+static int write_connection_state_locked(int fd)
 {
-	switch(sa->sa_family) {
-	case AF_INET:
-		inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr), s, sz);
-		*port = ((struct sockaddr_in *)sa)->sin_port;
-		break;
-
-	case AF_INET6:
-		inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr), s, sz);
-		*port = ((struct sockaddr_in6 *)sa)->sin6_port;
-		break;
-	default:
-		strncpy(s, "Unknown AF", sz);
-		return NULL;
-	}
-
-	return s;
-}
-#endif
-
-static int write_connection_state_locked(int fd) {
 	char msg[8192];
 	struct timespec elapsed_time;
 
@@ -199,7 +168,8 @@ static int write_connection_state_locked(int fd) {
 	return 0;
 }
 
-static void *connection_state_handler(void *userarg) {
+static void *connection_state_handler(void *userarg)
+{
 	struct sockaddr_un addr;
 
 	memset(&addr, 0, sizeof(addr));
@@ -207,32 +177,33 @@ static void *connection_state_handler(void *userarg) {
 	snprintf(addr.sun_path, sizeof(addr.sun_path)-1, "/tmp/haproxy-%d.connections", getpid());
 
 	if ((listen_fd = socket(AF_UNIX, SOCK_STREAM, 0)) == -1) {
-		DBG("error: socket: %s\n", sys_errlist[errno]);
+		char buf[1024];
+		DBG("error: socket: %s\n", strerror_r(errno, buf, sizeof(buf)));
 		return NULL;
 	}
 
 	unlink(addr.sun_path);
 
 	if (bind(listen_fd, &addr, sizeof(addr)) != 0) {
-		DBG("error: bind(%s): %s\n", addr.sun_path, sys_errlist[errno]);
-		assert(0);
+		char buf[1024];
+		DBG("error: bind(%s): %s\n", addr.sun_path, strerror_r(errno, buf, sizeof(buf)));
 		return NULL;
 	}
 
 	if (listen(listen_fd, 5) != 0) {
-		DBG("error: listen: %s\n", sys_errlist[errno]);
-		assert(0);
+		char buf[1024];
+		DBG("error: listen: %s\n", strerror_r(errno, buf, sizeof(buf)));
 		return NULL;
 	}
 
-	DBG("listening for debug connections on %d (%s)\n", listen_fd, addr.sun_path);
-	pthread_setname_np(pthread_self(), "DEBUG");
+	DBG("listening for debug connections on %s (fd=%d)\n", addr.sun_path, listen_fd);
 
 	while (1) {
 		int cl;
 
 		if ((cl = libc_accept4(listen_fd, NULL, NULL, 0)) == -1) {
-			DBG("error: accept (%s): %s\n", addr.sun_path, sys_errlist[errno]);
+			char buf[1024];
+			DBG("error: accept (%s): %s\n", addr.sun_path, strerror_r(errno, buf, sizeof(buf)));
 			libc_close(cl);
 			continue;
 		}
@@ -244,7 +215,8 @@ static void *connection_state_handler(void *userarg) {
 		DBG("accepted new debug client fd %d\n", cl);
 
 		if (write_connection_state_locked(cl) != 0) {
-			DBG("error: write: %s\n", sys_errlist[errno]);
+			char buf[1024];
+			DBG("error: write: %s\n", strerror_r(errno, buf, sizeof(buf)));
 		}
 
 		libc_close(cl);
@@ -256,59 +228,32 @@ static void *connection_state_handler(void *userarg) {
 	return NULL;
 }
 
-static void signal_handler(int signum) {
-	abort();
-	delete_debug_socket(getpid());
-
-	/* restore default handler and redeliver. */
-	signal(signum, SIG_DFL);
-
-	if (raise(signum) != 0) {
-		exit(0);
-	}
-}
-
-static __attribute__((constructor)) void setup(void) {
+static __attribute__((constructor (101))) void setup(void)
+{
 	assert(initialised == 0);
 	fp_dbg = stderr;
 
-	if ((pthread_pthread_sigmask = dlsym(RTLD_NEXT, "pthread_sigmask")) == NULL) {
-		DBG("error: dlsym(pthread_sigmask): %s\n", sys_errlist[errno]);
-		exit(EXIT_FAILURE); /* has to be fatal */
-	}
-
 	if ((libc_fork = dlsym(RTLD_NEXT, "fork")) == NULL) {
-		DBG("error: dlsym(fork): %s\n", sys_errlist[errno]);
+		char buf[1024]; 
+		DBG("error: dlsym(fork): %s\n", strerror_r(errno, buf, sizeof(buf)));
 		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
 	if ((libc_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
-		DBG("error: dlsym(accept4): %s\n", sys_errlist[errno]);
+		char buf[1024];
+		DBG("error: dlsym(accept4): %s\n", strerror_r(errno, buf, sizeof(buf)));
 		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
 	if ((libc_accept = dlsym(RTLD_NEXT, "accept")) == NULL) {
-		DBG("error: dlsym(accept): %s\n", sys_errlist[errno]);
+		char buf[1024];
+		DBG("error: dlsym(accept): %s\n", strerror_r(errno, buf, sizeof(buf)));
 		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
 	if ((libc_close = dlsym(RTLD_NEXT, "close")) == NULL) {
-		DBG("error: dlsym(close): %s\n", sys_errlist[errno]);
-		exit(EXIT_FAILURE); /* has to be fatal */
-	}
-
-	if ((libc_exit = dlsym(RTLD_NEXT, "exit")) == NULL) {
-		DBG("error: dlsym(exit): %s\n", sys_errlist[errno]);
-		exit(EXIT_FAILURE); /* has to be fatal */
-	}
-
-	if ((libc__exit = dlsym(RTLD_NEXT, "_exit")) == NULL) {
-		DBG("error: dlsym(_exit): %s\n", sys_errlist[errno]);
-		exit(EXIT_FAILURE); /* has to be fatal */
-	}
-
-	if ((libc_signal = dlsym(RTLD_NEXT, "signal")) == NULL) {
-		DBG("error: dlsym(signal): %s\n", sys_errlist[errno]);
+		char buf[1024];
+		DBG("error: dlsym(close): %s\n", strerror_r(errno, buf, sizeof(buf)));
 		exit(EXIT_FAILURE); /* has to be fatal */
 	}
 
@@ -317,37 +262,6 @@ static __attribute__((constructor)) void setup(void) {
 		fdtab[i].fd = -1; /* cleared */
 	}
 	UNLOCK_FDTAB;
-
-	/* HAProxy doesn't register SIGTERM or SIGINT. It does register:
-	 *  1 (SIGHUP)
-	 *  3 (SIGQUIT)
-	 * 10 (SIGUSR1)
-	 * 12 (SIGUSR2)
-	 * 13 (SIGPIPE)
-	 * 21 (SIGTTIN)
-	 * 22 (SIGTTOU)
-	 */
-
-	/*
-	 * We register SIGTERM and SIGINT so that we delete_debug_socket the
-	 * socket path that is created.
-	 */
-#if 0
-	if (signal(SIGTERM, signal_handler) == SIG_ERR) {
-		DBG("error: signal(SIGTERM): %s\n", sys_errlist[errno]);
-		return;
-	}
-
-	if (signal(SIGINT, signal_handler) == SIG_ERR) {
-		DBG("error: signal(SIGINT): %s\n", sys_errlist[errno]);
-		return;
-	}
-#endif
-	
-	pthread_t connection_state_tid;
-	if (pthread_create(&connection_state_tid, NULL, &connection_state_handler, NULL) != 0) {
-		DBG("error: pthread_create: %s\n", sys_errlist[errno]);
-	}
 
 	if (on_exit(exit_handler, NULL) != 0) {
 		abort();
@@ -359,22 +273,16 @@ static __attribute__((constructor)) void setup(void) {
 }
 
 /* libc interposer */
-int accept(int sockfd, struct sockaddr *sa, socklen_t *salen) {
+int accept(int sockfd, struct sockaddr *sa, socklen_t *salen)
+{
 	assert(libc_accept != NULL);
 	return accept4(sockfd, sa, salen, 0);
 }
 
 /* libc interposer */
-int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags) {
+int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags)
+{
 	assert(libc_accept4 != NULL);
-
-	if (listen_fd == 0) {
-		pthread_t connection_state_tid;
-		if (pthread_create(&connection_state_tid, NULL, &connection_state_handler,
-				   NULL) != 0) {
-			DBG("error: pthread_create: %s", sys_errlist[errno]);
-		}
-	}
 
 	int clientfd = libc_accept4(sockfd, sa, salen, flags);
 
@@ -437,7 +345,8 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags) {
 }
 
 /* libc interposer */
-int close(int fd) {
+int close(int fd)
+{
 	if (libc_close == NULL || fd == -1) {
 		return -1;
 	}
@@ -458,7 +367,8 @@ int close(int fd) {
 }
 
 /* libc interposer */
-pid_t fork(void) {
+pid_t fork(void)
+{
 	assert(libc_fork != NULL);
 	pid_t pid = libc_fork();
 
@@ -466,7 +376,8 @@ pid_t fork(void) {
 		DBG("new child %d\n", getpid());
 		pthread_t connection_state_tid;
 		if (pthread_create(&connection_state_tid, NULL, &connection_state_handler, NULL) != 0) {
-			DBG("error: pthread_create: %s\n", sys_errlist[errno]);
+			char buf[1024];
+			DBG("error: pthread_create: %s\n", strerror_r(errno, buf, sizeof(buf)));
 		}
 	} else if (pid > 0) {
 		DBG("forked; cleaning up parent %d\n", getpid());
@@ -474,40 +385,4 @@ pid_t fork(void) {
 	}
 
 	return pid;
-}
-
-#ifdef INTERPOSE_EXIT
-/* libc interposer */
-void exit(int status) {
-	delete_debug_socket();
-	DBG("exit(%d)\n", status);
-	libc_exit(status);
-}
-#endif
-
-#ifdef INTERPOSE__EXIT
-/* libc interposer */
-void _exit(int status) {
-	delete_debug_socket();
-	DBG("_exit(%d)\n", status);
-	libc__exit(status);
-}
-#endif
-
-sighandler_t signal(int signum, sighandler_t handler)
-{
-	DBG("signal #%d registered\n", signum);
-	return libc_signal(signum, handler);
-}
-
-int pthread_sigmask(int how, const sigset_t *set, sigset_t *oldset)
-{
-#if 0
-	sigdelset((sigset_t *)set, SIGTERM);
-	sigdelset((sigset_t *)set, SIGINT);
-	DBG("interposing signal #%d\n", SIGTERM);
-	DBG("interposing signal #%d\n", SIGINT);
-#endif
-	assert(pthread_pthread_sigmask != NULL);
-	return pthread_pthread_sigmask(how, set, oldset);
 }
