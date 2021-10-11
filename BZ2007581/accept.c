@@ -61,11 +61,11 @@ struct intercepted_accept {
 
 static tsa_mutex fdtab_lock;
 static struct intercepted_accept fdtab[65536 * 2] TSA_GUARDED_BY(&fdtab_lock);
-static const FILE *fp_dbg;
+static FILE *fp_dbg;
 
 #define LOCK_FDTAB							\
 	do {								\
-		if (tsa_mutex_lock(&fdtab_lock) != 0) {		\
+		if (tsa_mutex_lock(&fdtab_lock) != 0) {			\
 			PERROR("error: pthread_mutex_lock: %s\n",	\
 			       strerror_r(errno,			\
 					  _errbuf, sizeof(_errbuf)));	\
@@ -85,7 +85,7 @@ static const FILE *fp_dbg;
 #ifdef ACCEPT_INTERPOSER_DEBUG
 #define DBG(fmt, ...)						\
 	do {							\
-		if (fp_dbg) fprintf(stderr, "[%d] %s:%d:%s(): "	\
+		if (fp_dbg) fprintf(fp_dbg, "[%d] %s:%d:%s(): "	\
 				    fmt,			\
 				    getpid(),			\
 				    __FILE__,			\
@@ -96,8 +96,8 @@ static const FILE *fp_dbg;
 
 #define PERROR(fmt, ...)					\
 	do {							\
-                char _errbuf[1024];				\
-		if (fp_dbg) fprintf(stderr, "[%d] %s:%d:%s(): "	\
+		char _errbuf[1024];				\
+		if (fp_dbg) fprintf(fp_dbg, "[%d] %s:%d:%s(): "	\
 				    fmt,			\
 				    getpid(),			\
 				    __FILE__,			\
@@ -107,8 +107,8 @@ static const FILE *fp_dbg;
 	} while (0)
 
 #else
-#define DBG(fmt, ...) 
-#define PERROR(fmt, ...) 
+#define DBG(fmt, ...)
+#define PERROR(fmt, ...)
 #endif
 
 /* Return a - b */
@@ -196,7 +196,7 @@ static int write_connection_state(int fd) TSA_REQUIRES(&fdtab_lock)
 
 static void *connection_state_handler(void *userarg)
 {
-	static int listen_fd;
+	int listen_fd;
 	struct sockaddr_un addr;
 
 	memset(&addr, 0, sizeof(addr));
@@ -247,7 +247,7 @@ static void *connection_state_handler(void *userarg)
 	return NULL;
 }
 
-static __attribute__((constructor (101))) void setup(void)
+static __attribute__((constructor (102))) void setup(void)
 {
 	fp_dbg = stderr;
 
@@ -282,6 +282,7 @@ static __attribute__((constructor (101))) void setup(void)
 	}
 
 	DBG("ACCEPT-INTERPOSER initialised\n");
+	fp_dbg = NULL;
 	return;
 }
 
@@ -293,7 +294,7 @@ int accept(int sockfd, struct sockaddr *sa, socklen_t *salen)
 }
 
 /* libc interposer */
-int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags) 
+int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags)
 {
 	if (libc_accept4 == NULL) {
 		if ((libc_accept4 = dlsym(RTLD_NEXT, "accept4")) == NULL) {
@@ -305,7 +306,7 @@ int accept4(int sockfd, struct sockaddr *sa, socklen_t *salen, int flags)
 	struct sockaddr local_addr;
 	socklen_t local_addrlen = sizeof(local_addr);
 	int clientfd;
-	
+
 	assert(libc_accept4 != NULL);
 	clientfd = libc_accept4(sockfd, sa, salen, flags);
 	if (clientfd == -1) {
