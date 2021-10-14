@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: bz1941703
+    labels:
+      app: bz1941703
+  spec:
+    selector:
+      app: bz1941703
+    ports:
+      - port: 8080
+        name: http
+        targetPort: 8080
+        protocol: TCP
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: bz1941703
+  spec:
+    replicas: 1
+    template:
+      metadata:
+        name: bz1941703
+        labels:
+          app: bz1941703
+      spec:
+        containers:
+          - image: quay.io/amcdermo/bz1941703
+            imagePullPolicy: Always
+            name: bz1941703
+            ports:
+              - name: "http"
+                containerPort: 8080
+    selector:
+      matchLabels:
+        app: bz1941703
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: bz1941703-insecure
+    labels:
+      app: bz1941703
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: bz1941703
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: bz1941703-edge
+    labels:
+      app: bz1941703
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+      key: |-
+        -----BEGIN EC PRIVATE KEY-----
+        MHcCAQEEIAW+ecg2cZR47ItbI898N3nJduh9UJNv+b0cOwH/Z1BEoAoGCCqGSM49
+        AwEHoUQDQgAEx0/5sEgiUPFdcbd4dSllkul8s68RQ5WxIjfwWYMdfYLiLLqP1lkz
+        4UYpwAW/t63qBx3jRhPgkUxh5saJP9Qu5Q==
+        -----END EC PRIVATE KEY-----
+      certificate: |-
+        -----BEGIN CERTIFICATE-----
+        MIIBgTCCASagAwIBAgIRALutWdExjxX8fWljW+lcYbswCgYIKoZIzj0EAwIwJDEQ
+        MA4GA1UEChMHUmVkIEhhdDEQMA4GA1UEAxMHUm9vdCBDQTAgFw0yMDA1MTExMDU2
+        NThaGA8yMTIwMDQxNzEwNTY1OFowJjEQMA4GA1UEChMHUmVkIEhhdDESMBAGA1UE
+        AwwJdGVzdF9jZXJ0MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEx0/5sEgiUPFd
+        cbd4dSllkul8s68RQ5WxIjfwWYMdfYLiLLqP1lkz4UYpwAW/t63qBx3jRhPgkUxh
+        5saJP9Qu5aM1MDMwDgYDVR0PAQH/BAQDAgWgMBMGA1UdJQQMMAoGCCsGAQUFBwMB
+        MAwGA1UdEwEB/wQCMAAwCgYIKoZIzj0EAwIDSQAwRgIhAOIx8885y8tX/Vv94UGx
+        hWC/O1Hzi15kOT0WQ/UKUMjMAiEA40uW9P6k+i1cDwgfBBMzgDFQa9GAb4FqM8Wr
+        PaUMdqg=
+        -----END CERTIFICATE-----
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: bz1941703
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: bz1941703-passthrough
+    labels:
+      app: bz1941703
+    tls:
+      termination: passthrough
+      insecureEdgeTerminationPolicy: Redirect
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: bz1941703
