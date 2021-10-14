@@ -17,7 +17,7 @@ const (
 	defaultTLSKey    = "/home/aim/tls.key"
 )
 
-xvar addr = flag.String("addr", ":4040", "http service address")
+var addr = flag.String("addr", ":4040", "http service address")
 
 func lookupEnv(key, defaultVal string) string {
 	if val, ok := os.LookupEnv(key); ok {
