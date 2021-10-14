@@ -12,7 +12,9 @@ pid_file=/tmp/lib/haproxy/run/haproxy.pid
 old_pids=$(pidof haproxy)
 
 PATH=/home/aim/src/github.com/frobware/haproxy-2.2:$PATH
+PATH=/home/aim/git.haproxy.org/haproxy-2.4:$PATH
 
+haproxy -v
 reload_status=0
 if [ -n "$old_pids" ]; then
     #export LD_PRELOAD=/home/aim/glibc-malloc-trace-utils/libmtrace.so
