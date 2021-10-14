@@ -1,9 +1,7 @@
 package main
 
 import (
-	"crypto/tls"
 	"flag"
-	"fmt"
 	"log"
 	"net/url"
 	"os"
@@ -29,15 +27,11 @@ func startWSPingPong(r request) {
 		r.WebSocketLifetime = time.Hour
 	}
 
-	u := url.URL{Scheme: "wss", Host: r.Host, Path: "/ws"}
+	u := url.URL{Scheme: "ws", Host: r.Host, Path: "/ws"}
 
 	log.Printf("connecting to %s, lifetime: %s\n", u.String(), r.WebSocketLifetime.String())
 
-	config := tls.Config{RootCAs: nil, InsecureSkipVerify: true}
-	d := websocket.Dialer{TLSClientConfig: &config}
-	c, resp, err := d.Dial(u.String(), nil)
-	fmt.Println(resp)
-
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
 	if err != nil {
 		switch *exitOnConnError {
 		case true:
@@ -83,7 +77,7 @@ func startWSPingPong(r request) {
 	}
 }
 
-var addr = flag.String("addr", ":8443", "service address")
+var addr = flag.String("addr", "localhost:8080", "service address")
 
 func main() {
 	interrupt := make(chan os.Signal, 1)
