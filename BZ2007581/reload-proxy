@@ -15,11 +15,13 @@ PATH=/home/aim/src/github.com/frobware/haproxy-2.2:$PATH
 
 reload_status=0
 if [ -n "$old_pids" ]; then
-  haproxy -f $config_file -p $pid_file -x /tmp/lib/haproxy/run/haproxy.sock -sf $old_pids
-  reload_status=$?
+    #export LD_PRELOAD=/home/aim/glibc-malloc-trace-utils/libmtrace.so
+    haproxy -f $config_file -p $pid_file -x /tmp/lib/haproxy/run/haproxy.sock -sf $old_pids
+    #haproxy -f $config_file -p $pid_file -x /tmp/lib/haproxy/run/haproxy.sock -sf $old_pids
+    reload_status=$?
 else
-  haproxy -f $config_file -p $pid_file
-  reload_status=$?
+    haproxy -f $config_file -p $pid_file
+    reload_status=$?
 fi
 
 [ $reload_status -ne 0 ] && exit $reload_status
