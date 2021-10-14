@@ -1,33 +1,25 @@
 #!/bin/bash
 
 TOPDIR="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd -P)"
+config_file=$TOPDIR/haproxy.cfg
 
-old_pids=$(pidof haproxy)
-echo "$(date) -- oldpids: $old_pids"
+haproxy_binary=/usr/sbin/haproxy
+haproxy_binary=/home/aim/src/github.com/frobware/haproxy-2.2/haproxy
 
-set -eu
 set -o nounset
 
-mkdir -p /var/tmp/haproxy/run
-[ ! -S /var/tmp/haproxy/run/haproxy.sock ] || mkfifo /var/tmp/haproxy/run/haproxy.sock
+pid_file=/tmp/lib/haproxy/run/haproxy.pid
+old_pids=$(pidof haproxy)
 
-config_file=$TOPDIR/haproxy.cfg
-#echo "config file: $config_file"
-
-pid_file=/var/tmp/haproxy/run/haproxy.pid
-
-[ -s $config_file ] || mkfifo $config_file
-
-haproxy_binary=/usr/local/sbin/haproxy
+PATH=/home/aim/src/github.com/frobware/haproxy-2.2:$PATH
 
 reload_status=0
 if [ -n "$old_pids" ]; then
-    LD_PRELOAD=$TOPDIR/libaccept.so $haproxy_binary -f $config_file -p $pid_file -x /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
-    reload_status=$?
+  haproxy -f $config_file -p $pid_file -x /tmp/lib/haproxy/run/haproxy.sock -sf $old_pids
+  reload_status=$?
 else
-    rm -f /var/tmp/haproxy/run/haproxy.sock
-    LD_PRELOAD=$TOPDIR/libaccept.so $haproxy_binary -f $config_file -p $pid_file
-    reload_status=$?
+  haproxy -f $config_file -p $pid_file
+  reload_status=$?
 fi
 
 [ $reload_status -ne 0 ] && exit $reload_status
