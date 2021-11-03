@@ -259,11 +259,12 @@ EOF
     for (my $j = 0; $j < $servers; $j++) {
 	my $endpoint = "pod:app-$i:replica-$j:10.128.0.$j:100${j}";
 	my $endpoint_hash = md5_hex("$endpoint");
-	push(@proxy, "server $endpoint ${target_host}:${target_port} cookie $endpoint_hash weight $weight\n");
+	push(@proxy, "server $endpoint ${target_host}:${target_port} cookie $endpoint_hash weight $weight");
     }
 
-    push(@os_edge_reencrypt_be, "^app-${i}-${route_type}\$ $proxy_name\n");
+    push(@os_edge_reencrypt_be, "^app-${i}-${route_type}\$ $proxy_name");
 }
 
-write_to_file("$output_dir/conf/haproxy.config", ">>", "@proxy");
-write_to_file("$output_dir/conf/os_edge_reencrypt_be.map", ">>", "@os_edge_reencrypt_be");
+local $" = "\n";
+write_to_file("$output_dir/conf/haproxy.config", ">>", "@proxy\n");
+write_to_file("$output_dir/conf/os_edge_reencrypt_be.map", ">>", "@os_edge_reencrypt_be\n");
