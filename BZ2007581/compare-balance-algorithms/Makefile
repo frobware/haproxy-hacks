@@ -4,8 +4,8 @@ all: clean
 
 .PHONY:
 clean:
-	rm -rf benchmark-config*
+	rm -rf benchmark-config-*
 
 .PHONY:
 summary:
-	./make-summary.md
+	./make-summary.bash
