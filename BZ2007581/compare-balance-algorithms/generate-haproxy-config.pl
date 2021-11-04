@@ -97,7 +97,7 @@ defaults
   log global
   option httplog
   option logasap
-  errorfile 503 "$output_dir/error-page-503.http"
+  errorfile 503 "error-page-503.http"
   timeout connect 30s
   timeout client 30s
   timeout client-fin 1s
@@ -122,10 +122,10 @@ frontend public
   http-request set-header Host %[req.hdr(Host),lower]
 
   # check if we need to redirect/force using https.
-  acl secure_redirect base,map_reg(./os_route_http_redirect.map) -m found
+  acl secure_redirect base,map_reg(os_route_http_redirect.map) -m found
   redirect scheme https if secure_redirect
 
-  use_backend %[base,map_reg(./os_http_be.map)]
+  use_backend %[base,map_reg(os_http_be.map)]
 
   default_backend openshift_default
 
@@ -138,8 +138,8 @@ frontend public_ssl
   # if the connection is SNI and the route is a passthrough don't use the termination backend, just use the tcp backend
   # for the SNI case, we also need to compare it in case-insensitive mode (by converting it to lowercase) as RFC 4343 says
   acl sni req.ssl_sni -m found
-  acl sni_passthrough req.ssl_sni,lower,map_reg(./os_sni_passthrough.map) -m found
-  use_backend %[req.ssl_sni,lower,map_reg(./os_tcp_be.map)] if sni sni_passthrough
+  acl sni_passthrough req.ssl_sni,lower,map_reg(os_sni_passthrough.map) -m found
+  use_backend %[req.ssl_sni,lower,map_reg(os_tcp_be.map)] if sni sni_passthrough
 
   # if the route is SNI and NOT passthrough enter the termination flow
   use_backend be_sni if sni
@@ -177,7 +177,7 @@ frontend fe_sni
   # Search from most specific to general path (host case).
   # Note: If no match, haproxy uses the default_backend, no other
   #       use_backend directives below this will be processed.
-  use_backend %[base,map_reg(./os_edge_reencrypt_be.map)]
+  use_backend %[base,map_reg(os_edge_reencrypt_be.map)]
 
   default_backend openshift_default
 
@@ -201,7 +201,7 @@ frontend fe_no_sni
   # Search from most specific to general path (host case).
   # Note: If no match, haproxy uses the default_backend, no other
   #       use_backend directives below this will be processed.
-  use_backend %[base,map_reg(./os_edge_reencrypt_be.map)]
+  use_backend %[base,map_reg(os_edge_reencrypt_be.map)]
 
   default_backend openshift_default
 
