@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
 
-set -e
-set -a
+set -eu
 
-ALGORITHMS="leastconn roundrobin" NPROXY=10000 WEIGHTS="1"
-./benchmark.bash --export-markdown benchmark-result-${ALGORITHMS// /-vs-}-nproxy-${NPROXY}-weight-${WEIGHTS}.md -M=2
+algorithm_combos=("leastconn,roundrobin"
+		  "leastconn,source"
+		  "leastconn,random")
 
-ALGORITHMS="leastconn roundrobin" NPROXY=10000 WEIGHTS="256"
-./benchmark.bash --export-markdown benchmark-result-${ALGORITHMS// /-vs-}-nproxy-${NPROXY}-weight-${WEIGHTS}.md -M=2
-
-ALGORITHMS="leastconn source" NPROXY=10000 WEIGHTS="1"
-./benchmark.bash --export-markdown benchmark-result-${ALGORITHMS// /-vs-}-nproxy-${NPROXY}-weight-${WEIGHTS}.md -M=2
-
-ALGORITHMS="leastconn source" NPROXY=10000 WEIGHTS="256"
-./benchmark.bash --export-markdown benchmark-result-${ALGORITHMS// /-vs-}-nproxy-${NPROXY}-weight-${WEIGHTS}.md -M=2
-
-ALGORITHMS="leastconn random" NPROXY=10000 WEIGHTS="1"
-./benchmark.bash --export-markdown benchmark-result-${ALGORITHMS// /-vs-}-nproxy-${NPROXY}-weight-${WEIGHTS}.md -M=2
-
-ALGORITHMS="leastconn random" NPROXY=10000 WEIGHTS="256"
-./benchmark.bash --export-markdown benchmark-result-${ALGORITHMS// /-vs-}-nproxy-${NPROXY}-weight-${WEIGHTS}.md -M=2
-
+for nproxy in 1000 10000; do
+    for weight in 1 256; do
+	for algorithm_combo in "${algorithm_combos[@]}"; do
+	    hyperfine \
+		-L nproxy $nproxy \
+		-L weight $weight \
+		-L algorithm "$algorithm_combo" \
+		--prepare './generate-haproxy-config.pl --balance-algorithm={algorithm} --nproxy={nproxy} --weight={weight} --output-dir=benchmark-config-algorithm-{algorithm}-nproxy-{nproxy}-weight-{weight}' \
+		--export-markdown "benchmark-result-${algorithm_combo/,/-vs-}-nproxy-${nproxy}-weight-${weight}.md" \
+		"$@" \
+		'haproxy -c -f haproxy.config -C benchmark-config-algorithm-{algorithm}-nproxy-{nproxy}-weight-{weight}'
+	done
+    done
+done
