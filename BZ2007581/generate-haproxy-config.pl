@@ -4,7 +4,7 @@
 
 # Generate an OpenShift-esque haproxy.config
 #
-# $ ./generate-haproxy-config.pl --balance-algorithm=random --proxies=10 --servers=1 --weight=256 --output-dir=/tmp/random --crt-file ~/domain.pem
+# $ ./generate-haproxy-config.pl --balance-algorithm=random --nproxy=10 --nservers=1 --weight=256 --output-dir=/tmp/random
 
 # Validate config
 #
@@ -16,10 +16,10 @@ use warnings;
 use Getopt::Long;
 use File::Basename;
 use Digest::MD5 qw(md5_hex);
+use Carp;
 
-my $proxies = 1;
+my $nproxy = 1;
 my $balance_algorithm = "random";
-my $crt_file;
 my $namespace = "default";
 my $output_dir;
 my $public_http_port = 18080;
@@ -28,20 +28,19 @@ my $public_https_port = 18443;
 my $fe_sni_port = 10444;
 my $be_no_sni_port = 10443;
 
-my $servers = 1;
+my $nservers = 10;
 my $route_type = "edge";
 my $target_host = "127.0.0.1";
 my $target_port = 9001;
 my $weight = 256;
 
-GetOptions("proxies=i" => \$proxies,
+GetOptions("nproxy=i" => \$nproxy,
 	   "balance-algorithm=s", \$balance_algorithm,
-	   "crt-file=s", \$crt_file,
 	   "http-port=i" => \$public_http_port,
 	   "https-port=i" => \$public_https_port,
 	   "namespace=s", \$namespace,
 	   "output-dir=s" => \$output_dir,
-	   "servers=i" => \$servers,
+	   "nservers=i" => \$nservers,
 	   "target-host=s" => \$target_host,
 	   "target-port=i" => \$target_port,
 	   "weight=i" => \$weight)
@@ -52,10 +51,8 @@ sub write_to_file {
     my $mode = shift;
     my ($name, $path, $suffix) = fileparse($filename);
 
-    system("mkdir -p $path");
-
     open(FH, "$mode", "$filename")
-	or die "cannot open $filename (mode=$mode): $!";
+	or carp "cannot open $filename (mode=$mode): $!";
 
     print FH @_
 	or die "write($filename) failed: $!";
@@ -67,16 +64,9 @@ sub write_to_file {
 die "output-dir not specified"
     unless $output_dir;
 
-die "expecting output_dir '$output_dir' to begin with '/tmp'"
-    unless $output_dir =~ m!^/tmp!;
+system("mkdir -p \"$output_dir\"");
 
-die "crt-file not specified"
-    unless $crt_file;
-
-# clean up successive runs for the same output directory.
-system("rm -rf $output_dir");
-
-write_to_file("$output_dir/conf/error-page-503.http", ">", <<EOF
+write_to_file("$output_dir/error-page-503.http", ">", <<EOF
 HTTP/1.0 503 Service Unavailable
 Pragma: no-cache
 Cache-Control: private, max-age=0, no-cache, no-store
@@ -92,7 +82,7 @@ EOF
     );
 
 # Standard OpenShift haproxy preamble.
-write_to_file("$output_dir/conf/haproxy.config", ">", <<EOF
+write_to_file("$output_dir/haproxy.config", ">", <<EOF
 global
   maxconn 20000
   daemon
@@ -100,14 +90,14 @@ global
   nbthread 4
   tune.maxrewrite 8192
   tune.bufsize 32768
-  stats socket $output_dir/haproxy.sock mode 600 level admin expose-fd listeners
+  #stats socket "$output_dir/haproxy.sock" mode 600 level admin expose-fd listeners
   ssl-default-bind-options ssl-min-ver TLSv1.2
 
 defaults
   log global
   option httplog
   option logasap
-  errorfile 503 $output_dir/conf/error-page-503.http
+  errorfile 503 "$output_dir/error-page-503.http"
   timeout connect 30s
   timeout client 30s
   timeout client-fin 1s
@@ -132,10 +122,10 @@ frontend public
   http-request set-header Host %[req.hdr(Host),lower]
 
   # check if we need to redirect/force using https.
-  acl secure_redirect base,map_reg(os_route_http_redirect.map) -m found
+  acl secure_redirect base,map_reg(./os_route_http_redirect.map) -m found
   redirect scheme https if secure_redirect
 
-  use_backend %[base,map_reg(os_http_be.map)]
+  use_backend %[base,map_reg(./os_http_be.map)]
 
   default_backend openshift_default
 
@@ -148,8 +138,8 @@ frontend public_ssl
   # if the connection is SNI and the route is a passthrough don't use the termination backend, just use the tcp backend
   # for the SNI case, we also need to compare it in case-insensitive mode (by converting it to lowercase) as RFC 4343 says
   acl sni req.ssl_sni -m found
-  acl sni_passthrough req.ssl_sni,lower,map_reg($output_dir/conf/os_sni_passthrough.map) -m found
-  use_backend %[req.ssl_sni,lower,map_reg($output_dir/conf/os_tcp_be.map)] if sni sni_passthrough
+  acl sni_passthrough req.ssl_sni,lower,map_reg(./os_sni_passthrough.map) -m found
+  use_backend %[req.ssl_sni,lower,map_reg(./os_tcp_be.map)] if sni sni_passthrough
 
   # if the route is SNI and NOT passthrough enter the termination flow
   use_backend be_sni if sni
@@ -174,7 +164,7 @@ backend be_sni
 
 frontend fe_sni
   # terminate ssl on edge
-  bind :${fe_sni_port} ssl crt $crt_file crt-list $output_dir/conf/cert_config.map
+  bind :${fe_sni_port} crt-list cert_config.map
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)
@@ -187,7 +177,7 @@ frontend fe_sni
   # Search from most specific to general path (host case).
   # Note: If no match, haproxy uses the default_backend, no other
   #       use_backend directives below this will be processed.
-  use_backend %[base,map_reg(os_edge_reencrypt_be.map)]
+  use_backend %[base,map_reg(./os_edge_reencrypt_be.map)]
 
   default_backend openshift_default
 
@@ -197,7 +187,7 @@ backend be_no_sni
 
 frontend fe_no_sni
   # terminate ssl on edge
-  bind 127.0.0.1:${be_no_sni_port} ssl crt $crt_file
+  bind 127.0.0.1:${be_no_sni_port}
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)
@@ -211,7 +201,7 @@ frontend fe_no_sni
   # Search from most specific to general path (host case).
   # Note: If no match, haproxy uses the default_backend, no other
   #       use_backend directives below this will be processed.
-  use_backend %[base,map_reg($output_dir/conf/os_edge_reencrypt_be.map)]
+  use_backend %[base,map_reg(./os_edge_reencrypt_be.map)]
 
   default_backend openshift_default
 
@@ -223,17 +213,17 @@ backend openshift_default
 EOF
     );
 
-write_to_file("$output_dir/conf/cert_config.map", ">", "");
-write_to_file("$output_dir/conf/os_http_be.map", ">", "");
-write_to_file("$output_dir/conf/os_route_http_redirect.map", ">", "");
-write_to_file("$output_dir/conf/os_edge_reencrypt_be.map", ">", "");
-write_to_file("$output_dir/conf/os_sni_passthrough.map", ">", "");
-write_to_file("$output_dir/conf/os_tcp_be.map", ">", "");
+write_to_file("$output_dir/cert_config.map", ">", "");
+write_to_file("$output_dir/os_http_be.map", ">", "");
+write_to_file("$output_dir/os_route_http_redirect.map", ">", "");
+write_to_file("$output_dir/os_edge_reencrypt_be.map", ">", "");
+write_to_file("$output_dir/os_sni_passthrough.map", ">", "");
+write_to_file("$output_dir/os_tcp_be.map", ">", "");
 
 my @proxy;
 my @os_edge_reencrypt_be;
 
-for (my $i = 0; $i < $proxies; $i++) {
+for (my $i = 0; $i < $nproxy; $i++) {
     my $proxy_name = "be_${route_type}:${namespace}:app-${i}-${route_type}";
     my $proxy_name_hash = md5_hex("$proxy_name");
 
@@ -256,7 +246,7 @@ backend ${proxy_name}
 EOF
 	);
 
-    for (my $j = 0; $j < $servers; $j++) {
+    for (my $j = 0; $j < $nservers; $j++) {
 	my $endpoint = "pod:app-$i:replica-$j:10.128.0.$j:100${j}";
 	my $endpoint_hash = md5_hex("$endpoint");
 	push(@proxy, "server $endpoint ${target_host}:${target_port} cookie $endpoint_hash weight $weight");
@@ -266,5 +256,5 @@ EOF
 }
 
 local $" = "\n";
-write_to_file("$output_dir/conf/haproxy.config", ">>", "@proxy\n");
-write_to_file("$output_dir/conf/os_edge_reencrypt_be.map", ">>", "@os_edge_reencrypt_be\n");
+write_to_file("$output_dir/haproxy.config", ">>", "@proxy\n");
+write_to_file("$output_dir/os_edge_reencrypt_be.map", ">>", "@os_edge_reencrypt_be\n");
