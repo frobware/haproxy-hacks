@@ -1,0 +1,29 @@
+#+begin_src sh
+  oc project default
+  oc delete project rewrite-test
+#+end_src
+
+#+RESULTS:
+
+#+begin_src sh
+  oc new-project rewrite-test
+  oc new-app nginx-example
+  oc patch routes/nginx-example --type=merge --patch='{"metadata": {"annotations": {"haproxy.router.openshift.io/rewrite-target": "/kam/"}}, "spec": {"path": "/foo"}}'
+  curl -svk https://nginx-example-rewrite-test.apps.ocp47.int.frobware.com/foo
+#+end_src
+
+#+begin_src sh
+  oc get routes/nginx-example -o yaml
+  oc -n openshift-ingress rsync -c router router-default-654b65b8d8-rl2nb:haproxy.config /tmp/
+  oc -n openshift-ingress rsync -c router router-default-654b65b8d8-wwbjb:os_sni_passthrough.map /tmp/
+#+end_src
+
+#+begin_src sh
+  cat /tmp/os_sni_passthrough.map  
+#+end_src
+
+Convert to TLS
+
+#+begin_src sh
+  oc patch routes/nginx-example --type=merge --patch='{"metadata": {"annotations": {"haproxy.router.openshift.io/rewrite-target": "/kam/"}}, "spec": {"path": "/foo", "tls": {"termination": "edge", "insecureEdgeTerminationPolicy": "Redirect"}}}'
+#+end_src
