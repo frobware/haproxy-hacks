@@ -12,13 +12,13 @@ items:
       app: coredns-b
     ports:
     - name: dns
-      port: 53
+      port: 5353
       protocol: UDP
-      targetPort: dns
+      targetPort: 5353
     - name: dns-tcp
-      port: 53
+      port: 5353
       protocol: TCP
-      targetPort: dns-tcp
+      targetPort: 5353
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
