@@ -32,7 +32,7 @@ items:
           app: coredns-b
       spec:
         containers:
-        - image: nicolaka/netshoot
+        - image: quay.io/submariner/nettest
           name: netshoot
           command: ["/bin/sh"]
           args: ["-c", "while true; do echo hello; sleep 10; done"]
