@@ -72,7 +72,7 @@ items:
             lameduck 3s
         }
         ready
-        forward . XXXX:53 {
+        forward . XXXX:5353 {
             policy sequential
         }
         cache 3 {
