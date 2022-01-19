@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: coredns-a
+  spec:
+    replicas: 1
+    template:
+      metadata:
+        name: coredns-a
+        labels:
+          app: coredns-a
+      spec:
+        containers:
+        - image: nicolaka/netshoot
+          name: netshoot
+          command: ["/bin/sh"]
+          args: ["-c", "while true; do echo hello; sleep 10; done"]
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+        - image: nicolaka/netshoot
+          name: test
+          command: ["/bin/sh"]
+          args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=5353 www.google.nl $MY_POD_IP; done; sleep 10; done"]
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+        - image: quay.io/openshift-release-dev/ocp-v4.0-art-dev@sha256:aaf0854244f356ccb3f1cd70356362ac5ef7a9f227e08128740306430fd75497
+          name: coredns
+          command: ["/usr/bin/coredns"]
+          args: ["-conf", "/etc/coredns/Corefile"]
+          ports:
+          - containerPort: 5353
+            name: dns
+            protocol: UDP
+          - containerPort: 5353
+            name: dns-tcp
+            protocol: TCP
+          volumeMounts:
+          - name: corefile
+            mountPath: /etc/coredns
+        volumes:
+        - name: corefile
+          configMap:
+            name: coredns-a
+      imagePullPolicy: IfNotPresent
+    selector:
+      matchLabels:
+        app: coredns-a
+- apiVersion: v1
+  kind: ConfigMap
+  labels:
+    app: coredns-a
+  metadata:
+    name: coredns-a
+  data:
+    Corefile: |
+      .:5353 {
+        log
+        bufsize 512
+        errors
+        health {
+            lameduck 3s
+        }
+        ready
+        forward . 1.1.1.1 {
+            policy sequential
+        }
+        cache 3 {
+            denial 9984 3
+        }
+        reload
+      }

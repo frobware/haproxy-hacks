@@ -1,0 +1,47 @@
+.:5454 {
+       log
+    errors
+#    bufsize 512
+    forward . 1.1.1.1 {
+        policy sequential
+    }
+    cache 3
+    reload
+    template IN A h376ydk-b5564.shiftstack.devcluster.openshift.com {
+        match .*.apps.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        answer "{{ .Name }} 60 in {{ .Type }} 10.0.0.7"
+        fallthrough
+    }
+    template IN AAAA h376ydk-b5564.shiftstack.devcluster.openshift.com {
+        match .*.apps.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        fallthrough
+    }
+    template IN A h376ydk-b5564.shiftstack.devcluster.openshift.com {
+        match api.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        answer "{{ .Name }} 60 in {{ .Type }} 10.0.0.5"
+        fallthrough
+    }
+    template IN AAAA h376ydk-b5564.shiftstack.devcluster.openshift.com {
+        match api.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        fallthrough
+    }
+    template IN A h376ydk-b5564.shiftstack.devcluster.openshift.com {
+        match api-int.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        answer "{{ .Name }} 60 in {{ .Type }} 10.0.0.5"
+        fallthrough
+    }
+    template IN AAAA h376ydk-b5564.shiftstack.devcluster.openshift.com {
+        match api-int.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        fallthrough
+    }
+    hosts {
+        10.0.3.2 h376ydk-b5564-rkhxx-master-0 h376ydk-b5564-rkhxx-master-0.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        10.0.3.159 h376ydk-b5564-rkhxx-master-1 h376ydk-b5564-rkhxx-master-1.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        10.0.1.152 h376ydk-b5564-rkhxx-master-2 h376ydk-b5564-rkhxx-master-2.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        10.0.3.243 h376ydk-b5564-rkhxx-worker-0-8n72d h376ydk-b5564-rkhxx-worker-0-8n72d.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        10.0.3.91 h376ydk-b5564-rkhxx-worker-0-hwdvq h376ydk-b5564-rkhxx-worker-0-hwdvq.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        10.0.0.116 h376ydk-b5564-rkhxx-worker-0-jp58h h376ydk-b5564-rkhxx-worker-0-jp58h.h376ydk-b5564.shiftstack.devcluster.openshift.com
+        fallthrough
+    }
+
+}
