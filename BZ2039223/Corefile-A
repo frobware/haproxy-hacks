@@ -1,0 +1,21 @@
+.:1234 {
+    log
+    bufsize 512
+    errors
+    health {
+        lameduck 1s
+    }
+    ready
+    # kubernetes cluster.local in-addr.arpa ip6.arpa {
+    #     pods insecure
+    #     fallthrough in-addr.arpa ip6.arpa
+    # }
+    # prometheus 127.0.0.1:9153
+    forward . 127.0.0.1:5454 {
+        policy sequential
+    }
+    # cache 1 {
+    #     denial 9984 30
+    # }
+    reload
+}
