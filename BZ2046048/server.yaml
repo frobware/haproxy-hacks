@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: bz2046048
+    labels:
+      app: bz2046048
+    annotations:
+      service.beta.openshift.io/serving-cert-secret-name: serving-cert-bz2046048
+  spec:
+    selector:
+      app: bz2046048
+    ports:
+    - port: 8443
+      name: "https"
+      targetPort: 8443
+    - port: 8080
+      name: "http"
+      targetPort: 8080
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    name: bz2046048
+    labels:
+      app: bz2046048
+  spec:
+    containers:
+    - image: quay.io/amcdermo/bz2046048-server:master-g12db038
+      imagePullPolicy: IfNotPresent
+      name: bz2046048
+      ports:
+      - containerPort: 8443
+        name: "https"
+      - containerPort: 8080
+        name: "http"
+      volumeMounts:
+      - mountPath: /etc/serving-cert
+        name: cert
+    dnsPolicy: "None"
+    dnsConfig:
+      nameservers:
+        - 192.168.7.198
+      searches:
+        - ocp410.int.frobware.com
+        - int.frobware.com
+      options:
+        - name: ndots
+          value: "4"
+        - name: edns0
+    volumes:
+    - name: cert
+      secret:
+        secretName: serving-cert-bz2046048
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: bz2046048-passthrough
+    labels:
+      app: bz2046048
+    tls:
+      termination: passthrough
+      insecureEdgeTerminationPolicy: Redirect
+  spec:
+    port:
+      targetPort: 8443
+    to:
+      kind: Service
+      name: bz2046048
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: bz2046048-edge
+    labels:
+      app: bz2046048
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: bz2046048
