@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: List
+items:
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: bz2044682
+    labels:
+      app: bz2044682
+    annotations:
+      service.beta.openshift.io/serving-cert-secret-name: serving-cert-bz2044682
+  spec:
+    selector:
+      app: bz2044682
+    ports:
+    - port: 8080
+      name: "http"
+      targetPort: 8080
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    name: bz2044682
+    labels:
+      app: bz2044682
+  spec:
+    containers:
+    - image: quay.io/gspence/httpd-debug:latest
+      command: ["/bin/sh"]
+      args: ["-c", "while true; do echo hello; sleep 10; done"]
+      imagePullPolicy: Always
+      name: bz2044682
+      ports:
+      - containerPort: 8080
+        name: "http"
+      volumeMounts:
+      - mountPath: /etc/serving-cert
+        name: cert
+    volumes:
+    - name: cert
+      secret:
+        secretName: serving-cert-bz2044682
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: bz2044682-insecure
+    labels:
+      app: bz2044682
+  spec:
+    port:
+      targetPort: 8080
+    to:
+      kind: Service
+      name: bz2044682
