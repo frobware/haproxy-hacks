@@ -9,30 +9,37 @@ import (
 	"time"
 )
 
+const N int = 300
+
 func main() {
 	var wg sync.WaitGroup
+	var successful int
 
-	for i := 0; i < 100; i++{
+	for i := 0; i < N; i++ {
 		wg.Add(1)
 		go func(i int) {
+			defer func() {
+				wg.Done()
+			}()
 			var client = &http.Client{
 				Timeout: time.Second * 10,
 			}
-			fmt.Println(i)
-			resp, err := client.Get("http://localhost:8080/")
+			resp, err := client.Get(fmt.Sprintf("http://localhost:8080/id=%d", i))
 			if err != nil {
-				log.Println(i, err)
-				wg.Done()
+				log.Println("Connection failed", i)
 				return
 			}
-			fmt.Println(i, resp)
 			defer resp.Body.Close()
-			_, err = ioutil.ReadAll(resp.Body)
-			fmt.Println(err)
-			wg.Done()
+			if _, err := ioutil.ReadAll(resp.Body); err != nil {
+				fmt.Println("read error", i, err)
+			} else {
+				successful +=1
+				fmt.Println(i, resp.StatusCode)
+			}
 			return
 		}(i)
 	}
 
 	wg.Wait()
+	fmt.Println("successful: ", successful)
 }
