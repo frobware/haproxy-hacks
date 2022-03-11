@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -11,11 +12,18 @@ import (
 
 const N int = 300
 
+var (
+	iterations = flag.Int("iterations", 100, "iterations")
+)
+
 func main() {
+	flag.Parse()
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
+
 	var wg sync.WaitGroup
 	var successful int
 
-	for i := 0; i < N; i++ {
+	for i := 0; i < *iterations; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer func() {
@@ -33,7 +41,7 @@ func main() {
 			if _, err := ioutil.ReadAll(resp.Body); err != nil {
 				fmt.Println("read error", i, err)
 			} else {
-				successful +=1
+				successful += 1
 				fmt.Println(i, resp.StatusCode)
 			}
 			return
