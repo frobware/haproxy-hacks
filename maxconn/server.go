@@ -20,8 +20,8 @@ func (fw *flushWriter) Write(p []byte) (n int, err error) {
 	if fw.f != nil {
 		fw.f.Flush()
 	}
-	fmt.Println("sleeping 1s...")
-	time.Sleep(time.Second)
+	fmt.Println("sleeping...")
+	time.Sleep(time.Millisecond * 250)
 	return
 }
 
@@ -38,5 +38,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	http.HandleFunc("/", handler)
-	log.Fatal(http.ListenAndServe(":4040", nil))
+	server := &http.Server{Addr: ":4040"}
+	server.SetKeepAlivesEnabled(false)
+	log.Fatal(server.ListenAndServe())
 }
