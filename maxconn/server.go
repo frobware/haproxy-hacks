@@ -30,7 +30,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	if f, ok := w.(http.Flusher); ok {
 		fw.f = f
 	}
-	cmd := exec.Command("find", "/", "-print")
+	cmd := exec.Command("find", "/home/aim/src/github.com/frobware/haproxy-hacks", "-print")
 	cmd.Stdout = &fw
 	cmd.Stderr = &fw
 	fmt.Println(cmd.Run())
