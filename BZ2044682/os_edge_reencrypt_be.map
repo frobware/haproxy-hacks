@@ -1,0 +1,10 @@
+^app-0-edge$ be_edge:default:app-0-edge
+^app-1-edge$ be_edge:default:app-1-edge
+^app-2-edge$ be_edge:default:app-2-edge
+^app-3-edge$ be_edge:default:app-3-edge
+^app-4-edge$ be_edge:default:app-4-edge
+^app-5-edge$ be_edge:default:app-5-edge
+^app-6-edge$ be_edge:default:app-6-edge
+^app-7-edge$ be_edge:default:app-7-edge
+^app-8-edge$ be_edge:default:app-8-edge
+^app-9-edge$ be_edge:default:app-9-edge
