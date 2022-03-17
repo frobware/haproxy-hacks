@@ -1,0 +1,15 @@
+test_type,routes,conn_per_targetroute,keepalive,metric,5c0de480-5f2b-44ed-b5a3-40a8867b70b5
+http,100,1,0,avg(requests_per_second),65182.5
+http,100,1,0,avg(latency_95pctl),2476.0
+test_type,routes,conn_per_targetroute,keepalive,metric,5c0de480-5f2b-44ed-b5a3-40a8867b70b5
+edge,100,1,0,avg(requests_per_second),57062.5
+edge,100,1,0,avg(latency_95pctl),2589.0
+test_type,routes,conn_per_targetroute,keepalive,metric,5c0de480-5f2b-44ed-b5a3-40a8867b70b5
+passthrough,100,1,0,avg(requests_per_second),67389.0
+passthrough,100,1,0,avg(latency_95pctl),2439.5
+test_type,routes,conn_per_targetroute,keepalive,metric,5c0de480-5f2b-44ed-b5a3-40a8867b70b5
+reencrypt,100,1,0,avg(requests_per_second),55460.5
+reencrypt,100,1,0,avg(latency_95pctl),2699.5
+test_type,routes,conn_per_targetroute,keepalive,metric,5c0de480-5f2b-44ed-b5a3-40a8867b70b5
+mix,400,1,0,avg(requests_per_second),108919.5
+mix,400,1,0,avg(latency_95pctl),5934.5
