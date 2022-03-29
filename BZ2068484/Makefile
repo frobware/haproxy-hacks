@@ -4,10 +4,10 @@ TAG	  := $(BRANCH)-g$(HASH)
 IMAGENAME := amcdermo/bz2068484-server
 
 build:
-	buildah bud -t amcdermo/$(IMAGENAME):$(TAG) -f Dockerfile .
+	buildah bud -t $(IMAGENAME):$(TAG) -f Dockerfile .
 
 push:
-	podman tag amcdermo/$(IMAGENAME):$(TAG) quay.io/$(IMAGENAME):$(TAG)
+	podman tag $(IMAGENAME):$(TAG) quay.io/$(IMAGENAME):$(TAG)
 	podman push quay.io/$(IMAGENAME):$(TAG)
 
 server:
