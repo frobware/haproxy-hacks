@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	defaultHTTPPort  = "8080"
+	defaultHTTPPort  = "1936"
 	defaultHTTPSPort = "8443"
 	defaultTLSCrt    = "/etc/serving-cert/tls.crt"
 	defaultTLSKey    = "/etc/serving-cert/tls.key"
