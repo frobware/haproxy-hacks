@@ -16,10 +16,7 @@ var (
 	iterations = flag.Int("iterations", 100, "iterations")
 )
 
-func main() {
-	flag.Parse()
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-
+func pokeURL(url string) {
 	var wg sync.WaitGroup
 	var successful int
 
@@ -32,22 +29,27 @@ func main() {
 			var client = &http.Client{
 				Timeout: time.Second * 10,
 			}
-			resp, err := client.Get(fmt.Sprintf("http://localhost:8080/id=%d", i))
+			resp, err := client.Get(fmt.Sprintf("http://%s?id=%d", url, i))
 			if err != nil {
-				log.Println("Connection failed", i)
+				log.Println(url, "Connection failed", i, err)
 				return
 			}
 			defer resp.Body.Close()
 			if _, err := ioutil.ReadAll(resp.Body); err != nil {
-				fmt.Println("read error", i, err)
+				log.Println(url, "read error", i, err)
 			} else {
 				successful += 1
-				fmt.Println(i, resp.StatusCode)
+				log.Println(i, url, resp.StatusCode)
 			}
 			return
 		}(i)
 	}
 
 	wg.Wait()
-	fmt.Println("successful: ", successful)
+	log.Println("successful: ", successful)
+}
+
+func main() {
+	pokeURL("localhost:8080/1")
+	pokeURL("localhost:8081/2")
 }
