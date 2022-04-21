@@ -1,5 +1,5 @@
 
-### random: weight = 1, backends = 1000, threads = 4
+### random weight=1 backends=1000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -11,7 +11,7 @@
 |  200000 |            200000 |            400054 |             37456 |
 |    auto |            262117 |            524288 |             45220 |
 
-### random: weight = 1, backends = 1000, threads = 64
+### random weight=1 backends=1000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -25,7 +25,7 @@
 ```
  
 
-### random: weight = 1, backends = 2000, threads = 4
+### random weight=1 backends=2000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -37,7 +37,7 @@
 |  200000 |            200000 |            400054 |             48500 |
 |    auto |            262117 |            524288 |             56264 |
 
-### random: weight = 1, backends = 2000, threads = 64
+### random weight=1 backends=2000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -51,7 +51,7 @@
 ```
  
 
-### random: weight = 1, backends = 4000, threads = 4
+### random weight=1 backends=4000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -63,7 +63,7 @@
 |  200000 |            200000 |            400054 |             70600 |
 |    auto |            262117 |            524288 |             78356 |
 
-### random: weight = 1, backends = 4000, threads = 64
+### random weight=1 backends=4000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -77,7 +77,7 @@
 ```
  
 
-### random: weight = 1, backends = 10000, threads = 4
+### random weight=1 backends=10000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -89,7 +89,7 @@
 |  200000 |            200000 |            400054 |            136876 |
 |    auto |            262117 |            524288 |            144644 |
 
-### random: weight = 1, backends = 10000, threads = 64
+### random weight=1 backends=10000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -103,7 +103,7 @@
 ```
  
 
-### random: weight = 256, backends = 1000, threads = 4
+### random weight=256 backends=1000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -115,7 +115,7 @@
 |  200000 |            200000 |            400054 |            232888 |
 |    auto |            262117 |            524288 |            240652 |
 
-### random: weight = 256, backends = 1000, threads = 64
+### random weight=256 backends=1000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -129,7 +129,7 @@
 ```
  
 
-### random: weight = 256, backends = 2000, threads = 4
+### random weight=256 backends=2000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -141,7 +141,7 @@
 |  200000 |            200000 |            400054 |            439168 |
 |    auto |            262117 |            524288 |            446928 |
 
-### random: weight = 256, backends = 2000, threads = 64
+### random weight=256 backends=2000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -155,7 +155,7 @@
 ```
  
 
-### random: weight = 256, backends = 4000, threads = 4
+### random weight=256 backends=4000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -167,7 +167,7 @@
 |  200000 |            200000 |            400054 |            851728 |
 |    auto |            262117 |            524288 |            859492 |
 
-### random: weight = 256, backends = 4000, threads = 64
+### random weight=256 backends=4000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -181,7 +181,7 @@
 ```
  
 
-### random: weight = 256, backends = 10000, threads = 4
+### random weight=256 backends=10000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -193,7 +193,7 @@
 |  200000 |            200000 |            400054 |           2089472 |
 |    auto |            262117 |            524288 |           2097240 |
 
-### random: weight = 256, backends = 10000, threads = 64
+### random weight=256 backends=10000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -207,7 +207,7 @@
 ```
  
 
-### leastconn: weight = 1, backends = 1000, threads = 4
+### leastconn weight=1 backends=1000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -219,7 +219,7 @@
 |  200000 |            200000 |            400054 |             36688 |
 |    auto |            262117 |            524288 |             44460 |
 
-### leastconn: weight = 1, backends = 1000, threads = 64
+### leastconn weight=1 backends=1000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -233,7 +233,7 @@
 ```
  
 
-### leastconn: weight = 1, backends = 2000, threads = 4
+### leastconn weight=1 backends=2000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -245,7 +245,7 @@
 |  200000 |            200000 |            400054 |             46972 |
 |    auto |            262117 |            524288 |             54732 |
 
-### leastconn: weight = 1, backends = 2000, threads = 64
+### leastconn weight=1 backends=2000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -259,7 +259,7 @@
 ```
  
 
-### leastconn: weight = 1, backends = 4000, threads = 4
+### leastconn weight=1 backends=4000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -271,7 +271,7 @@
 |  200000 |            200000 |            400054 |             67532 |
 |    auto |            262117 |            524288 |             75296 |
 
-### leastconn: weight = 1, backends = 4000, threads = 64
+### leastconn weight=1 backends=4000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -285,7 +285,7 @@
 ```
  
 
-### leastconn: weight = 1, backends = 10000, threads = 4
+### leastconn weight=1 backends=10000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -297,7 +297,7 @@
 |  200000 |            200000 |            400054 |            129280 |
 |    auto |            262117 |            524288 |            137044 |
 
-### leastconn: weight = 1, backends = 10000, threads = 64
+### leastconn weight=1 backends=10000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -311,7 +311,7 @@
 ```
  
 
-### leastconn: weight = 256, backends = 1000, threads = 4
+### leastconn weight=256 backends=1000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -323,7 +323,7 @@
 |  200000 |            200000 |            400054 |             36688 |
 |    auto |            262117 |            524288 |             44456 |
 
-### leastconn: weight = 256, backends = 1000, threads = 64
+### leastconn weight=256 backends=1000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -337,7 +337,7 @@
 ```
  
 
-### leastconn: weight = 256, backends = 2000, threads = 4
+### leastconn weight=256 backends=2000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -349,7 +349,7 @@
 |  200000 |            200000 |            400054 |             46972 |
 |    auto |            262117 |            524288 |             54732 |
 
-### leastconn: weight = 256, backends = 2000, threads = 64
+### leastconn weight=256 backends=2000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -363,7 +363,7 @@
 ```
  
 
-### leastconn: weight = 256, backends = 4000, threads = 4
+### leastconn weight=256 backends=4000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -375,7 +375,7 @@
 |  200000 |            200000 |            400054 |             67536 |
 |    auto |            262117 |            524288 |             75296 |
 
-### leastconn: weight = 256, backends = 4000, threads = 64
+### leastconn weight=256 backends=4000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -389,7 +389,7 @@
 ```
  
 
-### leastconn: weight = 256, backends = 10000, threads = 4
+### leastconn weight=256 backends=10000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -401,7 +401,7 @@
 |  200000 |            200000 |            400054 |            129276 |
 |    auto |            262117 |            524288 |            137044 |
 
-### leastconn: weight = 256, backends = 10000, threads = 64
+### leastconn weight=256 backends=10000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -415,7 +415,7 @@
 ```
  
 
-### roundrobin: weight = 1, backends = 1000, threads = 4
+### roundrobin weight=1 backends=1000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -427,7 +427,7 @@
 |  200000 |            200000 |            400054 |             36688 |
 |    auto |            262117 |            524288 |             44452 |
 
-### roundrobin: weight = 1, backends = 1000, threads = 64
+### roundrobin weight=1 backends=1000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -441,7 +441,7 @@
 ```
  
 
-### roundrobin: weight = 1, backends = 2000, threads = 4
+### roundrobin weight=1 backends=2000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -453,7 +453,7 @@
 |  200000 |            200000 |            400054 |             46968 |
 |    auto |            262117 |            524288 |             54736 |
 
-### roundrobin: weight = 1, backends = 2000, threads = 64
+### roundrobin weight=1 backends=2000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -467,7 +467,7 @@
 ```
  
 
-### roundrobin: weight = 1, backends = 4000, threads = 4
+### roundrobin weight=1 backends=4000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -479,7 +479,7 @@
 |  200000 |            200000 |            400054 |             67532 |
 |    auto |            262117 |            524288 |             75300 |
 
-### roundrobin: weight = 1, backends = 4000, threads = 64
+### roundrobin weight=1 backends=4000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -493,7 +493,7 @@
 ```
  
 
-### roundrobin: weight = 1, backends = 10000, threads = 4
+### roundrobin weight=1 backends=10000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -505,7 +505,7 @@
 |  200000 |            200000 |            400054 |            129280 |
 |    auto |            262117 |            524288 |            137040 |
 
-### roundrobin: weight = 1, backends = 10000, threads = 64
+### roundrobin weight=1 backends=10000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -519,7 +519,7 @@
 ```
  
 
-### roundrobin: weight = 256, backends = 1000, threads = 4
+### roundrobin weight=256 backends=1000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -531,7 +531,7 @@
 |  200000 |            200000 |            400054 |             36688 |
 |    auto |            262117 |            524288 |             44452 |
 
-### roundrobin: weight = 256, backends = 1000, threads = 64
+### roundrobin weight=256 backends=1000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -545,7 +545,7 @@
 ```
  
 
-### roundrobin: weight = 256, backends = 2000, threads = 4
+### roundrobin weight=256 backends=2000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -557,7 +557,7 @@
 |  200000 |            200000 |            400054 |             46968 |
 |    auto |            262117 |            524288 |             54732 |
 
-### roundrobin: weight = 256, backends = 2000, threads = 64
+### roundrobin weight=256 backends=2000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -571,7 +571,7 @@
 ```
  
 
-### roundrobin: weight = 256, backends = 4000, threads = 4
+### roundrobin weight=256 backends=4000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -583,7 +583,7 @@
 |  200000 |            200000 |            400054 |             67532 |
 |    auto |            262117 |            524288 |             75296 |
 
-### roundrobin: weight = 256, backends = 4000, threads = 64
+### roundrobin weight=256 backends=4000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -597,7 +597,7 @@
 ```
  
 
-### roundrobin: weight = 256, backends = 10000, threads = 4
+### roundrobin weight=256 backends=10000 threads=4
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
@@ -609,7 +609,7 @@
 |  200000 |            200000 |            400054 |            129276 |
 |    auto |            262117 |            524288 |            137044 |
 
-### roundrobin: weight = 256, backends = 10000, threads = 64
+### roundrobin weight=256 backends=10000 threads=64
 
 ```
 | maxconn | maxconn (HAProxy) | maxsock (HAProxy) | Process Size (KB) |
