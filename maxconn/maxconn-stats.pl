@@ -50,9 +50,17 @@ frontend alive-${i}
         print $fh "
 backend backend-${i}
     balance $balance_algorithm
+    server server_0 127.0.0.1:80 weight $weight
+    server server_1 127.0.0.1:80 weight $weight
     server server_2 127.0.0.1:80 weight $weight
+    server server_3 127.0.0.1:80 weight $weight
+    server server_4 127.0.0.1:80 weight $weight
+    server server_5 127.0.0.1:80 weight $weight
+    server server_6 127.0.0.1:80 weight $weight
+    server server_7 127.0.0.1:80 weight $weight
+    server server_8 127.0.0.1:80 weight $weight
+    server server_9 127.0.0.1:80 weight $weight
 \n";
-
     }
 
     close $fh or die;
@@ -64,7 +72,7 @@ sub haproxy_memsize_in_megabytes {
     system("pkill haproxy");
     system("pkill haproxy");
     system("haproxy -D -f $filename");
-    system("sleep 2");
+    system("sleep 1");
     my @output = `pmap -x -p \$(pgrep haproxy)`;
     for my $line (@output) {
         next unless $line =~ m/total kB/;
@@ -91,17 +99,17 @@ sub haproxy_actual_maxconn_and_maxsock {
     return $maxconn, $maxsock;
 }
 
-# my @weights = qw(1 256);
-# my @balance_algorithms = qw(random leastconn roundrobin);
-# my @backends = qw(1000 2000 4000 10000);
-# my @nbthreads = qw(4 64);
-# my @max_connections = qw(1000 20000 50000 100000 200000 auto);
+my @weights = qw(1 256);
+my @balance_algorithms = qw(random leastconn roundrobin);
+my @backends = qw(1000 2000 4000 10000);
+my @nbthreads = qw(4 64);
+my @max_connections = qw(1000 20000 50000 100000 200000 auto);
 
-my @weights = qw(1);
-my @balance_algorithms = qw(leastconn);
-my @backends = qw(1000);
-my @nbthreads = qw(4);
-my @max_connections = qw(2000 200000 auto);
+# my @weights = qw(1);
+# my @balance_algorithms = qw(leastconn);
+# my @backends = qw(1000);
+# my @nbthreads = qw(4);
+# my @max_connections = qw(20000 auto);
 
 for my $weight (@weights) {
     for my $balance_algorithm (@balance_algorithms) {
