@@ -1,6 +1,7 @@
 # random
 ## weight=1 backends=1000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              12632
@@ -11,6 +12,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              45220
 ## weight=1 backends=1000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              21108
@@ -19,9 +21,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              33152
  200000             200000             400234              45668
    auto             262027             524288              53388
+```
 ````
 ## weight=1 backends=2000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              23680
@@ -32,6 +36,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              56264
 ## weight=1 backends=2000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              35156
@@ -40,9 +45,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              47228
  200000             200000             400234              59704
    auto             262027             524288              67464
+```
 ````
 ## weight=1 backends=4000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              45792
@@ -53,6 +60,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              78356
 ## weight=1 backends=4000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              63360
@@ -61,9 +69,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              75436
  200000             200000             400234              87896
    auto             262027             524288              95656
+```
 ````
 ## weight=1 backends=10000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054             112080
@@ -74,6 +84,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288             144644
 ## weight=1 backends=10000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234             147992
@@ -82,9 +93,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234             160028
  200000             200000             400234             172560
    auto             262027             524288             180288
+```
 ````
 ## weight=256 backends=1000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054             208084
@@ -95,6 +108,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288             240652
 ## weight=256 backends=1000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234             216508
@@ -103,9 +117,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234             228576
  200000             200000             400234             241068
    auto             262027             524288             248824
+```
 ````
 ## weight=256 backends=2000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054             414368
@@ -116,6 +132,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288             446928
 ## weight=256 backends=2000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234             425836
@@ -124,9 +141,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234             437888
  200000             200000             400234             450368
    auto             262027             524288             458120
+```
 ````
 ## weight=256 backends=4000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054             826920
@@ -137,6 +156,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288             859492
 ## weight=256 backends=4000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234             844500
@@ -145,9 +165,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234             856548
  200000             200000             400234             869032
    auto             262027             524288             876796
+```
 ````
 ## weight=256 backends=10000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054            2064672
@@ -158,6 +180,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288            2097240
 ## weight=256 backends=10000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234            2100464
@@ -166,10 +189,12 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234            2112504
  200000             200000             400234            2125008
    auto             262027             524288            2132772
+```
 ````
 # leastconn
 ## weight=1 backends=1000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              11892
@@ -180,6 +205,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              44460
 ## weight=1 backends=1000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              20300
@@ -188,9 +214,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              32372
  200000             200000             400234              44844
    auto             262027             524288              52596
+```
 ````
 ## weight=1 backends=2000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              22172
@@ -201,6 +229,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              54732
 ## weight=1 backends=2000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              33608
@@ -209,9 +238,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              45712
  200000             200000             400234              58168
    auto             262027             524288              65924
+```
 ````
 ## weight=1 backends=4000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              42728
@@ -222,6 +253,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              75296
 ## weight=1 backends=4000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              60292
@@ -230,9 +262,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              72352
  200000             200000             400234              84848
    auto             262027             524288              92608
+```
 ````
 ## weight=1 backends=10000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054             104480
@@ -243,6 +277,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288             137044
 ## weight=1 backends=10000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234             140272
@@ -251,9 +286,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234             152296
  200000             200000             400234             164800
    auto             262027             524288             172552
+```
 ````
 ## weight=256 backends=1000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              11892
@@ -264,6 +301,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              44456
 ## weight=256 backends=1000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              20320
@@ -272,9 +310,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              32372
  200000             200000             400234              44864
    auto             262027             524288              52596
+```
 ````
 ## weight=256 backends=2000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              22168
@@ -285,6 +325,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              54732
 ## weight=256 backends=2000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              33620
@@ -293,9 +334,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              45708
  200000             200000             400234              58176
    auto             262027             524288              65944
+```
 ````
 ## weight=256 backends=4000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              42728
@@ -306,6 +349,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              75296
 ## weight=256 backends=4000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              60304
@@ -314,9 +358,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              72328
  200000             200000             400234              84860
    auto             262027             524288              92608
+```
 ````
 ## weight=256 backends=10000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054             104480
@@ -327,6 +373,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288             137044
 ## weight=256 backends=10000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234             140264
@@ -335,10 +382,12 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234             152336
  200000             200000             400234             164820
    auto             262027             524288             172560
+```
 ````
 # roundrobin
 ## weight=1 backends=1000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              11892
@@ -349,6 +398,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              44452
 ## weight=1 backends=1000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              20304
@@ -357,9 +407,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              32368
  200000             200000             400234              44844
    auto             262027             524288              52600
+```
 ````
 ## weight=1 backends=2000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              22172
@@ -370,6 +422,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              54736
 ## weight=1 backends=2000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              33612
@@ -378,9 +431,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              45692
  200000             200000             400234              58172
    auto             262027             524288              65920
+```
 ````
 ## weight=1 backends=4000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              42728
@@ -391,6 +446,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              75300
 ## weight=1 backends=4000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              60296
@@ -399,9 +455,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              72372
  200000             200000             400234              84856
    auto             262027             524288              92608
+```
 ````
 ## weight=1 backends=10000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054             104476
@@ -412,6 +470,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288             137040
 ## weight=1 backends=10000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234             140260
@@ -420,9 +479,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234             152320
  200000             200000             400234             164816
    auto             262027             524288             172580
+```
 ````
 ## weight=256 backends=1000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              11884
@@ -433,6 +494,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              44452
 ## weight=256 backends=1000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              20316
@@ -441,9 +503,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              32344
  200000             200000             400234              44844
    auto             262027             524288              52608
+```
 ````
 ## weight=256 backends=2000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              22172
@@ -454,6 +518,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              54732
 ## weight=256 backends=2000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              33640
@@ -462,9 +527,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              45676
  200000             200000             400234              58176
    auto             262027             524288              65932
+```
 ````
 ## weight=256 backends=4000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054              42728
@@ -475,6 +542,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288              75296
 ## weight=256 backends=4000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234              60316
@@ -483,9 +551,11 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234              72348
  200000             200000             400234              84836
    auto             262027             524288              92596
+```
 ````
 ## weight=256 backends=10000 threads=4
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2054             104480
@@ -496,6 +566,7 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
    auto             262117             524288             137044
 ## weight=256 backends=10000 threads=64
 ````console
+```sh
 maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
 -------  -----------------  -----------------  -----------------
    1000               1000               2234             140248
@@ -504,4 +575,5 @@ maxconn  maxconn (HAProxy)  maxsock (HAProxy)  Process Size (KB)
  100000             100000             200234             152316
  200000             200000             400234             164824
    auto             262027             524288             172576
+```
 ````
