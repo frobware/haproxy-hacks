@@ -1,11 +1,11 @@
 .:5454 {
        log
     errors
-#    bufsize 512
-    forward . 1.1.1.1 {
+   bufsize 512
+    forward . 192.168.7.253 {
         policy sequential
     }
-    cache 3
+    cache 30
     reload
     template IN A h376ydk-b5564.shiftstack.devcluster.openshift.com {
         match .*.apps.h376ydk-b5564.shiftstack.devcluster.openshift.com

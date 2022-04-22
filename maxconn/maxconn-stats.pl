@@ -79,8 +79,7 @@ sub haproxy_memsize_in_megabytes {
         my @fields = split /\s+/, $line;
         return int($fields[4]);
     }
-    die;
-    return 0;
+    die "didn't find memory usage info; do you have haproxy on your PATH?";
 }
 
 sub haproxy_actual_maxconn_and_maxsock {
@@ -103,7 +102,7 @@ my @weights = qw(1 256);
 my @balance_algorithms = qw(random leastconn roundrobin);
 my @backends = qw(1000 2000 4000 10000);
 my @nbthreads = qw(4 64);
-my @max_connections = qw(1000 20000 50000 100000 200000 auto);
+my @max_connections = qw(2000 20000 50000 100000 200000 auto);
 
 # my @weights = qw(1);
 # my @balance_algorithms = qw(leastconn);

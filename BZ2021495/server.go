@@ -22,7 +22,8 @@ func main() {
 		go func(port int) {
 			addr := fmt.Sprintf(":%v", port)
 			log.Printf("listening at %s\n", addr)
-			err := http.ListenAndServe(addr, handler{Port: port})
+			//			err := http.ListenAndServeTLS(addr, "/home/aim/domain.pem", "/home/aim/domain.pem", handler{Port:port})
+			err := http.ListenAndServe(addr, handler{Port:port})
 			if err != nil {
 				log.Fatalf("ListenAndServe: %v\n", err)
 			}

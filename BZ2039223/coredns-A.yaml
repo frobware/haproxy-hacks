@@ -41,38 +41,38 @@ items:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-        - image: amouat/network-utils
-          name: nslookup-fedoraproject
-          command: ["/bin/sh"]
-          args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=5353 fedoraproject.org $MY_POD_IP; done; sleep 5; done"]
-          env:
-            - name: MY_POD_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-        - image: amouat/network-utils
-          name: nslookup-github
-          command: ["/bin/sh"]
-          args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=5353 www.github.com $MY_POD_IP; done; sleep 5; done"]
-          env:
-            - name: MY_POD_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-        - image: amouat/network-utils
-          name: nslookup-google
-          command: ["/bin/sh"]
-          args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=5353 www.google.nl $MY_POD_IP; done; sleep 5; done"]
-          env:
-            - name: MY_POD_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-        - image: amouat/network-utils
-          name: nslookup-local
-          command: ["/bin/sh"]
-          args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=1234 www.google.nl 192.168.7.64; done; sleep 5; done"]
-        - image: amouat/network-utils
+        # - image: amouat/network-utils
+        #   name: nslookup-fedoraproject
+        #   command: ["/bin/sh"]
+        #   args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=5353 fedoraproject.org $MY_POD_IP; done; sleep 5; done"]
+        #   env:
+        #     - name: MY_POD_IP
+        #       valueFrom:
+        #         fieldRef:
+        #           fieldPath: status.podIP
+        # - image: amouat/network-utils
+        #   name: nslookup-github
+        #   command: ["/bin/sh"]
+        #   args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=5353 www.github.com $MY_POD_IP; done; sleep 5; done"]
+        #   env:
+        #     - name: MY_POD_IP
+        #       valueFrom:
+        #         fieldRef:
+        #           fieldPath: status.podIP
+        # - image: amouat/network-utils
+        #   name: nslookup-google
+        #   command: ["/bin/sh"]
+        #   args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=5353 www.google.nl $MY_POD_IP; done; sleep 5; done"]
+        #   env:
+        #     - name: MY_POD_IP
+        #       valueFrom:
+        #         fieldRef:
+        #           fieldPath: status.podIP
+        # - image: amouat/network-utils
+        #   name: nslookup-local
+        #   command: ["/bin/sh"]
+        #   args: ["-c", "while :; do date; for i in $(seq 1 100); do nslookup -port=1234 www.google.nl 192.168.7.64; done; sleep 5; done"]
+        - image: quay.io/amcdermo/fedora-utils
           name: nslookup-shell
           command: ["/bin/sh"]
           args: ["-c", "while true; do echo hello; sleep 10; done"]
@@ -115,8 +115,6 @@ items:
         forward . XXXX:5353 {
             policy sequential
         }
-        cache 3 {
-            denial 9984 3
-        }
+        cache 3
         reload
       }
