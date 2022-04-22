@@ -34,7 +34,7 @@ define regenerate_cmake_rules
 endef
 
 $(BUILD_DIR)/$(BUILD_FILE): | $(BUILD_DIR)
-	$(call regenerate_cmake_rules, $(BUILD_DIR), $(CURDIR))
+	$(call regenerate_cmake_rules,$(BUILD_DIR),$(CURDIR))
 
 $(BUILD_DIR):
 	@mkdir -p $@

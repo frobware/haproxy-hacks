@@ -26,11 +26,14 @@ func main() {
 	keyFile := lookupEnv("TLS_KEY", defaultTLSKey)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		log.Println("connection from", req.RemoteAddr)
+		w.Header().Set("set-cookie2", "X=Y")
 		fmt.Fprint(w, req.Proto)
 	})
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
 		log.Println("connection from", req.RemoteAddr)
+		fmt.Fprint(w, "healthz")
 		fmt.Fprint(w, req.Proto, "\n")
 	})
 

@@ -30,7 +30,8 @@ func main() {
 	})
 
 	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
-		fmt.Fprint(w, "ready")
+		log.Println("connection from", req.RemoteAddr)
+		fmt.Fprint(w, req.Proto, "\n")
 	})
 
 	go func() {

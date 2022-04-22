@@ -27,7 +27,7 @@ items:
       app: bz2046048
   spec:
     containers:
-    - image: quay.io/amcdermo/bz2046048-server:master-g12db038
+    - image: quay.io/amcdermo/bz2046048-server:master-g71153af
       imagePullPolicy: IfNotPresent
       name: bz2046048
       ports:

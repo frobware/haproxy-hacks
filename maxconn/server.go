@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 	"os/exec"
-	"time"
 )
 
 type flushWriter struct {
@@ -14,7 +13,7 @@ type flushWriter struct {
 }
 
 func (fw *flushWriter) Write(p []byte) (n int, err error) {
-	log.Println(string(p))
+	// log.Println(string(p))
 	n, err = fw.w.Write(p)
 	if err != nil {
 		if _, ok := fw.w.(io.Closer); ok {
@@ -29,7 +28,7 @@ func (fw *flushWriter) Write(p []byte) (n int, err error) {
 		fw.f.Flush()
 	}
 	log.Println("sleeping...")
-	time.Sleep(time.Millisecond * 100)
+	// time.Sleep(time.Millisecond * 100)
 	return
 }
 

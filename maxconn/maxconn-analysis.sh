@@ -78,13 +78,13 @@ function b() {
             for backend_count in $(backend_values); do
                 # echo "# $balance_algorithm: weight = $weight, backends = $backend_count"
                 for thread_count in $(thread_values); do
-                    echo "## weight=$weight backends=$backend_count threads=$thread_count"
+                    echo "## algorithm=$balance_algorithm weight=$weight backends=$backend_count threads=$thread_count"
                     printf "\`\`\`\n";
                     sqlite3 $db <<EOF
 .headers on
 .mode column
 .width -1 -1 -1 -1
-SELECT maxconn, actual_maxconn as "maxconn (HAProxy)", actual_maxsock as "maxsock (HAProxy)", process_size as "Process Size (KB)"
+SELECT maxconn, actual_maxconn as "maxconn (HAProxy)", actual_maxsock as "maxsock (HAProxy)", process_size / 1000 as "Process Size (MB)"
   FROM results
  WHERE weight == $weight and
        balance_algorithm == "$balance_algorithm" and
