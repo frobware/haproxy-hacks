@@ -125,6 +125,7 @@ int main(int argc, char *argv[]) {
   char *user_agent = NULL;
   int milliseconds;
   struct sigaction action;
+  int addqueryid = 0;
 
   if (argc < 2) {
     fprintf(stderr, "usage: <URL>\n");
@@ -132,6 +133,10 @@ int main(int argc, char *argv[]) {
   }
 
   curl_global_init(CURL_GLOBAL_DEFAULT);
+
+  if (getenv("Q") != NULL) {
+    addqueryid = atoi(getenv("Q"));
+  }
 
   if (getenv("N") != NULL) {
     n = atoi(getenv("N"));
@@ -199,8 +204,13 @@ int main(int argc, char *argv[]) {
       assert(curl_handle);
     }
 
-    url = mprintf("%s?queryid=%zd", argv[1], i);
-    user_agent = mprintf("curler/queryid=%zd", i);
+    if (addqueryid) {
+      url = mprintf("%s?queryid=%zd", argv[1], i);
+      user_agent = mprintf("curler/queryid=%zd", i);
+    } else {
+      url = mprintf("%s", argv[1]);
+      user_agent = mprintf("curler/queryid=%zd", i);
+    }
 
     curl_easy_setopt(curl_handle, CURLOPT_URL, url);
     curl_easy_setopt(curl_handle, CURLOPT_USERAGENT, user_agent);

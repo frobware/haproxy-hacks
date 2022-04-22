@@ -2,9 +2,14 @@
 
 use strict;
 
+my $maxconn = $ENV{"MAXCONN"} || 1000;
+my $nbthread = $ENV{"NBTHREAD"} || 64;
+my $backends = $ENV{"BACKENDS"} || 1000;
+
 print "
 global
-  maxconn 1000
+  maxconn $maxconn
+  nbthread $nbthread
   stats socket /tmp/haproxy.sock mode 600 level admin expose-fd listeners
   stats timeout 2m
 
@@ -31,18 +36,19 @@ listen stats
   stats uri /stats
 \n";
 
-for my $i (1..1) {
+for my $i (1..20) {
     print "
 frontend alive-${i}
-  bind unix@/var/lib/haproxy/run/alive-${i}.sock
+  bind unix@/tmp/haproxy-frontend-${i}.sock
 \n";
 
 }
 
-for my $i (0..1000) {
+for my $i (0..$backends) {
     print "
 backend backend-${i}
-    server server_2 127.0.0.1:80
+    balance random
+    server server_2 127.0.0.1:80 weight 256
 \n";
 
 }

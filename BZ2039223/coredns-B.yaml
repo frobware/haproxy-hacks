@@ -70,13 +70,12 @@ items:
         log
         bufsize 512
         errors
-        health {
-            lameduck 3s
-        }
         ready
-        forward . 1.1.1.1 {
+        forward . 192.168.7.198 {
             policy sequential
         }
-        cache 3
+        cache 3 {
+          denial 9984 3
+        }
         reload
       }

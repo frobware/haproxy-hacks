@@ -14,8 +14,8 @@
     forward . 127.0.0.1:5454 {
         policy sequential
     }
-    # cache 1 {
-    #     denial 9984 30
-    # }
+    cache 30 {
+        denial 9984 30
+    }
     reload
 }

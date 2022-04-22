@@ -3,20 +3,21 @@
 TOPDIR="$(cd $(dirname "${BASH_SOURCE[0]}") && pwd -P)"
 config_file=$TOPDIR/haproxy.cfg
 
-haproxy_binary=/r/aim/git.haproxy.org/haproxy-1.8/haproxy
+haproxy_binary=/home/aim/src/github.com/frobware/haproxy-1.8/build/bin/haproxy
+haproxy_binary=/home/aim/src/github.com/frobware/haproxy-2.2/build/bin/haproxy
 
 set -o nounset
 
 pid_file=/var/tmp/haproxy/run/haproxy.pid
 old_pids=$(pidof haproxy)
 
-haproxy -v
+$haproxy_binary -v
 reload_status=0
 if [ -n "$old_pids" ]; then
-    haproxy -f $config_file -p $pid_file -x /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
+    $haproxy_binary -f $config_file -p $pid_file -x /var/tmp/haproxy/run/haproxy.sock -sf $old_pids
     reload_status=$?
 else
-    haproxy -f $config_file -p $pid_file
+    $haproxy_binary -f $config_file -p $pid_file
     reload_status=$?
 fi
 

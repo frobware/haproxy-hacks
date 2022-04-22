@@ -86,7 +86,7 @@ write_to_file("$output_dir/haproxy.config", ">", <<EOF
 global
   maxconn 20000
   daemon
-  log stdout format raw local0
+  log stdout format raw local0 err
   nbthread 4
   tune.maxrewrite 8192
   tune.bufsize 32768
