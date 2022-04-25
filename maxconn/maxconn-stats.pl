@@ -3,6 +3,7 @@
 use strict;
 use Data::Dumper;
 
+
 sub gen_config {
     my ($maxconn, $nbthread, $backends, $balance_algorithm, $weight, $fh) = @_;
 
@@ -70,10 +71,11 @@ sub haproxy_memsize_in_megabytes {
     my $filename = shift;
     my $mb = 0;
     system("pkill haproxy");
+    system("sleep 1");
     system("pkill haproxy");
     system("haproxy -D -f $filename");
     system("sleep 1");
-    my @output = `pmap -x -p \$(pgrep haproxy)`;
+    my @output = `pmap -x -p \$(pgrep -n haproxy)`;
     for my $line (@output) {
         next unless $line =~ m/total kB/;
         my @fields = split /\s+/, $line;
