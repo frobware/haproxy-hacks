@@ -2,7 +2,7 @@
 
 while :
 do
-    oc delete route bz1941703-ephemeral
+    oc delete route helloworld-8-insecure
     sleep 5
-    oc expose service bz1941703 --name=bz1941703-ephemeral --port 8080
+    oc expose service helloworld-1 --name=helloworld-8-insecure --port 8080
 done
