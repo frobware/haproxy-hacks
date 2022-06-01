@@ -1,0 +1,10 @@
+^spicy.int.frobware.com be_edge_http:default:my-server
+^route1.int.frobware.com be_edge_http:default:my-server
+^route2.int.frobware.com be_edge_http:default:my-server
+^route3.int.frobware.com be_edge_http:default:my-server
+^route4.int.frobware.com be_edge_http:default:my-server
+^route5.int.frobware.com be_edge_http:default:my-server
+^route6.int.frobware.com be_edge_http:default:my-server
+^route7.int.frobware.com be_edge_http:default:my-server
+^route8.int.frobware.com be_edge_http:default:my-server
+^route9.int.frobware.com be_edge_http:default:my-server
