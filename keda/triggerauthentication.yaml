@@ -1,0 +1,12 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-trigger-auth-prometheus
+spec:
+  secretTargetRef:
+  - parameter: bearerToken
+    name: thanos-ic-token-fb64q
+    key: token
+  - parameter: ca
+    name: thanos-ic-token-fb64q
+    key: ca.crt

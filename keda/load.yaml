@@ -1,0 +1,16 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: generate-requests-
+spec:
+  template:
+    spec:
+      containers:
+      - image: jordi/ab
+        name: test
+        command: ["/bin/sh"]
+        args: ["-c", "for i in $(seq 1 30);do echo $i;ab -c 5 -n 100 -v 2 http://test-app.openshift-ingress-operator.svc/;sleep 1;done"]   # replace <NAMESPACE>
+      restartPolicy: Never
+  activeDeadlineSeconds: 120
+  backoffLimit: 2
+  
