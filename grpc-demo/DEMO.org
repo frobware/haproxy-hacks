@@ -64,7 +64,7 @@ interact with gRPC servers:
 
 *** Examples
     #+BEGIN_SRC sh :results pp
-    grpcurl -v -insecure yages-default.apps.amcdermo-202002-23-1827.devcluster.openshift.com:443 list
+    grpcurl -v -insecure yages-default.apps.ocp410.int.frobware.com:443 list
     #+END_SRC
 
     #+RESULTS:
@@ -72,7 +72,7 @@ interact with gRPC servers:
     : yages.Echo
 
     #+BEGIN_SRC sh :results value pp
-    grpcurl -v -insecure yages-default.apps.amcdermo-202002-23-1827.devcluster.openshift.com:443 describe yages.Echo
+    grpcurl -v -insecure yages-default.apps.ocp410.int.frobware.com:443 describe yages.Echo
     #+END_SRC
 
     #+RESULTS:
@@ -83,7 +83,7 @@ interact with gRPC servers:
     : }
 
     #+BEGIN_SRC sh :results value pp
-    grpcurl -v -insecure yages-default.apps.amcdermo-202002-23-1827.devcluster.openshift.com:443 yages.Echo.Ping
+    grpcurl -v -insecure yages-default.apps.ocp410.int.frobware.com:443 yages.Echo.Ping
     #+END_SRC
 
     #+RESULTS:
@@ -112,7 +112,8 @@ interact with gRPC servers:
     Note: Caveats
 
     I had to modify the template to allow http/2 to run without TLS
-    when terminating at the "edge".
+
+when terminating at the "edge".
 
 * h2spec
 

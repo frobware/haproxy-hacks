@@ -1,0 +1,16 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: test-app-scaledobject
+spec:
+  scaleTargetRef:
+    name: test-app
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  pollingInterval: 1
+  cooldownPeriod:  1            # second
+  triggers:
+  - type: kubernetes-workload
+    metadata:
+      podSelector: 'app=hello'
+      value: '1'
