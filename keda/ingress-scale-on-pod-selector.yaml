@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ingress-scale-on-pod-selector
+spec:
+  scaleTargetRef:
+    apiVersion: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    envSourceContainerName: ingress-operator
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingInterval: 1
+  cooldownPeriod:  1            # seconds
+  triggers:
+  - type: kubernetes-workload
+    metadata:
+      podSelector: 'app=test-app'
+      value: '1'

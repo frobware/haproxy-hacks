@@ -5,8 +5,8 @@ metadata:
 spec:
   secretTargetRef:
   - parameter: bearerToken
-    name: thanos-ic-token-fb64q
+    name: thanos-token-6699z
     key: token
   - parameter: ca
-    name: thanos-ic-token-fb64q
+    name: thanos-token-6699z
     key: ca.crt
