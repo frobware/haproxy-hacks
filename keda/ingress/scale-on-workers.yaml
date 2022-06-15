@@ -1,7 +1,7 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: ingress-scale-on-pod-selector
+  name: ingress-scale-on-worker-nodes
 spec:
   scaleTargetRef:
     apiVersion: operator.openshift.io/v1
