@@ -10,7 +10,7 @@ spec:
     envSourceContainerName: ingress-operator
   minReplicaCount: 1
   maxReplicaCount: 10
-  pollingInterval: 5
+  pollingInterval: 1
   cooldownPeriod:  1            # seconds
   triggers:
   - type: prometheus
@@ -18,7 +18,7 @@ spec:
       serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9092
       namespace: openshift-ingress-operator
       metricName: http_requests_total
-      threshold: '5'
+      threshold: '1'
       query: sum(rate(http_requests_total{job="test-app"}[1m]))
       authModes: "bearer"
     authenticationRef:

@@ -1,22 +1,23 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: prometheus-scaledobject
+  name: test-app-scaledobject
 spec:
   scaleTargetRef:
     name: test-app
   minReplicaCount: 1
-  maxReplicaCount: 10
-  pollingInterval: 5
-  cooldownPeriod:  1            # seconds
+  maxReplicaCount: 20
+  pollingInterval: 1
+  cooldownPeriod:  5            # seconds
   triggers:
   - type: prometheus
+    metricType: Value
     metadata:
       serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9092
       namespace: openshift-ingress-operator
-      metricName: http_requests_total
-      threshold: '5'
-      query: sum(rate(http_requests_total{job="test-app"}[1m]))
+      metricName: 'kube_node_role'
+      threshold: '1'
+      query: 'sum(kube_node_role{role="worker"})'
       authModes: "bearer"
     authenticationRef:
       name: keda-trigger-auth-prometheus
