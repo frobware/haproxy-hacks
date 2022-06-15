@@ -1,14 +1,17 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: test-app-scale-on-workers
+  name: ingress-scale-on-pod-selector
 spec:
   scaleTargetRef:
-    name: test-app
+    apiVersion: operator.openshift.io/v1
+    kind: IngressController
+    name: default
+    envSourceContainerName: ingress-operator
   minReplicaCount: 1
-  maxReplicaCount: 20
-  pollingInterval: 2
-  cooldownPeriod:  5            # second
+  maxReplicaCount: 10
+  pollingInterval: 1
+  cooldownPeriod:  1            # seconds
   triggers:
   - type: prometheus
     metricType: AverageValue
