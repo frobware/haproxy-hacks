@@ -8,7 +8,7 @@ spec:
   minReplicaCount: 1
   maxReplicaCount: 20
   pollingInterval: 1
-  cooldownPeriod:  1            # second
+  cooldownPeriod:  5            # second
   triggers:
   - type: kubernetes-workload
     metadata:
