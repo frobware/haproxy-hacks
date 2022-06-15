@@ -10,6 +10,3 @@ subjects:
 - kind: ServiceAccount
   name: ingress-operator
   namespace: openshift-ingress-operator
-- kind: ServiceAccount
-  name: thanos-reader
-  namespace: openshift-ingress-operator
