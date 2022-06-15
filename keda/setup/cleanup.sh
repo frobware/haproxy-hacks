@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 
-oc delete jobs --field-selector status.successful=1 
-oc delete -f triggerauthentication.yaml
-oc delete -f scaledobject.yaml
-oc delete -f deployment.yaml
-oc delete -f secret.yaml
-oc delete -f rolebinding.yaml
-oc delete -f role.yaml
+thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+oc adm policy remove-role-from-user thanos-metrics-reader -z thanos --role-namespace=openshift-ingress-operator
+oc delete -n openshift-ingress-operator -f $thisdir/role.yaml
+oc delete serviceaccount thanos
