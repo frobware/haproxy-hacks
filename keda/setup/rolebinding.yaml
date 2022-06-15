@@ -8,5 +8,8 @@ roleRef:
   name: thanos-metrics-reader
 subjects:
 - kind: ServiceAccount
-  name: thanos
+  name: ingress-operator
+  namespace: openshift-ingress-operator
+- kind: ServiceAccount
+  name: thanos-reader
   namespace: openshift-ingress-operator
