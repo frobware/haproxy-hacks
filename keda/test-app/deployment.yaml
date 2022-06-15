@@ -19,6 +19,14 @@ spec:
       - name: prom-test-app
         image: quay.io/zroubalik/prometheus-app:latest
         imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
 ---
 apiVersion: v1
 kind: Service
@@ -50,3 +58,4 @@ spec:
   selector:
     matchLabels:
        app: test-app
+       
