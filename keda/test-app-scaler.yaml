@@ -2,6 +2,7 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
   name: test-app-scaledobject
+  namespace: openshift-ingress-operator
 spec:
   scaleTargetRef:
     name: test-app
