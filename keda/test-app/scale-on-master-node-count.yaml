@@ -15,9 +15,9 @@ spec:
     metadata:
       serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9092
       namespace: openshift-ingress-operator
-      metricName: 'ready_nodes'
+      metricName: 'master_nodes'
       threshold: '1'
-      query: 'ready_nodes'
+      query: 'sum(cluster:master_nodes)'
       authModes: "bearer"
     authenticationRef:
       name: keda-trigger-auth-prometheus
