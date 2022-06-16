@@ -1,7 +1,7 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: test-app-scale-on-workers
+  name: test-app-scale-on-master-nodes
 spec:
   scaleTargetRef:
     name: test-app
