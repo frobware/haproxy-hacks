@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: node-ready-app
+  name: node-ready-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: node-ready-app
+  template:
+    metadata:
+      labels:
+        app: node-ready-app
+        type: keda-testing
+    spec:
+      containers:
+      - name: prom-node-ready-app
+        image: quay.io/amcdermo/node-ready-app:latest
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: node-ready-app
+  annotations:
+    prometheus.io/scrape: "true"
+  name: node-ready-app
+spec:
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    type: keda-testing
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+  name: keda-testing-sm
+spec:
+  endpoints:
+  - scheme: http
+    port: http
+  namespaceSelector: {}
+  selector:
+    matchLabels:
+       app: node-ready-app
