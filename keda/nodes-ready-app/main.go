@@ -28,7 +28,7 @@ var readyNodesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "Report the number of Ready nodes in the cluster.",
 })
 
-const port = 9393
+const port = 8080
 
 func init() {
 	prometheus.DefaultRegisterer.MustRegister(readyNodesGauge)
