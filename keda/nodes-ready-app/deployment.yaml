@@ -50,7 +50,7 @@ apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
   labels:
-  name: keda-testing-sm
+  name: keda-nodes-ready-app-sm
 spec:
   endpoints:
   - scheme: http
