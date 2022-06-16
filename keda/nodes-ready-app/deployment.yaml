@@ -2,22 +2,22 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: node-ready-app
-  name: node-ready-app
+    app: nodes-ready-app
+  name: nodes-ready-app
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: node-ready-app
+      app: nodes-ready-app
   template:
     metadata:
       labels:
-        app: node-ready-app
+        app: nodes-ready-app
         type: keda-testing
     spec:
       containers:
-      - name: prom-node-ready-app
-        image: quay.io/amcdermo/node-ready-app:latest
+      - name: prom-nodes-ready-app
+        image: quay.io/amcdermo/nodes-ready-app:latest
         imagePullPolicy: IfNotPresent
         securityContext:
           allowPrivilegeEscalation: false
@@ -27,15 +27,16 @@ spec:
               - ALL
           seccompProfile:
             type: RuntimeDefault
+      serviceAccountName: ingress-operator
 ---
 apiVersion: v1
 kind: Service
 metadata:
   labels:
-    app: node-ready-app
+    app: nodes-ready-app
   annotations:
     prometheus.io/scrape: "true"
-  name: node-ready-app
+  name: nodes-ready-app
 spec:
   ports:
   - name: http
@@ -57,4 +58,4 @@ spec:
   namespaceSelector: {}
   selector:
     matchLabels:
-       app: node-ready-app
+       app: nodes-ready-app
