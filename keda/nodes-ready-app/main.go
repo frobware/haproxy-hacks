@@ -1,21 +1,24 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
-	"github.com/frobware/g/nodes/pkg/autoscaler"
-	"github.com/google/go-cmp/cmp"
+	"nodes-ready-app/pkg/autoscaler"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/client-go/informers"
+	v1 "k8s.io/client-go/informers/core/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -28,108 +31,97 @@ var readyNodesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "Report the number of Ready nodes in the cluster.",
 })
 
-const port = 8080
+type nodeLister struct {
+	nodeInformer v1.NodeInformer
+}
+
+type NodeFilter func(*corev1.Node)
 
 func init() {
 	prometheus.DefaultRegisterer.MustRegister(readyNodesGauge)
+	http.Handle("/metrics", promhttp.Handler())
+}
+
+func NewNodeLister(client kubernetes.Interface, stopCh <-chan struct{}) (*nodeLister, error) {
+	factory := informers.NewSharedInformerFactory(client, 0)
+	nodeInformer := factory.Core().V1().Nodes()
+	informer := nodeInformer.Informer()
+
+	go factory.Start(stopCh)
+
+	if !cache.WaitForCacheSync(stopCh, informer.HasSynced) {
+		return nil, errors.New("timed out waiting for caches to sync")
+	}
+
+	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{})
+
+	return &nodeLister{nodeInformer: nodeInformer}, nil
+}
+
+func (l *nodeLister) ProcessNodes(filter NodeFilter) {
+	nodes := l.nodeInformer.Informer().GetStore().List()
+
+	for i := range nodes {
+		if node, ok := (nodes[i].(*corev1.Node)); ok {
+			filter(node)
+		}
+	}
 }
 
 func main() {
-	flag.Parse()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	// override any CLI argument.
+	flag.Parse()
 	if env := os.Getenv("KUBECONFIG"); env != "" {
 		*kubeconfig = env
 	}
 
 	config, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
-	http.Handle("/metrics", promhttp.Handler())
-
-	// stop signal for the informer
-	stopper := make(chan struct{})
-	defer close(stopper)
-
-	factory := informers.NewSharedInformerFactory(clientset, 0)
-	nodeInformer := factory.Core().V1().Nodes()
-	informer := nodeInformer.Informer()
-	defer runtime.HandleCrash()
-
-	// start informer ->
-	go factory.Start(stopper)
-
-	// start to sync and call list
-	if !cache.WaitForCacheSync(stopper, informer.HasSynced) {
-		runtime.HandleError(fmt.Errorf("Timed out waiting for caches to sync"))
-		return
-	}
-
-	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc:    onAdd,
-		UpdateFunc: onUpdate,
-		DeleteFunc: func(interface{}) { fmt.Println("delete not implemented") },
-	})
-
-	lister := nodeInformer.Lister()
-	_, err = lister.List(labels.Everything())
+	stopCh := make(chan struct{})
+	nodeLister, err := NewNodeLister(clientset, stopCh)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 
 	go func() {
+		defer wg.Done()
 		for {
-			var readyNodes float64
-			nodes := informer.GetStore().List()
-			for i := range nodes {
-				n, ok := nodes[i].(*corev1.Node)
-				if !ok {
-					panic(fmt.Sprintf("%T", nodes[i]))
-				}
-				if autoscaler.IsNodeReadyAndSchedulable(n) {
-					fmt.Println("READY", n.GetName())
-					readyNodes += 1
-				} else {
-					if unreadiness, err := autoscaler.GetNodeReadiness(n); err != nil {
-						fmt.Println("NOT READY", n.GetName(), unreadiness.Reason)
+			select {
+			case <-ctx.Done():
+				log.Println("Terminating...")
+				close(stopCh)
+				return
+			case <-time.After(3 * time.Second):
+				var readyNodes float64
+				var notReadyNodes float64
+				nodeLister.ProcessNodes(func(node *corev1.Node) {
+					if autoscaler.IsNodeReadyAndSchedulable(node) {
+						log.Println(node.GetName(), "READY")
+						readyNodes += 1
+					} else {
+						log.Println(node.GetName(), "NOT-READY-OR-SCHEDULABLE")
+						notReadyNodes += 1
 					}
-				}
+				})
+				readyNodesGauge.Set(readyNodes)
+				log.Println(readyNodes, "ready nodes")
+				log.Println(notReadyNodes, "not ready nodes")
 			}
-			readyNodesGauge.Set(readyNodes)
-			time.Sleep(2 * time.Second)
 		}
 	}()
 
-	// fmt.Println("nodes:", nodes)
-
-	log.Printf("Server started on port %v", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", port), nil))
-
-	<-stopper
-
-	// fmt.Println(clientset.CoreV1().Nodes().List(context.TODO(), corev1.ConfigMapList)
-	//nodeInformer := kubeInformerFactory.Core().V1().Nodes().Informer()
-}
-
-func onAdd(obj interface{}) {
-	if node, ok := obj.(*corev1.Node); ok {
-		fmt.Println("ADD", node.GetName())
-		fmt.Println(autoscaler.GetNodeReadiness(node))
-	}
-}
-
-func onUpdate(prev, curr interface{}) {
-	fmt.Printf("old %T, curr %T\n", prev, curr)
-	prevNode, currNode := prev.(*corev1.Node), curr.(*corev1.Node)
-	if diff := cmp.Diff(prevNode, currNode); diff != "" {
-		fmt.Println("onUpdate", "\n", diff)
-		fmt.Println(autoscaler.GetNodeReadiness(currNode))
-	}
+	wg.Wait()
 }
