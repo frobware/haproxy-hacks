@@ -26,9 +26,7 @@ spec:
               - ALL
           seccompProfile:
             type: RuntimeDefault
-      #serviceAccountName: ingress-operator
-      #serviceAccountName: deployer
-      serviceAccountName: default
+      serviceAccountName: ingress-operator
 ---
 apiVersion: v1
 kind: Service
