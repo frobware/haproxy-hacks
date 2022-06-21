@@ -419,19 +419,18 @@ currently deployed scaledobject.
 
     $ oc delete -f test-app/scale-on-ready-nodes.yaml
 
-and redploy:
+and redeploy:
 
     $ oc create -f test-app/scale-on-worker-role.yaml
 
 # How do I use metrics in a different namespace?
 
-1. Why does `sum(kube_node_role{role="worker"})` result in a value of 0
-   when we peek in the corresponding HPA?
+1. Why does `sum(kube_node_role{role="worker"})` result in a value of 0?
 
 2. Or, perhaps more fundamentally, how do I create a scaledobject
    where the metric is in a different (cluster-scoped?) namespace?
 
-Some debug setup:
+## Some debug setup:
 
     $ oc project
     Using project "openshift-ingress-operator" on server "https://api.amcdermo-2022-06-16-1041.devcluster.openshift.com:6443".
@@ -507,11 +506,6 @@ Interestingly I see my HPA listed^
     kube_node_role{node="ip-10-0-169-13.us-east-2.compute.internal",role="worker"} 1
     kube_node_role{node="ip-10-0-156-42.us-east-2.compute.internal",role="worker"} 1
 
-## Open Questions
-
-- How do I express that I want the query in a different namespace?
-- Do I have to create a different serviceaccount for thanos?
-
 ## A scaledobject where the metric is from the same namespace
 
     $ oc get scaledobject
@@ -563,3 +557,9 @@ Interestingly I see my HPA listed^
         ]
       }
     }
+
+## Open Questions
+
+- How do I express that I want the query in a different namespace?
+- Do I have to create a different serviceaccount for thanos?
+
