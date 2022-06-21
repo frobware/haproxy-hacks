@@ -14,5 +14,5 @@ spec:
   triggers:
   - type: kubernetes-workload
     metadata:
-      podSelector: 'app=hello'
+      podSelector: 'app=hello-app'
       value: '1'
