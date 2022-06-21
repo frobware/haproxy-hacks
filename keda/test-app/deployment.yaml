@@ -1,3 +1,4 @@
+# Copied from https://github.com/zroubalik/keda-openshift-examples/tree/main/prometheus
 apiVersion: apps/v1
 kind: Deployment
 metadata:
