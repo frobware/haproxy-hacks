@@ -20,6 +20,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/klog/v2"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -42,20 +43,17 @@ func processNodes(store cache.Store) {
 	for i := range nodes {
 		node, ok := (nodes[i].(*corev1.Node))
 		if !ok {
-			panic(fmt.Sprintf("%T", nodes[i]))
-			continue
+			panic(fmt.Sprintf("type %T unexpected", nodes[i]))
 		}
 		if autoscaler.IsNodeReadyAndSchedulable(node) {
-			log.Println(node.GetName(), "READY")
 			readyNodes += 1
 		} else {
-			log.Println(node.GetName(), "NOT-READY-OR-SCHEDULABLE")
 			notReadyNodes += 1
 		}
 	}
 	readyNodesGauge.Set(readyNodes)
-	log.Println(readyNodes, "ready nodes")
-	log.Println(notReadyNodes, "not ready nodes")
+	klog.Infof("%v ready nodes", readyNodes)
+	klog.Infof("%v not ready nodes", notReadyNodes)
 }
 
 func restConfig() (*rest.Config, error) {
@@ -95,7 +93,7 @@ func main() {
 	informer := nodeInformer.Informer()
 	informer.AddEventHandler(cache.ResourceEventHandlerFuncs{})
 	go factory.Start(mainCtx.Done())
-	if !cache.WaitForCacheSync(mainCtx.Done(), informer.HasSynced) {
+	if !cache.WaitForNamedCacheSync("controller", mainCtx.Done(), informer.HasSynced) {
 		log.Fatalln("timed out waiting for caches to sync")
 	}
 
@@ -106,7 +104,7 @@ func main() {
 			return fmt.Errorf("HTTP server error: %v", err)
 		}
 		server.SetKeepAlivesEnabled(false)
-		log.Println("Stopped serving new HTTP connections.")
+		klog.Info("Stopped serving new HTTP connections.\n")
 		return nil
 	})
 
@@ -117,7 +115,7 @@ func main() {
 		if err := server.Shutdown(shutdownCtx); err != nil {
 			return err
 		}
-		log.Println("Graceful HTTP shutdown complete.")
+		klog.Info("Graceful HTTP shutdown complete.\n")
 		return nil
 	})
 
