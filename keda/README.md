@@ -10,11 +10,11 @@
 
 ## Install KEDA
 
-Install KEDA operator (v2.7.1); I used the OperatorHub from within the
-console. Don't forget to create a `KedaController` (the operator hints
-at this once installed).
+Install KEDA operator (v2.7.1); I used the OperatorHub from the
+console. And don't forget to create a `KedaController` (the operator
+hints at this once installed).
 
-Verify that KEDA is installed:
+Verify that KEDA is completely installed:
 
 ```console
 $ oc get pods -n keda
@@ -26,9 +26,10 @@ keda-operator-78b964d4cd-7rclt           1/1     Running   0          36s
 
 # Goal/Demo
 
-Scale an ingresscontroler on some user-defined metric. For example:
+Scale an openshift ingresscontroler on some user-defined metric. For
+example:
 
-- some arbitrary metric (e.g., match replicas from another deployment)
+- some arbitrary test metric
 - the number of Ready and Schedulable worker nodes
 
 ## Setup Preliminaries
@@ -159,9 +160,9 @@ cluster. In my cluster this value is currently 11.
     7 ip-10-0-169-13.us-east-2.compute.internal    Ready    worker   86s    v1.24.0+284d62a
     8 ip-10-0-176-52.us-east-2.compute.internal    Ready    worker   107s   v1.24.0+284d62a
     9 ip-10-0-179-1.us-east-2.compute.internal     Ready    worker   118m   v1.24.0+284d62a
-   10 ip-10-0-186-40.us-east-2.compute.internal    Ready    worker   107s   v1.24.0+284d62a
-   11 ip-10-0-186-8.us-east-2.compute.internal     Ready    worker   91s    v1.24.0+284d62a
-   12 ip-10-0-218-12.us-east-2.compute.internal    Ready    worker   118m   v1.24.0+284d62a
+    10 ip-10-0-186-40.us-east-2.compute.internal   Ready    worker   107s   v1.24.0+284d62a
+    11 ip-10-0-186-8.us-east-2.compute.internal    Ready    worker   91s    v1.24.0+284d62a
+    12 ip-10-0-218-12.us-east-2.compute.internal   Ready    worker   118m   v1.24.0+284d62a
 
 Our metric for this will be: `sum(kube_node_role{role="worker"})`.
 
@@ -177,9 +178,8 @@ Our metric for this will be: `sum(kube_node_role{role="worker"})`.
     NAME                                     REFERENCE             TARGETS     MINPODS   MAXPODS   REPLICAS   AGE
     keda-hpa-test-app-scale-on-worker-role   Deployment/test-app   0/1         1         20        1          65s
 
-At this point--and based on our scale out previously with the
-`hello-app`--I would expect the `test-app` to scale out but the
-`test-app` deployment remains at 1 replica. any scaling.
+At this point I would expect the `test-app` to scale out but the
+replica count for the deployment remains at 1:
 
     $ oc get deployment
     NAME               READY   UP-TO-DATE   AVAILABLE   AGE
@@ -412,3 +412,152 @@ Create our scaledobject:
     test-app-979b5897-wx8f8   1/1     Running   0          57s
 
 So that worked.
+
+Let's go back to the metric we really want to scale on (i.e.,
+`sum(kube_node_role{role="worker"})`) but first we cleanup our
+currently deployed scaledobject.
+
+    $ oc delete -f test-app/scale-on-ready-nodes.yaml
+
+and redploy:
+
+    $ oc create -f test-app/scale-on-worker-role.yaml
+
+# How do I use metrics in a different namespace?
+
+1. Why does `sum(kube_node_role{role="worker"})` result in a value of 0
+   when we peek in the corresponding HPA?
+
+2. Or, perhaps more fundamentally, how do I create a scaledobject
+   where the metric is in a different (cluster-scoped?) namespace?
+
+Some debug setup:
+
+    $ oc project
+    Using project "openshift-ingress-operator" on server "https://api.amcdermo-2022-06-16-1041.devcluster.openshift.com:6443".
+
+    $ oc get nodes
+    NAME                                         STATUS   ROLES    AGE     VERSION
+    ip-10-0-154-192.us-east-2.compute.internal   Ready    master   5h10m   v1.24.0+284d62a
+    ip-10-0-156-42.us-east-2.compute.internal    Ready    worker   3h6m    v1.24.0+284d62a
+    ip-10-0-164-35.us-east-2.compute.internal    Ready    master   5h11m   v1.24.0+284d62a
+    ip-10-0-169-13.us-east-2.compute.internal    Ready    worker   3h6m    v1.24.0+284d62a
+    ip-10-0-218-12.us-east-2.compute.internal    Ready    worker   5h3m    v1.24.0+284d62a
+    ip-10-0-220-29.us-east-2.compute.internal    Ready    master   5h10m   v1.24.0+284d62a
+
+    $ oc rsh nodes-ready-app-69bf4677bb-kxzz5 curl http://localhost:8080/metrics | grep ready_nodes
+    # HELP ready_nodes Report the number of Ready nodes in the cluster.
+    # TYPE ready_nodes gauge
+    ready_nodes 6
+
+    $ oc get secret | grep thanos
+    thanos-dockercfg-bf9hf             kubernetes.io/dockercfg               1      4h6m
+    thanos-token-s9mq5                 kubernetes.io/service-account-token   4      4h6m
+
+    BEARER_CLUSTER="$(oc extract secret/thanos-token-s9mq5 --to=- --keys=token)"
+    # token
+
+    $ echo $BEARER_CLUSTER
+    eyJhbGciOiJSUzI1NiIs...CI6IjRMLW9LSW5....kJTNWV6RHRyODNMNGFv...
+
+    $ oc port-forward --address 127.0.0.1 -n openshift-monitoring service/thanos-querier 9091:9091
+    Forwarding from 127.0.0.1:9091 -> 9091
+
+    $ oc port-forward --address 127.0.0.1 -n openshift-monitoring service/thanos-querier 9092:9092
+    Forwarding from 127.0.0.1:9092 -> 9092
+
+## A scaledobject where the metric is in a different namespace
+
+    $ oc create -f test-app/scale-on-worker-role.yaml                                                                                                                                      
+
+    $ oc get scaledobjects.keda.sh -o yaml | grep -A1 externalMetricNames
+        externalMetricNames:
+        - s0-prometheus-kube_node_role
+
+    $ kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/openshift-ingress-operator/s0-prometheus-kube_node_role" | jq -M
+    {
+      "kind": "ExternalMetricValueList",
+      "apiVersion": "external.metrics.k8s.io/v1beta1",
+      "metadata": {},
+      "items": [
+        {
+          "metricName": "s0-prometheus-kube_node_role",
+          "metricLabels": null,
+          "timestamp": "2022-06-21T13:39:31Z",
+          "value": "0"
+        }
+      ]
+    }
+    
+We don't scale because the value is 0.
+
+Where does `kube_node_role` metric come from? I think here:
+
+    $ oc rsh -n openshift-monitoring kube-state-metrics-69b8cf4ddb-llkgd curl -s http://localhost:8081/metrics | grep kube_node_role
+    kube_horizontalpodautoscaler_spec_target_metric{namespace="openshift-ingress-operator",horizontalpodautoscaler="keda-hpa-test-app-scale-on-worker-role",metric_name="s0-prometheus-kube_node_role",metric_target_type="value"} 1
+
+Interestingly I see my HPA listed^
+
+    # HELP kube_node_role The role of a cluster node.
+    # TYPE kube_node_role gauge
+    kube_node_role{node="ip-10-0-218-12.us-east-2.compute.internal",role="worker"} 1
+    kube_node_role{node="ip-10-0-154-192.us-east-2.compute.internal",role="master"} 1
+    kube_node_role{node="ip-10-0-220-29.us-east-2.compute.internal",role="master"} 1
+    kube_node_role{node="ip-10-0-164-35.us-east-2.compute.internal",role="master"} 1
+    kube_node_role{node="ip-10-0-169-13.us-east-2.compute.internal",role="worker"} 1
+    kube_node_role{node="ip-10-0-156-42.us-east-2.compute.internal",role="worker"} 1
+
+So my scaledobject expression is borked. How do I express that I want
+the query in a different namespace?
+
+## A scaledobject where the metric is in the same namespace
+
+    $ oc get scaledobject
+    NAME                            SCALETARGETKIND      SCALETARGETNAME   MIN   MAX   TRIGGERS     AUTHENTICATION                 READY   ACTIVE   FALLBACK   AGE
+    test-app-scale-on-worker-role   apps/v1.Deployment   test-app          1     20    prometheus   keda-trigger-auth-prometheus   True    False    False      3m36s
+
+    $ oc get hpa
+    NAME                                     REFERENCE             TARGETS   MINPODS   MAXPODS   REPLICAS   AGE
+    keda-hpa-test-app-scale-on-worker-role   Deployment/test-app   0/1       1         20        1          3m40s
+
+    $ curl -s -k -H "Authorization: Bearer $BEARER_CLUSTER" 'https://localhost:9092/api/v1/query?query=ready_nodes&namespace=openshift-ingress-operator' | jq -M
+    {
+      "status": "success",
+      "data": {
+        "resultType": "vector",
+        "result": [
+          {
+            "metric": {
+              "__name__": "ready_nodes",
+              "endpoint": "http",
+              "instance": "10.129.4.18:8080",
+              "job": "nodes-ready-app",
+              "namespace": "openshift-ingress-operator",
+              "pod": "nodes-ready-app-69bf4677bb-kxzz5",
+              "prometheus": "openshift-monitoring/k8s",
+              "service": "nodes-ready-app"
+            },
+            "value": [
+              1655818221.878,
+              "6"
+            ]
+          },
+          {
+            "metric": {
+              "__name__": "ready_nodes",
+              "endpoint": "http",
+              "instance": "10.129.4.18:8080",
+              "job": "test-app",
+              "namespace": "openshift-ingress-operator",
+              "pod": "nodes-ready-app-69bf4677bb-kxzz5",
+              "prometheus": "openshift-monitoring/k8s",
+              "service": "test-app"
+            },
+            "value": [
+              1655818221.878,
+              "6"
+            ]
+          }
+        ]
+      }
+    }
