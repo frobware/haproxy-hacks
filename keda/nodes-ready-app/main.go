@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -37,11 +38,6 @@ type nodeLister struct {
 
 type NodeFilter func(*corev1.Node)
 
-func init() {
-	prometheus.DefaultRegisterer.MustRegister(readyNodesGauge)
-	http.Handle("/metrics", promhttp.Handler())
-}
-
 func NewNodeLister(client kubernetes.Interface, stopCh <-chan struct{}) (*nodeLister, error) {
 	factory := informers.NewSharedInformerFactory(client, 0)
 	nodeInformer := factory.Core().V1().Nodes()
@@ -69,6 +65,7 @@ func (l *nodeLister) ProcessNodes(filter NodeFilter) {
 }
 
 func main() {
+	prometheus.MustRegister(readyNodesGauge)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -103,8 +100,9 @@ func main() {
 			case <-ctx.Done():
 				log.Println("Terminating...")
 				close(stopCh)
+				os.Exit(0) // FIXME
 				return
-			case <-time.After(3 * time.Second):
+			case <-time.After(10 * time.Second):
 				var readyNodes float64
 				var notReadyNodes float64
 				nodeLister.ProcessNodes(func(node *corev1.Node) {
@@ -123,5 +121,16 @@ func main() {
 		}
 	}()
 
-	wg.Wait()
+	// TODO: handle interrupt/shutdown
+	port := "8080"
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		readyNodesGauge.Set(0)
+		msg := "Received a request; resetting ready nodes\n"
+		fmt.Fprint(w, msg)
+		fmt.Println(msg)
+	})
+	http.Handle("/metrics", promhttp.Handler())
+	log.Printf("Server started on port %v", port)
+	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", port), nil))
+	//wg.Wait()
 }
