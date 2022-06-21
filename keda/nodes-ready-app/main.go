@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"net/http"
 	"nodes-ready-app/pkg/autoscaler"
@@ -31,29 +30,22 @@ var readyNodesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "Report the number of Ready nodes in the cluster.",
 })
 
-type storeFilter func(*corev1.Node)
-
 func init() {
 	prometheus.MustRegister(readyNodesGauge)
 }
 
-func processNodes(store cache.Store) {
-	var readyNodes, notReadyNodes float64
+func processReadyNodes(store cache.Store) {
+	var ready float64
 	nodes := store.List()
 	for i := range nodes {
-		node, ok := (nodes[i].(*corev1.Node))
-		if !ok {
-			panic(fmt.Sprintf("type %T unexpected", nodes[i]))
-		}
-		if autoscaler.IsNodeReadyAndSchedulable(node) {
-			readyNodes += 1
-		} else {
-			notReadyNodes += 1
+		if node, ok := (nodes[i].(*corev1.Node)); ok {
+			if autoscaler.IsNodeReadyAndSchedulable(node) {
+				ready += 1
+			}
 		}
 	}
-	readyNodesGauge.Set(readyNodes)
-	klog.Infof("%v ready nodes", readyNodes)
-	klog.Infof("%v not ready nodes", notReadyNodes)
+	readyNodesGauge.Set(ready)
+	klog.Infof("%v total nodes, %v ready nodes", len(nodes), ready)
 }
 
 func restConfig() (*rest.Config, error) {
@@ -100,23 +92,15 @@ func main() {
 	g, gCtx := errgroup.WithContext(mainCtx)
 
 	g.Go(func() error {
-		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("HTTP server error: %v", err)
-		}
-		server.SetKeepAlivesEnabled(false)
-		klog.Info("Stopped serving new HTTP connections.\n")
-		return nil
+		return server.ListenAndServe()
 	})
 
 	g.Go(func() error {
 		<-gCtx.Done()
+		server.SetKeepAlivesEnabled(false)
 		shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), server.WriteTimeout)
 		defer shutdownRelease()
-		if err := server.Shutdown(shutdownCtx); err != nil {
-			return err
-		}
-		klog.Info("Graceful HTTP shutdown complete.\n")
-		return nil
+		return server.Shutdown(shutdownCtx)
 	})
 
 	g.Go(func() error {
@@ -125,7 +109,7 @@ func main() {
 			case <-gCtx.Done():
 				return nil
 			case <-time.After(2 * time.Second):
-				processNodes(informer.GetStore())
+				processReadyNodes(informer.GetStore())
 			}
 		}
 	})
@@ -133,6 +117,6 @@ func main() {
 	defer os.Exit(0)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("error: %s\n", err)
+		log.Fatalln(err)
 	}
 }
