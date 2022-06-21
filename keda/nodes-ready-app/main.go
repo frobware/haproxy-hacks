@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"nodes-ready-app/pkg/autoscaler"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
-	"nodes-ready-app/pkg/autoscaler"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
 	v1 "k8s.io/client-go/informers/core/v1"
@@ -64,11 +65,11 @@ func (l *nodeLister) ProcessNodes(filter NodeFilter) {
 	}
 }
 
-func main() {
+func init() {
 	prometheus.MustRegister(readyNodesGauge)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+}
 
+func main() {
 	flag.Parse()
 	if env := os.Getenv("KUBECONFIG"); env != "" {
 		*kubeconfig = env
@@ -90,21 +91,52 @@ func main() {
 		log.Fatal(err)
 	}
 
-	var wg sync.WaitGroup
-	wg.Add(1)
+	server := &http.Server{
+		Addr:         ":8080",
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
+	http.Handle("/metrics", promhttp.Handler())
 
-	go func() {
-		defer wg.Done()
+	mainCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	g, gCtx := errgroup.WithContext(mainCtx)
+
+	g.Go(func() error {
+		switch err := server.ListenAndServe(); {
+		case !errors.Is(err, http.ErrServerClosed):
+			return fmt.Errorf("HTTP server error: %v", err)
+		default:
+			server.SetKeepAlivesEnabled(false)
+			log.Println("Stopped serving new connections.")
+			return nil
+		}
+	})
+
+	g.Go(func() error {
+		<-gCtx.Done()
+		log.Println("WHOOOOOOOOOOOOOOOOOOOOOA Terminating...")
+		shutdownCtx, shutdownRelease := context.WithTimeout(context.Background(), server.WriteTimeout)
+		defer shutdownRelease()
+		switch err := server.Shutdown(shutdownCtx); {
+		case err == nil:
+			log.Println("Graceful shutdown complete.")
+			return nil
+		default:
+			return err
+		}
+	})
+
+	g.Go(func() error {
 		for {
 			select {
-			case <-ctx.Done():
+			case <-gCtx.Done():
 				log.Println("Terminating...")
 				close(stopCh)
-				os.Exit(0) // FIXME
-				return
-			case <-time.After(10 * time.Second):
-				var readyNodes float64
-				var notReadyNodes float64
+				return nil
+			case <-time.After(1 * time.Second):
+				var readyNodes, notReadyNodes float64
 				nodeLister.ProcessNodes(func(node *corev1.Node) {
 					if autoscaler.IsNodeReadyAndSchedulable(node) {
 						log.Println(node.GetName(), "READY")
@@ -119,18 +151,11 @@ func main() {
 				log.Println(notReadyNodes, "not ready nodes")
 			}
 		}
-	}()
-
-	// TODO: handle interrupt/shutdown
-	port := "8080"
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		readyNodesGauge.Set(0)
-		msg := "Received a request; resetting ready nodes\n"
-		fmt.Fprint(w, msg)
-		fmt.Println(msg)
 	})
-	http.Handle("/metrics", promhttp.Handler())
-	log.Printf("Server started on port %v", port)
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%v", port), nil))
-	//wg.Wait()
+
+	defer os.Exit(0)
+
+	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatalf("error: %s\n", err)
+	}
 }
