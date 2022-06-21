@@ -1,0 +1,23 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: test-app-scale-on-ready-nodes
+spec:
+  scaleTargetRef:
+    name: test-app
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  pollingInterval: 2
+  cooldownPeriod:  5            # second
+  triggers:
+  - type: prometheus
+    metricType: Value
+    metadata:
+      serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9092
+      namespace: openshift-ingress-operator
+      metricName: 'ready_nodes'
+      threshold: '1'
+      query: 'sum(ready_nodes)'
+      authModes: "bearer"
+    authenticationRef:
+      name: keda-trigger-auth-prometheus
