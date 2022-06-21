@@ -13,12 +13,11 @@ spec:
     metadata:
       labels:
         app: nodes-ready-app
-        type: keda-testing
     spec:
       containers:
       - name: nodes-ready-app
         image: quay.io/amcdermo/nodes-ready-app:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
@@ -27,7 +26,9 @@ spec:
               - ALL
           seccompProfile:
             type: RuntimeDefault
-      serviceAccountName: ingress-operator
+      #serviceAccountName: ingress-operator
+      #serviceAccountName: deployer
+      serviceAccountName: default
 ---
 apiVersion: v1
 kind: Service
