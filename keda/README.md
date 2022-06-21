@@ -468,7 +468,7 @@ Some debug setup:
 
 ## A scaledobject where the metric is in a different namespace
 
-    $ oc create -f test-app/scale-on-worker-role.yaml                                                                                                                                      
+    $ oc create -f test-app/scale-on-worker-role.yaml
 
     $ oc get scaledobjects.keda.sh -o yaml | grep -A1 externalMetricNames
         externalMetricNames:
@@ -488,7 +488,7 @@ Some debug setup:
         }
       ]
     }
-    
+
 We don't scale because the value is 0.
 
 Where does `kube_node_role` metric come from? I think here:
@@ -507,10 +507,12 @@ Interestingly I see my HPA listed^
     kube_node_role{node="ip-10-0-169-13.us-east-2.compute.internal",role="worker"} 1
     kube_node_role{node="ip-10-0-156-42.us-east-2.compute.internal",role="worker"} 1
 
-So my scaledobject expression is borked. How do I express that I want
-the query in a different namespace?
+## Open Questions
 
-## A scaledobject where the metric is in the same namespace
+- How do I express that I want the query in a different namespace?
+- Do I have to create a different serviceaccount for thanos?
+
+## A scaledobject where the metric is from the same namespace
 
     $ oc get scaledobject
     NAME                            SCALETARGETKIND      SCALETARGETNAME   MIN   MAX   TRIGGERS     AUTHENTICATION                 READY   ACTIVE   FALLBACK   AGE
