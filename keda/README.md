@@ -465,7 +465,9 @@ and redeploy:
     $ oc port-forward --address 127.0.0.1 -n openshift-monitoring service/thanos-querier 9092:9092
     Forwarding from 127.0.0.1:9092 -> 9092
 
-## A scaledobject where the metric is in a different namespace
+## A scaledobject where the metric is in a different namespace (and scaling doesn't work)
+
+This is the scenario I want, but doesn't currently work.
 
     $ oc create -f test-app/scale-on-worker-role.yaml
 
@@ -506,7 +508,7 @@ Interestingly I see my HPA listed^
     kube_node_role{node="ip-10-0-169-13.us-east-2.compute.internal",role="worker"} 1
     kube_node_role{node="ip-10-0-156-42.us-east-2.compute.internal",role="worker"} 1
 
-## A scaledobject where the metric is from the same namespace
+## A scaledobject where the metric is from the same namespace (and does work)
 
     $ oc get scaledobject
     NAME                            SCALETARGETKIND      SCALETARGETNAME   MIN   MAX   TRIGGERS     AUTHENTICATION                 READY   ACTIVE   FALLBACK   AGE
