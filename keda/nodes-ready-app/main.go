@@ -9,12 +9,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
+	"runtime/debug"
 	"syscall"
 	"time"
 
 	"nodes-ready-app/pkg/autoscaler"
 
 	"golang.org/x/sync/errgroup"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
@@ -23,13 +28,13 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
-
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"k8s.io/utils/net"
 )
 
-var refreshPeriod = flag.Duration("refresh-period", time.Second,
-	"refresh period for computing the number of ready nodes")
+var updateIntervalFlag = flag.Duration("update-interval", time.Second,
+	"interval between computing the number of ready nodes")
+
+var versionFlag = flag.Bool("V", false, "Print program version and build info")
 
 var readyNodesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: "ready_nodes",
@@ -68,6 +73,30 @@ func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
 
+	if *versionFlag {
+		info, _ := debug.ReadBuildInfo()
+		log.Println(info)
+		os.Exit(0)
+	}
+
+	if val := os.Getenv("UPDATE_INTERVAL"); val != "" {
+		if val, err := time.ParseDuration(val); err != nil {
+			klog.Fatalf("failed to parse UPDATE_INTERVAL=%q: %v\n", val, err)
+		} else {
+			*updateIntervalFlag = val
+		}
+		klog.Infof("Setting UPDATE_INTERVAL=%q\n", *updateIntervalFlag)
+	}
+
+	addr := "8080"
+	if val := os.Getenv("PORT"); val != "" {
+		if _, err := net.ParsePort(val, false); err != nil {
+			klog.Fatalf("failed to parse PORT=%q: %v\n", val, err)
+		}
+		addr = val
+		klog.Infof("Setting PORT=%q\n", addr)
+	}
+
 	clusterConfig, err := restConfig()
 	if err != nil {
 		log.Fatalf("could not get config: %v\n", err)
@@ -78,38 +107,27 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	if val := os.Getenv("UPDATE_INTERVAL"); val != "" {
-		if x, err := time.ParseDuration(val); err != nil {
-			klog.Infof("failed to parse UPDATE_INTERVAL=%q: %v; defaulting to %v\n", val, err, refreshPeriod)
-		} else {
-			klog.Infof("Setting update interval to %s\n", x.String())
-			*refreshPeriod = x
-		}
-	}
-
-	klog.Infof("update interval set to %v", refreshPeriod.String())
-
-	mainCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	signalCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
-	httpServer := &http.Server{
-		Addr:         ":8080",
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
-	}
-	http.Handle("/metrics", promhttp.Handler())
 
 	informerFactory := informers.NewSharedInformerFactory(clientSet, 0)
 	nodeInformer := informerFactory.Core().V1().Nodes()
 	sharedInformer := nodeInformer.Informer()
 	sharedInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{})
 
-	g, gCtx := errgroup.WithContext(mainCtx)
+	httpServer := &http.Server{
+		Addr:         fmt.Sprintf(":%v", addr),
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+	}
+	http.Handle("/metrics", promhttp.Handler())
+
+	g, gCtx := errgroup.WithContext(signalCtx)
 
 	g.Go(func() error {
 		informerFactory.Start(gCtx.Done())
-		if !cache.WaitForNamedCacheSync(os.Args[0], gCtx.Done(), sharedInformer.HasSynced) {
-			return fmt.Errorf("timed out waiting for caches to sync")
+		if !cache.WaitForNamedCacheSync(path.Base(os.Args[0]), gCtx.Done(), sharedInformer.HasSynced) {
+			return errors.New("timed out waiting for caches to sync")
 		}
 		return nil
 	})
@@ -130,19 +148,24 @@ func main() {
 		for {
 			select {
 			case <-gCtx.Done():
+				if err := gCtx.Err(); err != nil && !errors.Is(err, context.Canceled) {
+					return err
+				}
 				return nil
-			case <-time.After(*refreshPeriod):
-				total, ready := processReadyNodes(sharedInformer.GetStore())
-				klog.Infof("total nodes: %v, ready nodes: %v, unready nodes: %v", total, ready, total-ready)
-				readyNodesGauge.Set(float64(ready))
+			case <-time.After(*updateIntervalFlag):
+				if sharedInformer.HasSynced() {
+					total, ready := processReadyNodes(sharedInformer.GetStore())
+					klog.Infof("%v nodes, %v ready, %v unready", total, ready, total-ready)
+					readyNodesGauge.Set(float64(ready))
+				}
 			}
 		}
 	})
 
-	defer os.Exit(0)
+	defer klog.FlushAndExit(time.Second, 0)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		klog.Flush()
-		log.Fatalln(err)
+		klog.Fatalln(err)
 	}
 }

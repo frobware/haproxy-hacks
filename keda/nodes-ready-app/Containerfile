@@ -1,7 +1,7 @@
 FROM golang:1.18 as builder
 WORKDIR /workspace
 COPY . .
-RUN go build -mod=vendor -o nodes-ready-app
+RUN make build
 FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
 WORKDIR /
 COPY --from=builder /workspace/nodes-ready-app .

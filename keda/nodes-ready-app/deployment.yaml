@@ -26,6 +26,9 @@ spec:
               - ALL
           seccompProfile:
             type: RuntimeDefault
+        env:
+          - name: UPDATE_INTERVAL
+            value: "5s"
       serviceAccountName: ingress-operator
 ---
 apiVersion: v1
