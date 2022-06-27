@@ -4,13 +4,15 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
-	"nodes-ready-app/pkg/autoscaler"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"nodes-ready-app/pkg/autoscaler"
 
 	"golang.org/x/sync/errgroup"
 
@@ -26,7 +28,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var updateInterval = 15 * time.Second
+var refreshPeriod = flag.Duration("refresh-period", time.Second,
+	"refresh period for computing the number of ready nodes")
 
 var readyNodesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: "ready_nodes",
@@ -37,33 +40,33 @@ func init() {
 	prometheus.MustRegister(readyNodesGauge)
 }
 
-func processReadyNodes(store cache.Store) (int, int, int) {
+func processReadyNodes(store cache.Store) (int, int) {
 	var ready int
-	nodes := store.List()
+	var nodes = store.List()
 	for i := range nodes {
-		if node, ok := (nodes[i].(*corev1.Node)); ok {
+		if node, ok := nodes[i].(*corev1.Node); ok {
 			if autoscaler.IsNodeReadyAndSchedulable(node) {
 				ready += 1
 			}
 		}
 	}
-	return len(nodes), ready, len(nodes) - ready
+	return len(nodes), ready
 }
 
 func restConfig() (*rest.Config, error) {
-	kubeCfg, err := rest.InClusterConfig()
-	if kubeconfig := os.Getenv("KUBECONFIG"); kubeconfig != "" {
-		kubeCfg, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+	kubeConfig, err := rest.InClusterConfig()
+	if v := os.Getenv("KUBECONFIG"); v != "" {
+		kubeConfig, err = clientcmd.BuildConfigFromFlags("", v)
 	}
 	if err != nil {
 		return nil, err
 	}
-	return kubeCfg, nil
+	return kubeConfig, nil
 }
 
 func main() {
-	klog.InitFlags(flag.CommandLine)
-	klog.SetOutput(os.Stderr)
+	klog.InitFlags(nil)
+	flag.Parse()
 
 	clusterConfig, err := restConfig()
 	if err != nil {
@@ -77,14 +80,14 @@ func main() {
 
 	if val := os.Getenv("UPDATE_INTERVAL"); val != "" {
 		if x, err := time.ParseDuration(val); err != nil {
-			klog.Infof("failed to parse UPDATE_INTERVAL=%q: %v; defaulting to %v\n", val, err, updateInterval)
+			klog.Infof("failed to parse UPDATE_INTERVAL=%q: %v; defaulting to %v\n", val, err, refreshPeriod)
 		} else {
 			klog.Infof("Setting update interval to %s\n", x.String())
-			updateInterval = x
+			*refreshPeriod = x
 		}
 	}
 
-	klog.Infof("update interval set to %v", updateInterval.String())
+	klog.Infof("update interval set to %v", refreshPeriod.String())
 
 	mainCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -103,10 +106,13 @@ func main() {
 
 	g, gCtx := errgroup.WithContext(mainCtx)
 
-	go informerFactory.Start(gCtx.Done())
-	if !cache.WaitForNamedCacheSync(os.Args[0], gCtx.Done(), sharedInformer.HasSynced) {
-		klog.Fatalln("timed out waiting for caches to sync")
-	}
+	g.Go(func() error {
+		informerFactory.Start(gCtx.Done())
+		if !cache.WaitForNamedCacheSync(os.Args[0], gCtx.Done(), sharedInformer.HasSynced) {
+			return fmt.Errorf("timed out waiting for caches to sync")
+		}
+		return nil
+	})
 
 	g.Go(func() error {
 		return httpServer.ListenAndServe()
@@ -125,9 +131,9 @@ func main() {
 			select {
 			case <-gCtx.Done():
 				return nil
-			case <-time.After(updateInterval):
-				total, ready, unready := processReadyNodes(sharedInformer.GetStore())
-				klog.Infof("%v total nodes, %v ready nodes, %v unready nodes", total, ready, unready)
+			case <-time.After(*refreshPeriod):
+				total, ready := processReadyNodes(sharedInformer.GetStore())
+				klog.Infof("total nodes: %v, ready nodes: %v, unready nodes: %v", total, ready, total-ready)
 				readyNodesGauge.Set(float64(ready))
 			}
 		}
@@ -136,6 +142,7 @@ func main() {
 	defer os.Exit(0)
 
 	if err := g.Wait(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		klog.Flush()
 		log.Fatalln(err)
 	}
 }
