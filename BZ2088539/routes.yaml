@@ -1,0 +1,29 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+parameters:
+- name: DOMAIN
+- name: TLS_CRT
+- name: TLS_KEY
+objects:
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: hello-edge
+    labels:
+      type: hello-app
+  spec:
+    host: hello-edge.${DOMAIN}
+    port:
+      targetPort: 8080
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+      key: |-
+        ${TLS_KEY}
+      certificate: |-
+        ${TLS_CRT}
+    to:
+      kind: Service
+      name: hello-app
+      weight: 100
+    wildcardPolicy: None
