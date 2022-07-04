@@ -7,8 +7,6 @@ Run only 1 replica (for grep-ability), and enable access logging:
     $ oc -n openshift-ingress-operator patch ingresscontroller/default --type=merge --patch='{"spec":{"logging":{"access":{"destination":{"type":"Container"}}}}}'
     $ oc -n openshift-ingress-operator scale --replicas=1 ingresscontroller/default
 
-Wait for new router pods to rollout.
-
 # Deploy a hello openshift app
 
     $ oc apply -f deployment.yaml
@@ -22,7 +20,7 @@ Wait for new router pods to rollout.
 ## Disable HTTP/2 on the `default` ingresscontroller (this is the default)
 
     $ oc -n openshift-ingress-operator annotate --overwrite ingresscontrollers/default ingress.operator.openshift.io/default-enable-http2=false
-    # Wait for the router deployment to rollout...
+    $ oc rollout status deployment -n openshift-ingress router-default --timeout=120s
 
 ### Prove the app works without HTTP/2 enabled on the `default` ingresscontroller
 
@@ -40,8 +38,7 @@ Wait for new router pods to rollout.
 ## Enable HTTP/2 on the `default` ingresscontroller
 
     $ oc -n openshift-ingress-operator annotate --overwrite ingresscontrollers/default ingress.operator.openshift.io/default-enable-http2=true
-
-    # Wait for the deployment to rollout...
+    $ oc rollout status deployment -n openshift-ingress router-default --timeout=120s
 
     $ oc get pods -n openshift-ingress -w
     NAME                              READY   STATUS    RESTARTS   AGE
