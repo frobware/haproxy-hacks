@@ -15,9 +15,7 @@ Wait for new router pods to rollout.
 
 # Create route with its own certificate (for when we we enable HTTP/2)
 
-    $ go run certgen/certgen.go > /tmp/env
-    $ . /tmp/env
-    $ oc process -p TLS_CRT="$TLS_CRT" -p TLS_KEY="$TLS_KEY" -p DOMAIN="$domain" -f router-grpc-interop-routes.yaml | oc apply -f -
+    $ ./create-routes.sh
 
 # Reproducer steps
 
@@ -31,26 +29,26 @@ Wait for new router pods to rollout.
     $ curl -k -L hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)
     Hello OpenShift!
 
-### Prove the app works with double-slash in the URL with HTTP/1.1
+### Prove the app works with double-slash in the URL with HTTP/1.1 and HTTP/2
 
     $ curl --http1.1 -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
     Hello OpenShift!
 
-### Prove the app works with double-slash in the URL with HTTP/2
-
     $ curl --http2 -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
-    Hello OpenShift!
-
-    $ curl --http2-prior-knowledge -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
-    Hello OpenShift!
-
-    $ curl --http2-prior-knowledge --http2 -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
     Hello OpenShift!
 
 ## Enable HTTP/2 on the `default` ingresscontroller
 
     $ oc -n openshift-ingress-operator annotate --overwrite ingresscontrollers/default ingress.operator.openshift.io/default-enable-http2=true
+
     # Wait for the deployment to rollout...
+
+    $ oc get pods -n openshift-ingress -w
+    NAME                              READY   STATUS    RESTARTS   AGE
+    router-default-795bbc5887-j9829   2/2     Running   0          4m32s
+    router-default-8678f494b9-js2zm   1/2     Running   0          14s
+    router-default-8678f494b9-js2zm   2/2     Running   0          21s
+    router-default-795bbc5887-j9829   2/2     Terminating   0        4m39s
 
 ### Prove the app works when there are no double-slashes in the URL
 
@@ -62,18 +60,18 @@ Wait for new router pods to rollout.
 
 ### Prove HAProxy routing is broken with double-slash
 
+- OCP 4.11 OK
+- OCP 4.10 OK
+- OCP 4.9  NOT OK
+- OCP 4.8  NOT OK
+- OCP 4.7  OK
+- OCP 4.6  OK
+
     $ curl --http2 -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
     curl: (92) HTTP/2 stream 0 was not closed cleanly: PROTOCOL_ERROR (err 1)
 
     $ curl --http2-prior-knowledge -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
     curl: (92) HTTP/2 stream 0 was not closed cleanly: PROTOCOL_ERROR (err 1)
 
-    $ curl --http2-prior-knowledge --http2 -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
+    $ curl --http2 -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
     curl: (92) HTTP/2 stream 0 was not closed cleanly: PROTOCOL_ERROR (err 1)
-
-# Summary
-
-    OCP 4.8.25  is broken (haproxy22-2.2.13-3.el8.x86_64)
-
-    OCP 4.10.0 and onwards is OK (upstream fix is in haproxy-2.2.17)
-    OCP 4.11.0 and onwards is OK (upstream fix is in haproxy-2.2.24)
