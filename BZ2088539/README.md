@@ -2,7 +2,7 @@
 
 Reproducer for: https://bugzilla.redhat.com/show_bug.cgi?id=2088539
 
-Run only 1 replica (for greppability), and enable access logging:
+Run only 1 replica (for grep-ability), and enable access logging:
 
     $ oc -n openshift-ingress-operator patch ingresscontroller/default --type=merge --patch='{"spec":{"logging":{"access":{"destination":{"type":"Container"}}}}}'
     $ oc -n openshift-ingress-operator scale --replicas=1 ingresscontroller/default
@@ -65,7 +65,7 @@ Wait for new router pods to rollout.
 - OCP 4.9  NOT OK
 - OCP 4.8  NOT OK
 - OCP 4.7  OK
-- OCP 4.6  OK
+- OCP 4.6  OK (also tested haproxy 2.0.29)
 
     $ curl --http2 -k -L https://hello-edge.$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)//foo/bar/baz
     curl: (92) HTTP/2 stream 0 was not closed cleanly: PROTOCOL_ERROR (err 1)
