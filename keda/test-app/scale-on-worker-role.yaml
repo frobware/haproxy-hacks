@@ -13,7 +13,7 @@ spec:
   - type: prometheus
     metricType: Value
     metadata:
-      serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9092
+      serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
       namespace: openshift-ingress-operator
       metricName: 'kube_node_role'
       threshold: '1'
