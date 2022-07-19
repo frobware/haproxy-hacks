@@ -16,7 +16,7 @@ oc adm policy add-role-to-user thanos-metrics-reader -z thanos --role-namespace=
 oc get triggerauthentications.keda.sh -o yaml | grep $secret
 
 # add cluster-monitoring-view for cross-namespace queries; scaled object must target port 9091
-oc adm policy add-cluster-role-to-user cluster-monitoring-view -z thanos
+oc adm policy -n openshift-ingress-operator add-cluster-role-to-user cluster-monitoring-view -z thanos
 
 #$ oc get secrets -n openshift-monitoring thanos-querier-token-gqstv -o yaml |grep token
 # secret=$(oc get secrets -n openshift-monitoring thanos-querier-token-gqstv -o yaml | token: | head -n 1 | awk '{print $1 }')
