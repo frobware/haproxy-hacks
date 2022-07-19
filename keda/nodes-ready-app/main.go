@@ -115,12 +115,17 @@ func main() {
 	sharedInformer := nodeInformer.Informer()
 	sharedInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{})
 
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte("Hello."))
+	})
+	mux.Handle("/metrics", promhttp.Handler())
 	httpServer := &http.Server{
+		Handler:      mux,
 		Addr:         fmt.Sprintf(":%v", addr),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 	}
-	http.Handle("/metrics", promhttp.Handler())
 
 	g, gCtx := errgroup.WithContext(signalCtx)
 
