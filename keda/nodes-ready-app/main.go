@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path"
 	"runtime/debug"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -38,6 +39,9 @@ var readyNodesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Name: "ready_nodes",
 	Help: "Report the number of Ready nodes in the cluster.",
 })
+
+// poked is used to override the normal computation of ready nodes.
+var poked int
 
 func processReadyNodes(store cache.Store) (int, int) {
 	var ready int
@@ -112,6 +116,31 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	mux.HandleFunc("/poke", func(w http.ResponseWriter, req *http.Request) {
+		if req.URL.Path != "/poke" {
+			http.Error(w, "404 not found.", http.StatusNotFound)
+			return
+		}
+
+		switch req.Method {
+		case "POST":
+			if err := req.ParseForm(); err != nil {
+				fmt.Fprintf(w, "ParseForm() err: %v", err)
+				return
+			}
+			fmt.Fprintf(w, "PostFrom=%v\n", req.PostForm)
+			ready := req.FormValue("ready")
+			if n, _ := strconv.Atoi(ready); n > 0 {
+				poked = n
+				fmt.Fprintf(w, "poked=%v\n", poked)
+			} else {
+				poked = 0
+			}
+		default:
+			fmt.Fprintf(w, "Only POST methods are supported.")
+		}
+	})
+
 	mux.HandleFunc("/healthz/ready", func(w http.ResponseWriter, req *http.Request) {
 		if !sharedInformer.HasSynced() {
 			http.Error(w, "informers not synchronised", http.StatusInternalServerError)
@@ -166,7 +195,10 @@ func main() {
 				}
 				return nil
 			case <-time.After(*updateIntervalFlag):
-				if sharedInformer.HasSynced() {
+				if poked > 0 {
+					klog.Infof("Poked %v ready", poked)
+					readyNodesGauge.Set(float64(poked))
+				} else if sharedInformer.HasSynced() {
 					total, ready := processReadyNodes(sharedInformer.GetStore())
 					klog.Infof("%v nodes, %v ready, %v unready", total, ready, total-ready)
 					readyNodesGauge.Set(float64(ready))
