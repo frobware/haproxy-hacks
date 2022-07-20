@@ -1,4 +1,4 @@
-module nodes-ready-app
+module github.com/frobware/haproxy-hacks/keda/nodes-ready-app
 
 go 1.17
 

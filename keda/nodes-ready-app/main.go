@@ -14,12 +14,10 @@ import (
 	"syscall"
 	"time"
 
-	"nodes-ready-app/pkg/autoscaler"
-
-	"golang.org/x/sync/errgroup"
-
+	"github.com/frobware/haproxy-hacks/keda/nodes-ready-app/pkg/autoscaler"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/sync/errgroup"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/informers"
@@ -119,6 +117,9 @@ func main() {
 	})
 	mux.Handle("/metrics", promhttp.Handler())
 
+	// mux.Handle("/metrics", promhttp.Handler())
+	// mux.Handle("/metrics/", promhttp.Handler())
+	//
 	httpServer := &http.Server{
 		Handler:      mux,
 		Addr:         fmt.Sprintf(":%v", port),
