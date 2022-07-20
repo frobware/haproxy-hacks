@@ -111,15 +111,23 @@ func main() {
 	sharedInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{})
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
+
+	mux.HandleFunc("/healthz/ready", func(w http.ResponseWriter, req *http.Request) {
+		if !sharedInformer.HasSynced() {
+			http.Error(w, "informers not synchronised", http.StatusInternalServerError)
+			return
+		}
 		klog.Infoln(req)
-		w.Write([]byte("Hello.\n"))
+		w.Write([]byte("/healthz/ready.\n"))
 	})
+
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
+		klog.Infoln(req)
+		w.Write([]byte("/healthz.\n"))
+	})
+
 	mux.Handle("/metrics", promhttp.Handler())
 
-	// mux.Handle("/metrics", promhttp.Handler())
-	// mux.Handle("/metrics/", promhttp.Handler())
-	//
 	httpServer := &http.Server{
 		Handler:      mux,
 		Addr:         fmt.Sprintf(":%v", port),

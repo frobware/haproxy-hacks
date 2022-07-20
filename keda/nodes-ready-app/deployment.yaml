@@ -13,6 +13,7 @@ spec:
     metadata:
       labels:
         app: nodes-ready-app
+        type: keda-testing
     spec:
       containers:
       - name: nodes-ready-app
@@ -23,12 +24,20 @@ spec:
           runAsNonRoot: true
           capabilities:
             drop:
-              - ALL
+            - ALL
           seccompProfile:
             type: RuntimeDefault
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: 8080
         env:
-          - name: UPDATE_INTERVAL
-            value: "5s"
+        - name: UPDATE_INTERVAL
+          value: "5s"
       serviceAccountName: ingress-operator
 ---
 apiVersion: v1

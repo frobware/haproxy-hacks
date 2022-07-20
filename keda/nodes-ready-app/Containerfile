@@ -3,7 +3,7 @@ USER root
 WORKDIR /go/src
 COPY . .
 RUN GOOS=linux CGO_ENABLED=0 go build -mod=vendor -o nodes-ready-app .
-FROM registry.access.redhat.com/ubi8/ubi-micro:latest
+FROM registry.access.redhat.com/ubi8/ubi:latest
 WORKDIR /
 COPY --from=builder /go/src/nodes-ready-app /usr/local/bin/nodes-ready-app
 # 65532 is numeric for nonroot
