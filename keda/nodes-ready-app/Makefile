@@ -1,6 +1,5 @@
 TAG ?= amcdermo/nodes-ready-app
 
-.PHONY: build
 build:
 	CGO_ENABLED=0 go build -mod=vendor -o nodes-ready-app .
 
@@ -27,3 +26,5 @@ $(HOME)/.config/containers/policy.json: policy.json | $(HOME)/.config/containers
 
 $(HOME)/.config/containers:
 	mkdir -p $@
+
+.PHONY: build push-image vendor fmt vet
