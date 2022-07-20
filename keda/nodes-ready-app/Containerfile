@@ -1,10 +1,11 @@
-FROM golang:1.18 as builder
-WORKDIR /workspace
+FROM registry.access.redhat.com/ubi8/go-toolset AS builder
+USER root
+WORKDIR /go/src
 COPY . .
-RUN make build
-FROM registry.access.redhat.com/ubi8/ubi-minimal:latest
+RUN GOOS=linux CGO_ENABLED=0 go build -mod=vendor -o nodes-ready-app .
+FROM registry.access.redhat.com/ubi8/ubi-micro:latest
 WORKDIR /
-COPY --from=builder /workspace/nodes-ready-app .
+COPY --from=builder /go/src/nodes-ready-app /usr/local/bin/nodes-ready-app
 # 65532 is numeric for nonroot
 USER 65532:65532
-ENTRYPOINT ["/nodes-ready-app"]
+ENTRYPOINT ["/usr/local/bin/nodes-ready-app"]
