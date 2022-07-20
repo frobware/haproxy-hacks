@@ -5,19 +5,38 @@ metadata:
 spec:
   scaleTargetRef:
     name: test-app
-  minReplicaCount: 1
-  maxReplicaCount: 20
+  #minReplicaCount: 1
+  #maxReplicaCount: 20
+  cooldownPeriod: 1
   pollingInterval: 2
-  cooldownPeriod:  5            # second
+  fallback:
+    failureThreshold: 3
+    replicas: 1
+  advanced:                                          # Optional. Section to specify advanced options
+    restoreToOriginalReplicaCount: true
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 3
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 1
+        scaleUp:
+          stabilizationWindowSeconds: 3
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 1
   triggers:
   - type: prometheus
-    metricType: Value
+    metricType: AverageValue
     metadata:
       serverAddress: https://thanos-querier.openshift-monitoring.svc.cluster.local:9092
       namespace: openshift-ingress-operator
-      metricName: 'ready_nodes'
+      metricName: 'ready-nodes'
       threshold: '1'
-      query: 'sum(ready_nodes)'
+      query: 'ready_nodes{service="nodes-ready-app"}'
       authModes: "bearer"
     authenticationRef:
       name: keda-trigger-auth-prometheus
