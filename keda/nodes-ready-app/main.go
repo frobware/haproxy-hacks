@@ -41,10 +41,6 @@ var readyNodesGauge = prometheus.NewGauge(prometheus.GaugeOpts{
 	Help: "Report the number of Ready nodes in the cluster.",
 })
 
-func init() {
-	prometheus.MustRegister(readyNodesGauge)
-}
-
 func processReadyNodes(store cache.Store) (int, int) {
 	var ready int
 	var nodes = store.List()
@@ -70,6 +66,7 @@ func restConfig() (*rest.Config, error) {
 }
 
 func main() {
+	prometheus.MustRegister(readyNodesGauge)
 	klog.InitFlags(nil)
 	flag.Parse()
 
@@ -88,13 +85,13 @@ func main() {
 		klog.Infof("Setting UPDATE_INTERVAL=%q\n", *updateIntervalFlag)
 	}
 
-	addr := "8080"
+	port := "8080"
 	if val := os.Getenv("PORT"); val != "" {
 		if _, err := net.ParsePort(val, false); err != nil {
 			klog.Fatalf("failed to parse PORT=%q: %v\n", val, err)
 		}
-		addr = val
-		klog.Infof("Setting PORT=%q\n", addr)
+		port = val
+		klog.Infof("Setting PORT=%q\n", port)
 	}
 
 	clusterConfig, err := restConfig()
@@ -117,12 +114,14 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		w.Write([]byte("Hello."))
+		klog.Infoln(req)
+		w.Write([]byte("Hello.\n"))
 	})
 	mux.Handle("/metrics", promhttp.Handler())
+
 	httpServer := &http.Server{
 		Handler:      mux,
-		Addr:         fmt.Sprintf(":%v", addr),
+		Addr:         fmt.Sprintf(":%v", port),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 	}
