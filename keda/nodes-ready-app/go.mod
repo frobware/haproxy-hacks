@@ -1,6 +1,6 @@
 module nodes-ready-app
 
-go 1.18
+go 1.17
 
 require (
 	github.com/prometheus/client_golang v1.12.2
