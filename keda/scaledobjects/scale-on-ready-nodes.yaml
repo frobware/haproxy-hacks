@@ -5,8 +5,8 @@ metadata:
 spec:
   scaleTargetRef:
     name: test-app
-  #minReplicaCount: 1
-  #maxReplicaCount: 20
+  minReplicaCount: 1
+  maxReplicaCount: 20
   cooldownPeriod: 1
   pollingInterval: 2
   fallback:
