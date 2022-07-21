@@ -74,13 +74,13 @@ func main() {
 
 	if *versionFlag {
 		info, _ := debug.ReadBuildInfo()
-		log.Println(info)
+		klog.Infoln(info)
 		os.Exit(0)
 	}
 
 	if val := os.Getenv("UPDATE_INTERVAL"); val != "" {
 		if val, err := time.ParseDuration(val); err != nil {
-			klog.Fatalf("failed to parse UPDATE_INTERVAL=%q: %v\n", val, err)
+			klog.Fatalf("failed to parse UPDATE_INTERVAL=%q: %v", os.Getenv("UPDATE_INTERVAL"), err)
 		} else {
 			*updateIntervalFlag = val
 		}
@@ -93,12 +93,12 @@ func main() {
 			klog.Fatalf("failed to parse PORT=%q: %v\n", val, err)
 		}
 		port = val
-		klog.Infof("Setting PORT=%q\n", port)
+		klog.Infof("Setting PORT=%q", port)
 	}
 
 	clusterConfig, err := restConfig()
 	if err != nil {
-		log.Fatalf("could not get config: %v\n", err)
+		klog.Fatalln("could not get config: %v", err)
 	}
 
 	clientSet, err := kubernetes.NewForConfig(clusterConfig)
@@ -128,11 +128,9 @@ func main() {
 				fmt.Fprintf(w, "ParseForm() err: %v", err)
 				return
 			}
-			fmt.Fprintf(w, "PostFrom=%v\n", req.PostForm)
-			ready := req.FormValue("ready")
-			if n, _ := strconv.Atoi(ready); n > 0 {
+			if n, _ := strconv.Atoi(req.FormValue("ready")); n > 0 {
 				poked = n
-				fmt.Fprintf(w, "poked=%v\n", poked)
+				fmt.Fprintf(w, "poked=%v", poked)
 			} else {
 				poked = 0
 			}
@@ -146,13 +144,11 @@ func main() {
 			http.Error(w, "informers not synchronised", http.StatusInternalServerError)
 			return
 		}
-		klog.Infoln(req)
-		w.Write([]byte("/healthz/ready.\n"))
+		fmt.Fprintln(w, "/healthz/ready")
 	})
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
-		klog.Infoln(req)
-		w.Write([]byte("/healthz.\n"))
+		fmt.Fprintln(w, "/healthz")
 	})
 
 	mux.Handle("/metrics", promhttp.Handler())
@@ -196,11 +192,11 @@ func main() {
 				return nil
 			case <-time.After(*updateIntervalFlag):
 				if poked > 0 {
-					klog.Infof("Poked %v ready", poked)
+					klog.Infof("poked mode: %v ready", poked)
 					readyNodesGauge.Set(float64(poked))
 				} else if sharedInformer.HasSynced() {
 					total, ready := processReadyNodes(sharedInformer.GetStore())
-					klog.Infof("%v nodes, %v ready, %v unready", total, ready, total-ready)
+					klog.Infof("%v nodes, %v ready", total, ready)
 					readyNodesGauge.Set(float64(ready))
 				}
 			}
