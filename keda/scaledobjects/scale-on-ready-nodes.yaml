@@ -8,7 +8,7 @@ spec:
   minReplicaCount: 1
   maxReplicaCount: 20
   cooldownPeriod: 1
-  pollingInterval: 2
+  pollingInterval: 1
   fallback:
     failureThreshold: 3
     replicas: 1
@@ -36,7 +36,7 @@ spec:
       namespace: openshift-ingress-operator
       metricName: 'ready-nodes'
       threshold: '1'
-      query: 'ready_nodes{service="nodes-ready-app"}'
+      query: 'avg_over_time(ready_nodes{service="nodes-ready-app"}[1m])'
       authModes: "bearer"
     authenticationRef:
       name: keda-trigger-auth-prometheus
