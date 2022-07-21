@@ -13,7 +13,6 @@ spec:
     metadata:
       labels:
         app: nodes-ready-app
-        type: keda-testing
     spec:
       containers:
       - name: nodes-ready-app
@@ -55,7 +54,7 @@ spec:
     protocol: TCP
     targetPort: 8080
   selector:
-    type: keda-testing
+    app: nodes-ready-app
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
