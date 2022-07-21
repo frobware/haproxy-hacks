@@ -21,8 +21,8 @@ fmt:
 vet:
 	go vet ./...
 
-$(HOME)/.config/containers/policy.json: policy.json | $(HOME)/.config/containers
-	cp policy.json $@
+$(HOME)/.config/containers/policy.json: policy.json.example | $(HOME)/.config/containers
+	install -m644 $< $@
 
 $(HOME)/.config/containers:
 	mkdir -p $@
