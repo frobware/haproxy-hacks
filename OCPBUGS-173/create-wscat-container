@@ -1,0 +1,22 @@
+#! /usr/bin/env bash
+
+set -eu
+
+# podman run -t -i fedora:36 /bin/bash
+# dnf install npm
+# npm install -g wscat
+
+packages="npm"
+
+prepare_haproxy_build_container() {
+    base_image="$1"
+    local_image="$2"
+    container="$(buildah from $base_image)"
+    buildah run "$container" yum -y update
+    buildah run "$container" yum -y install $packages
+    buildah run "$container" npm install -g wscat
+    buildah commit "${container}" $local_image
+}
+
+prepare_haproxy_build_container fedora:36 ocpbugs-173-wscat
+toolbox create --container ocpbugs-173-wscat --image localhost/ocpbugs-173-wscat
