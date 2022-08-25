@@ -34,7 +34,7 @@ var upgrader = websocket.Upgrader{} // use default options
 
 func echo(w http.ResponseWriter, r *http.Request) {
 	for k, v := range r.Header {
-		log.Printf("[%s] %s = %s\n", r.RemoteAddr, k, v)
+		log.Printf("[%s] %s: %s\n", r.RemoteAddr, http.CanonicalHeaderKey(k), v)
 	}
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -51,16 +51,16 @@ func echo(w http.ResponseWriter, r *http.Request) {
 		log.Printf("recv: %s", message)
 		if strings.HasPrefix(string(message), "headers") {
 			for k, v := range r.Header {
-				err = c.WriteMessage(mt, []byte(fmt.Sprintf("[%s] %s: %s", r.RemoteAddr, k, v)))
+				err = c.WriteMessage(mt, []byte(fmt.Sprintf("[%s] %s: %s", r.RemoteAddr, http.CanonicalHeaderKey(k), v)))
 				if err != nil {
-					log.Println("write:", err)
+					log.Println("write error:", err)
 					break
 				}
 			}
 		}
 		err = c.WriteMessage(mt, []byte("echo: "+string(message)))
 		if err != nil {
-			log.Println("write:", err)
+			log.Println("write error:", err)
 			break
 		}
 	}
@@ -68,7 +68,7 @@ func echo(w http.ResponseWriter, r *http.Request) {
 
 func home(w http.ResponseWriter, r *http.Request) {
 	for k, v := range r.Header {
-		log.Printf("[%s] %s = %s\n", r.RemoteAddr, k, v)
+		log.Printf("[%s] %s: %s\n", r.RemoteAddr, http.CanonicalHeaderKey(k), v)
 	}
 	homeTemplate.Execute(w, "wss://"+r.Host+"/echo")
 }
@@ -78,7 +78,7 @@ func main() {
 	keyFile := lookupEnv("TLS_KEY", defaultTLSKey)
 
 	flag.Parse()
-	log.SetFlags(log.LstdFlags)
+	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
 	http.HandleFunc("/echo", echo)
 	http.HandleFunc("/", home)
