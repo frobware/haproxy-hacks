@@ -1,0 +1,3 @@
+#! /usr/bin/env bash
+
+podman run --rm -it ocpbugs-173-wscat wscat "$@"
