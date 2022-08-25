@@ -70,7 +70,7 @@ func home(w http.ResponseWriter, r *http.Request) {
 	for k, v := range r.Header {
 		log.Printf("[%s] %s = %s\n", r.RemoteAddr, k, v)
 	}
-	homeTemplate.Execute(w, "ws://"+r.Host+"/echo")
+	homeTemplate.Execute(w, "wss://"+r.Host+"/echo")
 }
 
 func main() {
