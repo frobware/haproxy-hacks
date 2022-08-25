@@ -8,7 +8,7 @@ set -eu
 
 packages="npm"
 
-prepare_haproxy_build_container() {
+prepare_build_container() {
     base_image="$1"
     local_image="$2"
     container="$(buildah from $base_image)"
@@ -18,5 +18,5 @@ prepare_haproxy_build_container() {
     buildah commit "${container}" $local_image
 }
 
-prepare_haproxy_build_container fedora:36 ocpbugs-173-wscat
+prepare_build_container fedora:36 ocpbugs-173-wscat
 toolbox create --container ocpbugs-173-wscat --image localhost/ocpbugs-173-wscat
