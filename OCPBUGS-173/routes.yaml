@@ -15,10 +15,12 @@ objects:
       name: reproducer
       namespace: ${NAMESPACE}
     spec:
+      port:
+        targetPort: 8443
       path: /
       to:
         kind: Service
-        name: reproducer
+        name: ocpbugs-173-server
         weight: 100
       tls:
         termination: reencrypt

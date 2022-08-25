@@ -1,0 +1,11 @@
+FROM registry.access.redhat.com/ubi8/go-toolset AS builder
+USER root
+WORKDIR /go/src
+COPY . .
+RUN GOOS=linux CGO_ENABLED=0 go build -mod=vendor -o server .
+FROM registry.access.redhat.com/ubi8/ubi:latest
+WORKDIR /
+COPY --from=builder /go/src/server /usr/local/bin/server
+# 65532 is numeric for nonroot
+USER 65532:65532
+ENTRYPOINT ["/usr/local/bin/server"]
