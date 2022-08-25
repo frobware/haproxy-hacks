@@ -1,0 +1,92 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: reproducer
+parameters:
+- name: NAMESPACE
+  required: true
+objects:
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      annotations:
+        service.beta.openshift.io/serving-cert-secret-name: reproducer-cert
+      name: reproducer
+      namespace: ${NAMESPACE}
+    spec:
+      internalTrafficPolicy: Cluster
+      ipFamilies:
+        - IPv4
+      ipFamilyPolicy: SingleStack
+      ports:
+        - port: 8080
+          protocol: TCP
+          targetPort: 8080
+      selector:
+        app: reproducer
+      sessionAffinity: None
+      type: ClusterIP
+  - kind: Route
+    apiVersion: route.openshift.io/v1
+    metadata:
+      name: reproducer
+      namespace: ${NAMESPACE}
+    spec:
+      path: /
+      to:
+        kind: Service
+        name: reproducer
+        weight: 100
+      tls:
+        termination: reencrypt
+        insecureEdgeTerminationPolicy: Redirect
+      wildcardPolicy: None
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: reproducer
+      namespace: ${NAMESPACE}
+    spec:
+      progressDeadlineSeconds: 600
+      replicas: 1
+      revisionHistoryLimit: 10
+      selector:
+        matchLabels:
+          app: reproducer
+      strategy:
+        rollingUpdate:
+          maxSurge: 25%
+          maxUnavailable: 25%
+        type: RollingUpdate
+      template:
+        metadata:
+          labels:
+            app: reproducer
+        spec:
+          containers:
+            - env:
+              - name: HJ_SERVE
+                value: ":8080"
+              image: quay.io/psav/reproducer:apple
+              imagePullPolicy: Always
+              name: reproducer
+              ports:
+                - containerPort: 8080
+                  protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - mountPath: /tmp/certs
+                  name: cert
+                  readOnly: true
+          dnsPolicy: ClusterFirst
+          restartPolicy: Always
+          schedulerName: default-scheduler
+          securityContext: {}
+          terminationGracePeriodSeconds: 30
+          volumes:
+            - name: cert
+              secret:
+                defaultMode: 420
+                secretName: reproducer-cert

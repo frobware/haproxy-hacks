@@ -1,0 +1,30 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: reproducer
+parameters:
+- name: NAMESPACE
+  required: true
+- name: TLS_CRT
+- name: TLS_KEY
+- name: DOMAIN
+objects:
+  - kind: Route
+    apiVersion: route.openshift.io/v1
+    metadata:
+      name: reproducer
+      namespace: ${NAMESPACE}
+    spec:
+      path: /
+      to:
+        kind: Service
+        name: reproducer
+        weight: 100
+      tls:
+        termination: reencrypt
+        insecureEdgeTerminationPolicy: Redirect
+        key: |-
+          ${TLS_KEY}
+        certificate: |-
+          ${TLS_CRT}
+      wildcardPolicy: None
