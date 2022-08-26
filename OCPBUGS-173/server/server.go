@@ -5,7 +5,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"html/template"
 	"log"
@@ -70,25 +69,41 @@ func home(w http.ResponseWriter, r *http.Request) {
 	for k, v := range r.Header {
 		log.Printf("[%s] %s: %s\n", r.RemoteAddr, http.CanonicalHeaderKey(k), v)
 	}
-	homeTemplate.Execute(w, "wss://"+r.Host+"/echo")
+	if r.Header.Get("X-Forwarded-Proto") == "https" {
+		homeTemplate.Execute(w, "wss://"+r.Host+"/echo")
+	} else {
+		homeTemplate.Execute(w, "ws://"+r.Host+"/echo")
+	}
 }
 
 func main() {
-	crtFile := lookupEnv("TLS_CRT", defaultTLSCrt)
-	keyFile := lookupEnv("TLS_KEY", defaultTLSKey)
-
-	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
 	http.HandleFunc("/echo", echo)
 	http.HandleFunc("/", home)
 
-	port := lookupEnv("HTTPS_PORT", defaultHTTPSPort)
-	log.Printf("Listening securely on port %v\n", port)
+	go func() {
+		port := lookupEnv("HTTP_PORT", defaultHTTPPort)
+		log.Printf("Listening on port %v\n", port)
 
-	if err := http.ListenAndServeTLS(":"+port, crtFile, keyFile, nil); err != nil {
-		log.Fatal(err)
-	}
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	go func() {
+		crtFile := lookupEnv("TLS_CRT", defaultTLSCrt)
+		keyFile := lookupEnv("TLS_KEY", defaultTLSKey)
+
+		port := lookupEnv("HTTPS_PORT", defaultHTTPSPort)
+		log.Printf("Listening securely on port %v\n", port)
+
+		if err := http.ListenAndServeTLS(":"+port, crtFile, keyFile, nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	select {}
 }
 
 var homeTemplate = template.Must(template.New("").Parse(`

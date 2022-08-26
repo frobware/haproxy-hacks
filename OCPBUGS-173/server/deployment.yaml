@@ -1,53 +1,79 @@
 ---
-apiVersion: v1
-kind: Service
+kind: Template
+apiVersion: template.openshift.io/v1
 metadata:
-  annotations:
-    service.beta.openshift.io/serving-cert-secret-name: ocpbugs-173-server
-  labels:
-    app: ocpbugs-173-server
   name: ocpbugs-173-server
-spec:
-  ports:
-  - name: https
-    port: 443
-    protocol: TCP
-    targetPort: 8443
-  selector:
-    app: ocpbugs-173-server
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  labels:
-    app: ocpbugs-173-server
-  name: ocpbugs-173-server
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
+parameters:
+- name: IMAGE
+  value: quay.io/amcdermo/ocpbugs-173-server:latest
+  required: true
+objects:
+- kind: Service
+  apiVersion: v1  
+  metadata:
+    annotations:
+      service.beta.openshift.io/serving-cert-secret-name: ocpbugs-173-cert
+    labels:
       app: ocpbugs-173-server
-  template:
-    metadata:
-      labels:
+    name: ocpbugs-173-server
+  spec:
+    ports:
+    - name: http
+      port: 80
+      protocol: TCP
+      targetPort: 8080
+    - name: https
+      port: 443
+      protocol: TCP
+      targetPort: 8443
+    selector:
+      app: ocpbugs-173-server
+- kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    labels:
+      app: ocpbugs-173-server
+    name: ocpbugs-173-server
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
         app: ocpbugs-173-server
-    spec:
-      containers:
-      - name: ocpbugs-173-server
-        image: quay.io/amcdermo/ocpbugs-173-server:latest
-        imagePullPolicy: Always
-        securityContext:
-          allowPrivilegeEscalation: false
-          runAsNonRoot: true
-          capabilities:
-            drop:
-            - ALL
-          seccompProfile:
-            type: RuntimeDefault
-        volumeMounts:
-        - mountPath: /etc/serving-cert
-          name: cert
-      volumes:
-      - name: cert
-        secret:
-          secretName: ocpbugs-173-server
+    template:
+      metadata:
+        labels:
+          app: ocpbugs-173-server
+      spec:
+        containers:
+        - name: ocpbugs-173-server
+          image: ${IMAGE}
+          imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+              - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+          - mountPath: /etc/serving-cert
+            name: cert
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            timeoutSeconds: 1
+            periodSeconds: 10
+            successThreshold: 1
+            failureThreshold: 3
+        volumes:
+        - name: cert
+          secret:
+            secretName: ocpbugs-173-cert

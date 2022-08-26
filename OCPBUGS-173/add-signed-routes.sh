@@ -12,7 +12,17 @@ if [[ $? -ne 0 ]] || [[ -z $domain ]]; then
     exit 1
 fi
 
-TLS_CRT="$(cat ~/.acme.sh/reproducer-default.apps.ocp411.int.frobware.com/reproducer-default.apps.ocp411.int.frobware.com.cer)"
-TLS_KEY="$(cat ~/.acme.sh/reproducer-default.apps.ocp411.int.frobware.com/reproducer-default.apps.ocp411.int.frobware.com.key)"
+EDGE_TLS_CRT="$(cat ~/.acme.sh/websocket-edge-default.apps.ocp411.int.frobware.com/fullchain.cer)"
+EDGE_TLS_KEY="$(cat ~/.acme.sh/websocket-edge-default.apps.ocp411.int.frobware.com/websocket-edge-default.apps.ocp411.int.frobware.com.key)"
 
-oc process -o yaml -p NAMESPACE="$NAMESPACE" -p TLS_CRT="$TLS_CRT" -p TLS_KEY="$TLS_KEY" -p DOMAIN="$domain" -f routes.yaml
+REENCRYPT_TLS_CRT="$(cat ~/.acme.sh/websocket-reencrypt-default.apps.ocp411.int.frobware.com/fullchain.cer)"
+REENCRYPT_TLS_KEY="$(cat ~/.acme.sh/websocket-reencrypt-default.apps.ocp411.int.frobware.com/websocket-reencrypt-default.apps.ocp411.int.frobware.com.key)"
+
+oc process -o yaml \
+   -p DOMAIN="$domain" \
+   -p EDGE_TLS_CRT="$EDGE_TLS_CRT" \
+   -p EDGE_TLS_KEY="$EDGE_TLS_KEY" \
+   -p NAMESPACE="$NAMESPACE" \
+   -p REENCRYPT_TLS_CRT="$REENCRYPT_TLS_CRT" \
+   -p REENCRYPT_TLS_KEY="$REENCRYPT_TLS_KEY" \
+   -f routes.yaml

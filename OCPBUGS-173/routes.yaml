@@ -1,32 +1,75 @@
+---
 kind: Template
 apiVersion: template.openshift.io/v1
 metadata:
-  name: reproducer
+  name: websocket
 parameters:
+- name: DOMAIN
+  required: true
+- name: EDGE_TLS_CRT
+  required: true
+- name: EDGE_TLS_KEY
+  required: true
 - name: NAMESPACE
   required: true
-- name: TLS_CRT
-- name: TLS_KEY
-- name: DOMAIN
+- name: REENCRYPT_TLS_CRT
+  required: true
+- name: REENCRYPT_TLS_KEY
+  required: true
 objects:
-  - kind: Route
-    apiVersion: route.openshift.io/v1
-    metadata:
-      name: reproducer
-      namespace: ${NAMESPACE}
-    spec:
-      port:
-        targetPort: 8443
-      path: /
-      to:
-        kind: Service
-        name: ocpbugs-173-server
-        weight: 100
-      tls:
-        termination: reencrypt
-        insecureEdgeTerminationPolicy: Redirect
-        key: |-
-          ${TLS_KEY}
-        certificate: |-
-          ${TLS_CRT}
-      wildcardPolicy: None
+- kind: Route
+  apiVersion: route.openshift.io/v1
+  metadata:
+    name: websocket-reencrypt
+    namespace: ${NAMESPACE}
+  spec:
+    port:
+      targetPort: 8443
+    path: /
+    to:
+      kind: Service
+      name: ocpbugs-173-server
+      weight: 100
+    tls:
+      termination: reencrypt
+      insecureEdgeTerminationPolicy: Redirect
+      key: |-
+        ${REENCRYPT_TLS_KEY}
+      certificate: |-
+        ${REENCRYPT_TLS_CRT}
+    wildcardPolicy: None
+- kind: Route
+  apiVersion: route.openshift.io/v1
+  metadata:
+    name: websocket-edge
+    namespace: ${NAMESPACE}
+  spec:
+    port:
+      targetPort: 8080
+    path: /
+    to:
+      kind: Service
+      name: ocpbugs-173-server
+      weight: 100
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+      key: |-
+        ${EDGE_TLS_KEY}
+      certificate: |-
+        ${EDGE_TLS_CRT}
+    wildcardPolicy: None
+- kind: Route
+  apiVersion: route.openshift.io/v1
+  metadata:
+    name: websocket-insecure
+    namespace: ${NAMESPACE}
+  spec:
+    port:
+      targetPort: 8080
+    path: /
+    to:
+      kind: Service
+      name: ocpbugs-173-server
+      weight: 100
+    wildcardPolicy: None
