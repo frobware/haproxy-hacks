@@ -1,6 +1,10 @@
 # OpenShift Ingress: testing websocket behaviour
 
-This was tested on:
+## Related bugs
+
+- https://issues.redhat.com/browse/OCPBUGS-173
+
+My testing/set was all done on:
 
 ```
 $ oc version
@@ -365,7 +369,7 @@ router-default-744f6c8bc4-mmh8k   2/2     Running   0          2m11s
 router-default-744f6c8bc4-pjt6d   2/2     Running   0          94s
 ```
 
-Now let's rerun the reencrypt test Note: the only change we have made
+Now let's rerun the reencrypt test. Note: the only change we have made
 is to swap out haproxy 2.2 for 2.4 but let's verify that:
 
 ```
