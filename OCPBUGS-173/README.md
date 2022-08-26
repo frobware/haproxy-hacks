@@ -410,10 +410,10 @@ Vist one of the (equivalent) URLs:
 - https://websocket-edge-default.apps.ocp411.int.frobware.com
 - https://websocket-reencrypt-default.apps.ocp411.int.frobware.com
 
-The web page will allows you to "Open" a connection to the websocket
+The web page allows you to "Open" a connection to the websocket
 server. Once sucessfully opened, you can send "commands" which will
 get echoed back to the web page. If you send the command "headers" it
 will reply with all the headers associated with the request as
 received by the backend websocket server.
 
-![Web Browser Testing](screenshots/webbrowser.png?raw=true "Web Browser Testing")
+![Web Browser Testing](OCPBUGS-173/screenshots/webbrowser.png?raw=true "Web Browser Testing")
