@@ -1,6 +1,4 @@
-# $ oc process -p DEBUG="" -f dns-lookup.yaml -o yaml | oc create -f -
-#   or
-# $ oc process -p DEBUG="" -f dns-lookup.yaml -o yaml | oc create -f -
+# $ oc process -p INTERVAL=1 -p NAME=<NAME-TO-LOOKUP> -f dns-lookup.yaml | oc create -f -
 ---
 kind: Template
 apiVersion: template.openshift.io/v1
@@ -29,7 +27,7 @@ objects:
         - /bin/bash
         - -c
       args:
-        - trap "kill -TERM $child" TERM; while :; do nslookup ${DEBUG} ${NAME}; echo "nslookup status $?"; sleep ${INTERVAL}; done | cat -n & child=$!; wait $child;
+        - trap kill -TERM $child' TERM; while :; do nslookup ${DEBUG} ${NAME}; echo "nslookup status $?"; sleep ${INTERVAL}; done | cat -n & child=$!; wait $child
       securityContext:
         allowPrivilegeEscalation: false
         runAsNonRoot: true
