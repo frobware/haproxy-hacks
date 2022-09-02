@@ -27,7 +27,7 @@ objects:
         - /bin/bash
         - -c
       args:
-        - trap kill -TERM $child' TERM; while :; do nslookup ${DEBUG} ${NAME}; echo "nslookup status $?"; sleep ${INTERVAL}; done | cat -n & child=$!; wait $child
+        - trap 'kill -TERM $child' TERM; while :; do nslookup ${DEBUG} ${NAME}; echo "nslookup status $?"; sleep ${INTERVAL}; done | cat -n & child=$!; wait $child
       securityContext:
         allowPrivilegeEscalation: false
         runAsNonRoot: true
