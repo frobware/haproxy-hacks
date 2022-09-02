@@ -1,3 +1,6 @@
+# $ oc process -p DEBUG="" -f dns-lookup.yaml -o yaml | oc create -f -
+#   or
+# $ oc process -p DEBUG="" -f dns-lookup.yaml -o yaml | oc create -f -
 ---
 kind: Template
 apiVersion: template.openshift.io/v1
@@ -5,7 +8,11 @@ metadata:
   name: dnslookup
 parameters:
 - name: NAME
-  value: _grpc._tcp.prometheus-operated.openshift-monitoring.svc.cluster.local
+  value: "_grpc._tcp.prometheus-operated.openshift-monitoring.svc.cluster.local"
+- name: DEBUG
+  value: "-debug"
+- name: INTERVAL
+  value: "6"
 objects:
 - kind: Pod
   apiVersion: v1
@@ -22,7 +29,7 @@ objects:
         - /bin/bash
         - -c
       args:
-        - trap "exit 0" INT TERM; while :; do nslookup -debug ${NAME}; sleep 1; done
+        - trap "kill -TERM $child" TERM; while :; do nslookup ${DEBUG} ${NAME}; echo "nslookup status $?"; sleep ${INTERVAL}; done | cat -n & child=$!; wait $child;
       securityContext:
         allowPrivilegeEscalation: false
         runAsNonRoot: true
