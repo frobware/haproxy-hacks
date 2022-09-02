@@ -1,0 +1,52 @@
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: thanos-nslookup
+parameters:
+- name: IMAGE
+  value: quay.io/amcdermo/thanos-nslookup:latest
+  required: true
+- name: NAME
+  value: "_grpc._tcp.prometheus-operated.openshift-monitoring.svc.cluster.local:53"
+  required: true
+objects:
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: thanos-nslookup
+    labels:
+      app: thanos-nslookup
+  spec:
+    containers:
+    - name: miekgdns
+      args:
+        - --address
+        - ${NAME}
+        - --resolver.name
+        - miekgdns
+      image: ${IMAGE}
+      imagePullPolicy: Always
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities:
+          drop:
+          - ALL
+        seccompProfile:
+          type: RuntimeDefault
+    - name: golang
+      args:
+        - --address
+        - ${NAME}
+        - --resolver.name
+        - golang
+      image: ${IMAGE}
+      imagePullPolicy: Always
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities:
+          drop:
+          - ALL
+        seccompProfile:
+          type: RuntimeDefault
