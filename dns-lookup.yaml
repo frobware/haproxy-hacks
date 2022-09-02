@@ -1,0 +1,34 @@
+---
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: dnslookup
+parameters:
+- name: NAME
+  value: _grpc._tcp.prometheus-operated.openshift-monitoring.svc.cluster.local
+objects:
+- kind: Pod
+  apiVersion: v1
+  metadata:
+    name: dnslookup
+    labels:
+      app: dnslookup
+  spec:
+    containers:
+    - name: debug
+      image: quay.io/openshift/origin-hello-openshift
+      imagePullPolicy: IfNotPresent
+      command:
+        - /bin/bash
+        - -c
+      args:
+        - trap "exit 0" INT TERM; while :; do nslookup -debug ${NAME}; sleep 1; done
+      securityContext:
+        allowPrivilegeEscalation: false
+        runAsNonRoot: true
+        capabilities:
+          drop:
+            - ALL
+        seccompProfile:
+          type: RuntimeDefault
+      terminationGracePeriodSeconds: 0s
