@@ -21,3 +21,6 @@ Each each container asserts that it can resolve the address: `_grpc._tcp.prometh
 | golang-nslookup-cgo-disabled | uses net.LookupHost() compiled with CGO_ENABLED=0 |
 
 
+# Repo that has rules & code to build this deployment
+
+https://github.com/frobware/thanos/tree/ocpbugs-612-release-4.10
