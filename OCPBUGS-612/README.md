@@ -14,7 +14,6 @@ Each each container asserts that it can resolve the address:
 
 ## Containers
 
-|------------------------------|---------------------------------------------------|
 | container                    | purpose                                           |
 |------------------------------|---------------------------------------------------|
 | nslookup                     | uses nslookup(1) to resolve addresses             |
