@@ -8,9 +8,7 @@ https://issues.redhat.com/browse/OCPBUGS-612
 
 This will create a pod with 5 containers.
 
-Each each container asserts that it can resolve the address:
-
-    "_grpc._tcp.prometheus-operated.openshift-monitoring.svc.cluster.local"
+Each each container asserts that it can resolve the address: `_grpc._tcp.prometheus-operated.openshift-monitoring.svc.cluster.local`
 
 ## Containers
 
