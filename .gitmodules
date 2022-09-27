@@ -1,3 +1,0 @@
-[submodule "BZ1829779/sqlite-histogram/SQLiteHistograms"]
-	path = BZ1829779/sqlite-histogram/SQLiteHistograms
-	url = https://github.com/Oeffner/SQLiteHistograms
