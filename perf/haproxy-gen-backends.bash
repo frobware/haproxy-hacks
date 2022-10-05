@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+set -eu
+
+host=$(dig +search +short $(hostname))
+
 for name in $(docker ps --no-trunc --filter name=^/docker_nginx_ --format '{{.Names}}' | sort -V); do
     port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8443/tcp") 0).HostPort}}' "$name")"
     container_id="$(docker inspect --format='{{.Id}}' "$name")"
@@ -18,5 +22,6 @@ backend $name
   http-request add-header X-Forwarded-Proto https if { ssl_fc }
   http-request add-header X-Forwarded-Proto-Version h2 if { ssl_fc_alpn -i h2 }
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
-  server pod:${name}:https:192.168.7.64:$port 192.168.7.64:$port cookie $container_id weight 1"
+  cookie $(rev <<<"$container_id") insert indirect nocache httponly secure attr SameSite=None
+  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1"
 done
