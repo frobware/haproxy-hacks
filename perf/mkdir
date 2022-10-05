@@ -1,0 +1,2 @@
+mkdir -p /var/lib/haproxy/router/{certs,cacerts,whitelists} && mkdir -p /var/lib/haproxy/{conf/.tmp,run,bin,log}
+

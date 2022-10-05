@@ -1,0 +1,16 @@
+services:
+  nginx:
+    image: quay.io/openshift-scale/nginx
+    ports:
+      - "6379-16385:8443"
+    # networks:
+    #   - nice_name
+# networks:
+#   nice_name:
+#     driver: macvlan
+#     driver_opts:
+#       parent: br0  # change this
+#     ipam:
+#       config:
+#         - subnet: "192.168.10.0/24" # change this
+          
