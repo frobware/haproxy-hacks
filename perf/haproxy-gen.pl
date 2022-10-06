@@ -2,9 +2,8 @@
 
 use strict;
 
-my $maxconn = $ENV{"MAXCONN"} || 20000;
+my $maxconn = $ENV{"MAXCONN"} || 0;
 my $nbthread = $ENV{"NBTHREAD"} || 4;
-my $backends = $ENV{"BACKENDS"} || 1000;
 my $var_lib_haproxy_dir = "/tmp/lib/haproxy";
 
 my $public_port = 8080;
@@ -15,7 +14,7 @@ print "global
   maxconn $maxconn
   nbthread $nbthread
 
-  daemon
+  # daemon
   ca-base /etc/ssl
   crt-base /etc/ssl
   # TODO: Check if we can get reload to be faster by saving server state.
@@ -51,8 +50,8 @@ defaults
   # backend service or alternatively, you can send a custom 503 or 404 error.
   #
   # server openshift_backend 127.0.0.1:8080
-  # errorfile 503 ${var_lib_haproxy_dir}/conf/error-page-503.http
-  # errorfile 404 ${var_lib_haproxy_dir}/conf/error-page-404.http
+  errorfile 503 ${var_lib_haproxy_dir}/conf/error-page-503.http
+  errorfile 404 ${var_lib_haproxy_dir}/conf/error-page-404.http
 
   timeout connect 5s
   timeout client 30s
