@@ -9,7 +9,7 @@ for name in $(docker ps --no-trunc --filter name=^/docker_nginx_ --format '{{.Na
     container_id="$(docker inspect --format='{{.Id}}' "$name")"
 
     echo "
-backend $name
+backend be_secure:${name}
   mode http
   option redispatch
   option forwardfor
@@ -23,5 +23,6 @@ backend $name
   http-request add-header X-Forwarded-Proto-Version h2 if { ssl_fc_alpn -i h2 }
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
   cookie $(rev <<<"$container_id") insert indirect nocache httponly secure attr SameSite=None
-  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1"
+  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1 ssl verify required ca-file /tmp/lib/haproxy/router/cacerts/be_secure:${name}.pem check inter 5000ms"
 done
+

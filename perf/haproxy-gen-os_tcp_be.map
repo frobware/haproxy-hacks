@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+for name in $(docker ps --no-trunc --filter name=^/docker_nginx_ --format '{{.Names}}' | sort -V); do
+    echo "${name}.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_secure:${name}"
+done

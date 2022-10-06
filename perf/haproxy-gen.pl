@@ -5,7 +5,7 @@ use strict;
 my $maxconn = $ENV{"MAXCONN"} || 20000;
 my $nbthread = $ENV{"NBTHREAD"} || 4;
 my $backends = $ENV{"BACKENDS"} || 1000;
-my $var_lib_haproxy_dir = "/var/lib/haproxy";
+my $var_lib_haproxy_dir = "/tmp/lib/haproxy";
 
 my $public_port = 8080;
 my $public_ssl_port = 8443;
