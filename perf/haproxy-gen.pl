@@ -3,7 +3,7 @@
 use strict;
 
 my $maxconn = $ENV{"MAXCONN"} || 0;
-my $nbthread = $ENV{"NBTHREAD"} || 4;
+my $nbthread = $ENV{"NBTHREAD"} || 16;
 my $var_lib_haproxy_dir = "/tmp/lib/haproxy";
 
 my $public_port = 8080;

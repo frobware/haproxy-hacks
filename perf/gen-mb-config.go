@@ -37,10 +37,10 @@ type Headers struct {
 }
 
 var (
-	clients           = flag.Int("clients", 1, "number of clients")
-	keepAliveRequests = flag.Int("keepAliveRequests", 0, "number of keepalive requests")
-	scheme            = flag.String("scheme", "https", "either http or https")
-	tlsreuse          = flag.Bool("tlsreuse", false, "enable TLS reuse")
+	clients   = flag.Int("clients", 1, "number of clients")
+	keepalive = flag.Int("keepalive", 0, "number of keepalive requests")
+	scheme    = flag.String("scheme", "https", "either http or https")
+	tlsreuse  = flag.Bool("tlsreuse", false, "enable TLS reuse")
 )
 
 func main() {
@@ -51,17 +51,16 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for scanner.Scan() {
-		cfg := Request{}
-		cfg.Clients = int64(*clients)
-		cfg.Delay.Max = 0
-		cfg.Delay.Min = 0
-		cfg.Host = scanner.Text()
-		cfg.KeepAliveRequests = int64(*keepAliveRequests)
-		cfg.Method = "GET"
-		cfg.Path = "/1024.html"
-		cfg.Port = 8443
-		cfg.Scheme = *scheme
-		cfg.TLSSessionReuse = *tlsreuse
+		cfg := Request{
+			Clients:           int64(*clients),
+			Host:              scanner.Text(),
+			KeepAliveRequests: int64(*keepalive),
+			Method:            "GET",
+			Path:              "/1024.html",
+			Port:              8443,
+			Scheme:            *scheme,
+			TLSSessionReuse:   *tlsreuse,
+		}
 		requests = append(requests, cfg)
 	}
 
