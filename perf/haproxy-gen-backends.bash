@@ -25,4 +25,5 @@ backend be_secure:${name}
   cookie $(rev <<<"$container_id") insert indirect nocache httponly secure attr SameSite=None
   server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1 ssl verify required ca-file /tmp/lib/haproxy/router/cacerts/be_secure:${name}.pem check inter 5000ms"
 done
+#  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1 ssl verify required ca-file /tmp/lib/haproxy/router/cacerts/be_secure:${name}.pem check inter 5000ms"
 

@@ -10,7 +10,8 @@ set -eu
     exit 1
 }
 
-crt="-----BEGIN CERTIFICATE-----
+# this is from: https://github.com/openshift-scale/images/tree/master/nginx
+nginx_dest_cacrt="-----BEGIN CERTIFICATE-----
 MIIDbTCCAlWgAwIBAgIJAJR/jN0Oa+/rMA0GCSqGSIb3DQEBCwUAME0xCzAJBgNV
 BAYTAlVTMRMwEQYDVQQIDApDYWxpZm9ybmlhMQswCQYDVQQHDAJOWTEcMBoGA1UE
 CgwTRGVmYXVsdCBDb21wYW55IEx0ZDAeFw0xNzAxMjQwODExMDJaFw0yNzAxMjIw
@@ -41,8 +42,9 @@ go build -o "$tmpdir/certgen" ./certgen/certgen.go
 for name in $(docker ps --no-trunc --filter name=^/docker_nginx_ --format '{{.Names}}' | sort -V); do
     "$tmpdir/certgen" > "$tmpdir/env"
     . "$tmpdir/env"
-    printf "%s\n" "$crt" > "$1/router/cacerts/be_secure:${name}.pem"
-    printf "%s\n%s\n" "$TLS_KEY" "$TLS_CRT" > "$1/router/certs/be_secure:${name}.pem"
+    # printf "%s\n" "$TLS_CACRT" > "$1/router/cacerts/be_secure:${name}.pem"
+    printf "%s\n" "$nginx_dest_cacrt" > "$1/router/cacerts/be_secure:${name}.pem"
+    printf "%s\n%s\n%s\n" "$TLS_KEY" "$TLS_CRT" "$TLS_CACRT" > "$1/router/certs/be_secure:${name}.pem"
     echo "$1/router/certs/be_secure:${name}.pem ${name}.int.frobware.com" >> "$1/conf/cert_config.map"
 done
 
