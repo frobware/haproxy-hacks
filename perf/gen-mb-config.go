@@ -37,10 +37,10 @@ type Headers struct {
 }
 
 var (
-	clients   = flag.Int("clients", 1, "number of clients")
+	clients   = flag.Int("clients", 200, "number of clients")
 	keepalive = flag.Int("keepalive", 0, "number of keepalive requests")
 	scheme    = flag.String("scheme", "https", "either http or https")
-	tlsreuse  = flag.Bool("tlsreuse", false, "enable TLS reuse")
+	tlsreuse  = flag.Bool("tlsreuse", true, "enable TLS reuse")
 )
 
 func main() {
