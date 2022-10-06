@@ -1,0 +1,142 @@
+[
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_1.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_2.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_3.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_4.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_5.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_6.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_7.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_8.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_9.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  },
+  {
+    "clients": 1,
+    "delay": {
+      "max": 0,
+      "min": 0
+    },
+    "host": "docker_nginx_10.int.frobware.com",
+    "keep-alive-requests": 0,
+    "method": "GET",
+    "path": "/1024.html",
+    "port": 8443,
+    "scheme": "https",
+    "tls-session-reuse": false
+  }
+]
