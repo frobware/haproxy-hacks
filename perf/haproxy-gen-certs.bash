@@ -40,6 +40,7 @@ trap 'rm -rf -- "$tmpdir"' EXIT
 go build -o "$tmpdir/certgen" ./certgen/certgen.go
 
 for name in $(docker ps --no-trunc --filter name=^/docker_nginx_ --format '{{.Names}}' | sort -V); do
+    name=$(echo $name | sed 's/_/-/g')
     "$tmpdir/certgen" > "$tmpdir/env"
     . "$tmpdir/env"
     # printf "%s\n" "$TLS_CACRT" > "$1/router/cacerts/be_secure:${name}.pem"

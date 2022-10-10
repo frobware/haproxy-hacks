@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 )
 
 type Request struct {
@@ -41,6 +43,8 @@ var (
 	keepalive = flag.Int("keepalive", 0, "number of keepalive requests")
 	scheme    = flag.String("scheme", "https", "either http or https")
 	tlsreuse  = flag.Bool("tlsreuse", true, "enable TLS reuse")
+	port      = flag.Int("port", 8443, "port number")
+	direct    = flag.Bool("direct", false, "direct to backend")
 )
 
 func main() {
@@ -51,13 +55,22 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 
 	for scanner.Scan() {
+		line := scanner.Text()
+		words := strings.Split(line, " ")
+		if *direct && len(words) > 1 {
+			if n, err := strconv.Atoi(words[1]); err == nil {
+				*port = n
+			} else {
+				panic(err)
+			}
+		}
 		cfg := Request{
 			Clients:           int64(*clients),
-			Host:              scanner.Text(),
+			Host:              words[0],
 			KeepAliveRequests: int64(*keepalive),
 			Method:            "GET",
 			Path:              "/1024.html",
-			Port:              8443,
+			Port:              int64(*port),
 			Scheme:            *scheme,
 			TLSSessionReuse:   *tlsreuse,
 		}
