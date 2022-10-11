@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-for name in $(docker ps --no-trunc --filter name=^/docker-nginx- --format '{{.Names}}' | sort -V); do
-    name=$(echo $name | sed 's/_/-/g')
+. common.sh
+
+for name in $(docker_pods | sort -V); do
+    name=${name//_/-}
     echo "${name}.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_secure:${name}"
 done

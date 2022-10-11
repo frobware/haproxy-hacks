@@ -2,6 +2,8 @@
 
 set -eu
 
+. common.sh
+
 # domain="int.frobware.com"
 # host=$(dig +search +short $(hostname))
 
@@ -39,13 +41,14 @@ trap 'rm -rf -- "$tmpdir"' EXIT
 
 go build -o "$tmpdir/certgen" ./certgen/certgen.go
 
-for name in $(docker ps --no-trunc --filter name=^/docker_nginx_ --format '{{.Names}}' | sort -V); do
-    name=$(echo $name | sed 's/_/-/g')
-    "$tmpdir/certgen" > "$tmpdir/env"
-    . "$tmpdir/env"
+tls_key="$(cat server/tls.key)"
+tls_crt="$(cat server/tls.crt)"
+
+for name in $(docker_pods | sort -V); do
+    name=${name//_/-}
     # printf "%s\n" "$TLS_CACRT" > "$1/router/cacerts/be_secure:${name}.pem"
     printf "%s\n" "$nginx_dest_cacrt" > "$1/router/cacerts/be_secure:${name}.pem"
-    printf "%s\n%s\n%s\n" "$TLS_KEY" "$TLS_CRT" "$TLS_CACRT" > "$1/router/certs/be_secure:${name}.pem"
+    printf "%s\n%s\n" "$tls_key" "$tls_crt" > "$1/router/certs/be_secure:${name}.pem"
     echo "$1/router/certs/be_secure:${name}.pem ${name}.int.frobware.com" >> "$1/conf/cert_config.map"
 done
 

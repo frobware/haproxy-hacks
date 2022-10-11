@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
-for name in $(docker ps --no-trunc --filter name=^/docker-nginx- --format '{{.Names}}' | sort -V); do
+for name in $(docker_pods | sort -V); do
+    name=${name//_/-}
     echo "192.168.7.64 ${name}.int.frobware.com $name"
 done

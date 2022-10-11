@@ -11,6 +11,8 @@ my $public_ssl_port = 8443;
 my $unix_at = "unix@";
 
 print "global
+  log stdout format raw local0
+
   maxconn $maxconn
   nbthread $nbthread
 
@@ -43,6 +45,9 @@ print "global
   ssl-default-bind-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
 
 defaults
+  option httplog
+  option dontlog-normal
+  log global
   maxconn $maxconn
 
   # To configure custom default errors, you can either uncomment the
@@ -183,6 +188,15 @@ frontend fe_no_sni
   use_backend %[base,map_reg(${var_lib_haproxy_dir}/conf/os_edge_reencrypt_be.map)]
 
   default_backend openshift_default
+
+listen stats
+  bind :1936
+  log global
+  option httplog
+  mode http
+  stats enable
+  stats refresh 5s
+  stats uri /stats
 
 ##########################################################################
 # END TLS NO SNI

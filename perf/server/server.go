@@ -9,8 +9,8 @@ import (
 const (
 	defaultHTTPPort  = "8080"
 	defaultHTTPSPort = "8443"
-	defaultTLSCrt    = "/etc/serving-cert/tls.crt"
-	defaultTLSKey    = "/etc/serving-cert/tls.key"
+	defaultTLSCrt    = "/tls.crt"
+	defaultTLSKey    = "/tls.key"
 )
 
 func lookupEnv(key, defaultVal string) string {
