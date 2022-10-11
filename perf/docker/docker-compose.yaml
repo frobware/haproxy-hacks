@@ -1,5 +1,8 @@
 services:
   nginx:
-    image: quay.io/openshift-scale/nginx
+    volumes:
+      - /etc/serving-cert:/etc/serving-cert
+    #image: quay.io/openshift-scale/nginx
+    image: registry.int.frobware.com/aim/perf-server
     ports:
       - "10000-20000:8443"

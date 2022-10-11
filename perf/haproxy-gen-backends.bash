@@ -4,7 +4,7 @@ set -eu
 
 host=$(dig +search +short $(hostname))
 
-for name in $(docker ps --no-trunc --filter name=^/docker_nginx_ --format '{{.Names}}' | sort -V); do
+for name in $(docker ps --no-trunc --filter name=^/docker-nginx- --format '{{.Names}}' | sort -V); do
     port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8443/tcp") 0).HostPort}}' "$name")"
     container_id="$(docker inspect --format='{{.Id}}' "$name")"
     name=$(echo $name | sed 's/_/-/g')
@@ -23,7 +23,7 @@ backend be_secure:${name}
   http-request add-header X-Forwarded-Proto-Version h2 if { ssl_fc_alpn -i h2 }
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
   cookie $(rev <<<"$container_id") insert indirect nocache httponly secure attr SameSite=None
-  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1 ssl verify required ca-file /tmp/lib/haproxy/router/cacerts/be_secure:${name}.pem"
+  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1 ssl verify none"
 done
-#  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1 ssl verify required ca-file /tmp/lib/haproxy/router/cacerts/be_secure:${name}.pem check inter 5000ms"
+#  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1 ssl verify required ca-file /tmp/lib/haproxy/router/cacerts/be_secure:${name}.pem"
 

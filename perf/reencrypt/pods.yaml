@@ -4,7 +4,7 @@ parameters:
 - name: ID
   required: true
 - name: IMAGE
-  #value: quay.io/amcdermo/ocpbugs-173-server:latest
+  #value: quay.io/amcdermo/perf-server:latest
   value: quay.io/openshift-scale/nginx
 objects:
 - kind: Deployment
