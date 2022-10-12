@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
 
-docker compose down --remove-orphans -t 1
+docker-compose down --remove-orphans -t 1
