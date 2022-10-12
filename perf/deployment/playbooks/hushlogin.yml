@@ -1,0 +1,7 @@
+---
+- name: create hushlogin
+  gather_facts: false
+  hosts: all
+  tasks:
+  - name: touch hushlogin
+    command: touch ~/.hushlogin

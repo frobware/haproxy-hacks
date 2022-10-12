@@ -1,0 +1,8 @@
+---
+- name: install dev tools
+  gather_facts: false
+  hosts: all
+  tasks:
+  - name: install packages
+    dnf:
+      name: strace, wget

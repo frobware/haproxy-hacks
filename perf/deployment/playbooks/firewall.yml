@@ -1,0 +1,11 @@
+---
+- name: stop firewall
+  gather_facts: false
+  hosts: all
+  tasks:
+  - name: stop systemd firewall service
+    systemd:
+      name: firewalld
+      state: stopped
+
+

@@ -1,0 +1,9 @@
+---
+- name: update resolver configuration
+  hosts: all
+  gather_facts: false
+  tasks:
+  - name: Replace /etc/host.conf
+    copy:
+      src: host.conf
+      dest: /etc/host.conf
