@@ -29,7 +29,10 @@
       notify: restart NFS server
     - name: export share
       ansible.builtin.command: "exportfs -rav"
-
+    - name: unmask firewalld
+      command: systemctl unmask --now firewalld
+    - name: restart firewalld
+      command: systemctl enable --now firewalld
     - name: firewall enabled
       ansible.posix.firewalld:
         service: "{{ item }}"
@@ -40,7 +43,8 @@
         - nfs
         - rpc-bind
         - mountd
-
+    - name: restart firewalld
+      command: systemctl enable --now nfs-server
   handlers:
     - name: restart NFS server
       ansible.builtin.service:

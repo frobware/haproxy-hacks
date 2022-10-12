@@ -1,0 +1,7 @@
+---
+- name: Disable SELinux
+  hosts: all
+  tasks:
+  - name: set selinux disabled
+    ansible.posix.selinux:
+      state: disabled

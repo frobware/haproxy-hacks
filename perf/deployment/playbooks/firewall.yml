@@ -1,13 +1,13 @@
 ---
-- name: start firewall
+- name: mask firewall
   gather_facts: false
   hosts: all
   tasks:
-  - name: unmask firewall service
-    command: systemctl unmask --now firewalld
-  - name: start systemd firewall service
-    systemd:
-      name: firewalld
-      state: started
+  - name: mask firewall service
+    command: systemctl mask --now firewalld
+  # - name: start systemd firewall service
+  #   systemd:
+  #     name: firewalld
+  #     state: started
 
 

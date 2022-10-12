@@ -14,11 +14,11 @@
       state: touch
       mode: 0644
       owner: aim
-  - name: Set authorized keys taken from url
+  - name: Set authorized keys taken from file
     ansible.posix.authorized_key:
       user: aim
       state: present
-      key: https://github.com/frobware.keys
+      key: "{{ lookup('file', '/home/aim/.ssh/id_rsa.pub') }}"
   - name: Add user to sudo
     lineinfile:
       path: /etc/sudoers.d/aim
@@ -36,7 +36,13 @@
   - name: add tmux.conf
     copy:
       src: tmux.conf
-      dest: ~aim/.tmux.conf
+      dest: /home/aim/.tmux.conf
+      mode: 0644
+      owner: aim
+  - name: add .ssh/config
+    copy:
+      src: ssh/config
+      dest: /home/aim/.ssh/config
       mode: 0644
       owner: aim
 - name: add docker group membership for user aim on perf_backend
