@@ -1,0 +1,13 @@
+---
+- name: install emacs
+  gather_facts: false
+  hosts: perf_backend
+  tasks:
+  - name: enable copr repo
+    command: dnf -y copr enable mlampe/emacs-28
+  - name: Install Emacs package
+    ansible.builtin.yum:
+      name:
+        - emacs
+        - libjansson
+      nobest: true

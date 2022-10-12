@@ -1,0 +1,10 @@
+---
+- hosts: all
+  tasks:
+  - name: Add EPEL REPO
+    command: dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+  - name: Install EPEL packages
+    yum:
+      name: htop, the_silver_searcher, git
+      enablerepo: epel
+      state: latest
