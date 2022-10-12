@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+. common.sh
+
 for name in $(docker_pods | sort -V); do
     name=${name//_/-}
     echo "192.168.7.64 ${name}.int.frobware.com $name"
