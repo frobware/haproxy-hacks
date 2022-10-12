@@ -21,15 +21,6 @@
   - name: Add repo
     command: dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
       
-  # - name: Add repository into repo.d list
-  #   yum_repository:
-  #     name: docker
-  #     description: docker repository
-  #     baseurl: "https://download.docker.com/linux/centos/docker-ce.repo"
-  #     enabled: true
-  #     gpgcheck: false
-  #     gpgkey: "https://download.docker.com/linux/{{ distro }}/gpg"
-
   - name: Install Docker
     ansible.builtin.yum:
       name:
@@ -48,5 +39,5 @@
   - name: Install docker-compose
     get_url: 
       url: https://github.com/docker/compose/releases/download/v2.11.2/docker-compose-linux-x86_64
-      dest: /usr/local/bin/docker-compose
+      dest: /usr/bin/docker-compose
       mode: 0555

@@ -1,0 +1,6 @@
+---
+- hosts: all
+  tasks:
+  - name: Display
+    debug:
+      msg: "{{ ansible_host }}"

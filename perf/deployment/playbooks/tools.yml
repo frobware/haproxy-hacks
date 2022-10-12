@@ -5,4 +5,4 @@
   tasks:
   - name: install packages
     dnf:
-      name: strace, wget
+      name: strace, wget, bind-utils

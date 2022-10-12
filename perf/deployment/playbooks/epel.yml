@@ -5,6 +5,6 @@
     command: dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
   - name: Install EPEL packages
     yum:
-      name: htop, the_silver_searcher, git
+      name: htop, the_silver_searcher, git, tmux
       enablerepo: epel
       state: latest

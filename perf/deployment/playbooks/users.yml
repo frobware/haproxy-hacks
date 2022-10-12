@@ -1,5 +1,5 @@
 ---
-- name: add perf_backend user accounts
+- name: add user accounts
   hosts: all
   tasks:
   - name: add user aim
@@ -7,6 +7,7 @@
       name: aim
       shell: /bin/bash
       groups: wheel
+      state: present
   - name: create hushlogin
     file:
       path: /home/aim/.hushlogin
@@ -26,6 +27,18 @@
       mode: 0440
       create: yes
       validate: 'visudo -cf %s'
+  - name: add bashrc
+    copy:
+      src: bashrc
+      dest: /home/aim/.bashrc
+      mode: 0644
+      owner: aim
+  - name: add tmux.conf
+    copy:
+      src: tmux.conf
+      dest: ~aim/.tmux.conf
+      mode: 0644
+      owner: aim
 - name: add docker group membership for user aim on perf_backend
   hosts: perf_backend
   tasks:
