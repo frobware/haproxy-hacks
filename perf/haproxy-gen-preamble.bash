@@ -1,27 +1,23 @@
-#!/usr/bin/env perl
+#!/usr/bin/env bash
 
-use strict;
+set -eu
 
-my $maxconn = $ENV{"MAXCONN"} || 0;
-my $nbthread = $ENV{"NBTHREAD"} || 4;
-my $var_lib_haproxy_dir = "/tmp/lib/haproxy";
+: ${MAXCONN:=0}
+: ${NBTHREAD:=4}
 
-my $public_port = 8080;
-my $public_ssl_port = 8443;
-my $unix_at = "unix@";
-
-print "global
+cat <<EOF
+global
   log stdout format raw local0
 
-  maxconn $maxconn
-  nbthread $nbthread
+  maxconn $MAXCONN
+  nbthread $NBTHREAD
 
   # daemon
   ca-base /etc/ssl
   crt-base /etc/ssl
   # TODO: Check if we can get reload to be faster by saving server state.
-  # server-state-file ${var_lib_haproxy_dir}/run/haproxy.state
-  stats socket ${var_lib_haproxy_dir}/run/haproxy.sock mode 600 level admin expose-fd listeners
+  # server-state-file /tmp/haproxy.state
+  stats socket /tmp/haproxy.sock mode 600 level admin expose-fd listeners
   stats timeout 2m
 
   # Increase the default request size to be comparable to modern cloud load balancers (ALB: 64kb), affects
@@ -48,15 +44,15 @@ defaults
   option httplog
   option dontlog-normal
   log global
-  maxconn $maxconn
+  maxconn $MAXCONN
 
   # To configure custom default errors, you can either uncomment the
   # line below (server ... 127.0.0.1:8080) and point it to your custom
   # backend service or alternatively, you can send a custom 503 or 404 error.
   #
   # server openshift_backend 127.0.0.1:8080
-  errorfile 503 ${var_lib_haproxy_dir}/conf/error-page-503.http
-  errorfile 404 ${var_lib_haproxy_dir}/conf/error-page-404.http
+  errorfile 503 ${HAPROXY_CONFIG_DIR}/conf/error-page-503.http
+  errorfile 404 ${HAPROXY_CONFIG_DIR}/conf/error-page-404.http
 
   timeout connect 5s
   timeout client 30s
@@ -73,7 +69,7 @@ defaults
 
 frontend public
 
-  bind :${public_port}
+  bind :8080
   mode http
   tcp-request inspect-delay 5s
   tcp-request content accept if HTTP
@@ -87,10 +83,10 @@ frontend public
   http-request set-header Host %[req.hdr(Host),lower]
 
   # check if we need to redirect/force using https.
-  acl secure_redirect base,map_reg_int(${var_lib_haproxy_dir}/conf/os_route_http_redirect.map) -m bool
+  acl secure_redirect base,map_reg_int(${HAPROXY_CONFIG_DIR}/conf/os_route_http_redirect.map) -m bool
   redirect scheme https if secure_redirect
 
-  use_backend %[base,map_reg(${var_lib_haproxy_dir}/conf/os_http_be.map)]
+  use_backend %[base,map_reg(${HAPROXY_CONFIG_DIR}/conf/os_http_be.map)]
 
   default_backend openshift_default
 
@@ -99,15 +95,15 @@ frontend public
 # that terminates encryption in this router (edge)
 frontend public_ssl
 
-  bind :${public_ssl_port}
+  bind :8443
   tcp-request inspect-delay 5s
   tcp-request content accept if { req_ssl_hello_type 1 }
 
   # if the connection is SNI and the route is a passthrough don't use the termination backend, just use the tcp backend
   # for the SNI case, we also need to compare it in case-insensitive mode (by converting it to lowercase) as RFC 4343 says
   acl sni req.ssl_sni -m found
-  acl sni_passthrough req.ssl_sni,lower,map_reg(${var_lib_haproxy_dir}/conf/os_sni_passthrough.map) -m found
-  use_backend %[req.ssl_sni,lower,map_reg(${var_lib_haproxy_dir}/conf/os_tcp_be.map)] if sni sni_passthrough
+  acl sni_passthrough req.ssl_sni,lower,map_reg(${HAPROXY_CONFIG_DIR}/conf/os_sni_passthrough.map) -m found
+  use_backend %[req.ssl_sni,lower,map_reg(${HAPROXY_CONFIG_DIR}/conf/os_tcp_be.map)] if sni sni_passthrough
 
   # if the route is SNI and NOT passthrough enter the termination flow
   use_backend be_sni if sni
@@ -128,11 +124,11 @@ frontend public_ssl
 # traffic
 ##########################################################################
 backend be_sni
-  server fe_sni ${unix_at}${var_lib_haproxy_dir}/run/haproxy-sni.sock weight 1 send-proxy
+  server fe_sni unix@/tmp/haproxy-sni.sock weight 1 send-proxy
 
 frontend fe_sni
   # terminate ssl on edge
-  bind ${unix_at}${var_lib_haproxy_dir}/run/haproxy-sni.sock ssl crt ${var_lib_haproxy_dir}/router/certs/default.pem crt-list ${var_lib_haproxy_dir}/conf/cert_config.map accept-proxy
+  bind unix@/tmp/haproxy-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map accept-proxy
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)
@@ -148,7 +144,7 @@ frontend fe_sni
   # Search from most specific to general path (host case).
   # Note: If no match, haproxy uses the default_backend, no other
   #       use_backend directives below this will be processed.
-  use_backend %[base,map_reg(${var_lib_haproxy_dir}/conf/os_edge_reencrypt_be.map)]
+  use_backend %[base,map_reg(${HAPROXY_CONFIG_DIR}/conf/os_edge_reencrypt_be.map)]
 
   default_backend openshift_default
 
@@ -165,11 +161,11 @@ frontend fe_sni
 ##########################################################################
 # backend for when sni does not exist, or ssl term needs to happen on the edge
 backend be_no_sni
-  server fe_no_sni ${unix_at}${var_lib_haproxy_dir}/run/haproxy-no-sni.sock weight 1 send-proxy
+  server fe_no_sni unix@/tmp/haproxy-no-sni.sock weight 1 send-proxy
 
 frontend fe_no_sni
   # terminate ssl on edge
-  bind ${unix_at}${var_lib_haproxy_dir}/run/haproxy-no-sni.sock ssl crt ${var_lib_haproxy_dir}/router/certs/default.pem accept-proxy
+  bind unix@/tmp/haproxy-no-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem accept-proxy
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)
@@ -185,7 +181,7 @@ frontend fe_no_sni
   # Search from most specific to general path (host case).
   # Note: If no match, haproxy uses the default_backend, no other
   #       use_backend directives below this will be processed.
-  use_backend %[base,map_reg(${var_lib_haproxy_dir}/conf/os_edge_reencrypt_be.map)]
+  use_backend %[base,map_reg(${HAPROXY_CONFIG_DIR}/conf/os_edge_reencrypt_be.map)]
 
   default_backend openshift_default
 
@@ -208,6 +204,5 @@ backend openshift_default
   #option http-keep-alive
   option http-pretend-keepalive
 
-##-------------- app level backends ----------------
-";
-
+##-------------- app level backends ----------------"
+EOF

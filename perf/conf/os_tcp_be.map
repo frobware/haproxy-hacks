@@ -1,1 +1,0 @@
-^http-perf-reencrypt-1-scale\.perf\.ocp411\.int\.frobware\.com\.?(:[0-9]+)?(/.*)?$ be_secure:scale:http-perf-reencrypt-1
