@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-set -eu
-
 docker_pod_prefix=docker-nginx-
 
 function docker_pods() {
@@ -9,6 +7,6 @@ function docker_pods() {
 }
 
 function domain() {
-    local a=$(dig +short -x $(dig +search +short "$(hostname)"))
-    echo ${${a#*.*}%.}
+    local h=$(hostname)
+    echo "${h#*.*}"
 }
