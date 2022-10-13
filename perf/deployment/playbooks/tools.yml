@@ -5,4 +5,5 @@
   tasks:
   - name: install packages
     dnf:
-      name: strace, wget, bind-utils, golang, rsync, lsof
+      name: strace, wget, bind-utils, golang, rsync, lsof, tar, zsh
+      
