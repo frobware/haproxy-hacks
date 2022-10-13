@@ -1,0 +1,16 @@
+---
+- name: update nofile limit
+  hosts: all
+  tasks:
+    - name: Add or modify nofile soft limit for the user aim
+      community.general.pam_limits:
+        domain: aim
+        limit_type: soft
+        limit_item: nofile
+        value: 524288
+    - name: Add or modify nofile soft limit for the user aim
+      community.general.pam_limits:
+        domain: aim
+        limit_type: hard
+        limit_item: nofile
+        value: 524288
