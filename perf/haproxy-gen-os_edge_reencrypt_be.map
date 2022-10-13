@@ -2,9 +2,7 @@
 
 . common.sh
 
-domain="alias.bos.scalelab.redhat.com"
-
 for name in $(docker_pods | sort -V); do
     name=${name//_/-}
-    echo "${name}.${domain}\.?(:[0-9]+)?(/.*)?$ be_secure:${name}"
+    echo "${name}.$(domain)\.?(:[0-9]+)?(/.*)?$ be_secure:${name}"
 done
