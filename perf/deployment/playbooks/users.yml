@@ -33,6 +33,12 @@
       dest: /home/aim/.bashrc
       mode: 0644
       owner: aim
+  - name: add git/config
+    copy:
+      src: git/config
+      dest: /home/aim/.gitconfig
+      mode: 0644
+      owner: aim
   - name: add tmux.conf
     copy:
       src: tmux.conf
