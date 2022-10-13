@@ -1,13 +1,37 @@
 ---
-- name: mask firewall
+- name: firewall
   gather_facts: false
   hosts: all
   tasks:
-  - name: mask firewall service
-    command: systemctl mask --now firewalld
-  # - name: start systemd firewall service
-  #   systemd:
-  #     name: firewalld
-  #     state: started
-
-
+  - name: unmask firewall service
+    command: systemctl unmask --now firewalld
+  - name: enable firewall service
+    command: systemctl enable --now firewalld
+  - name: start systemd firewall service
+    systemd:
+      name: firewalld
+      state: started
+  - name: permit traffic for port 8443
+    ansible.posix.firewalld:
+      port: 8443/tcp
+      permanent: true
+      immediate: true
+      state: enabled
+  - name: permit traffic for port 8080
+    ansible.posix.firewalld:
+      port: 8080/tcp
+      permanent: true
+      immediate: true
+      state: enabled
+  - name: permit traffic for https
+    ansible.posix.firewalld:
+      service: https
+      permanent: true
+      immediate: true
+      state: enabled
+  - name: permit traffic for http
+    ansible.posix.firewalld:
+      service: http
+      permanent: true
+      immediate: true
+      state: enabled
