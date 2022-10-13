@@ -4,6 +4,8 @@ set -eu
 
 : "${DOMAIN:=int.frobware.com}"
 
+DOMAIN="alias.bos.scalelab.redhat.com"
+
 . common.sh
 
 for name in $(docker_pods | sort -V); do

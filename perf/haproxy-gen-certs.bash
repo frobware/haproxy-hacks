@@ -4,7 +4,7 @@ set -eu
 
 . common.sh
 
-# domain="int.frobware.com"
+domain="alias.bos.scalelab.redhat.com"
 # host=$(dig +search +short $(hostname))
 
 [[ -d "${1:?}/conf" ]] || {
@@ -49,7 +49,7 @@ for name in $(docker_pods | sort -V); do
     # printf "%s\n" "$TLS_CACRT" > "$1/router/cacerts/be_secure:${name}.pem"
     printf "%s\n" "$nginx_dest_cacrt" > "$1/router/cacerts/be_secure:${name}.pem"
     printf "%s\n%s\n" "$tls_key" "$tls_crt" > "$1/router/certs/be_secure:${name}.pem"
-    echo "$1/router/certs/be_secure:${name}.pem ${name}.int.frobware.com" >> "$1/conf/cert_config.map"
+    echo "$1/router/certs/be_secure:${name}.pem ${name}.${domain}" >> "$1/conf/cert_config.map"
 done
 
 exit 0
