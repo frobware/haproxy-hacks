@@ -5,5 +5,5 @@
   tasks:
   - name: install packages
     dnf:
-      name: strace, wget, bind-utils, golang, rsync, lsof, tar, zsh
+      name: strace, wget, bind-utils, golang, rsync, lsof, tar, zsh, glibc-minimal-langpack, glibc-all-langpacks, util-linux-user
       
