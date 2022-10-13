@@ -4,6 +4,7 @@ set -eu
 
 : ${MAXCONN:=0}
 : ${NBTHREAD:=4}
+: ${MAXACCEPT:=64}
 
 cat <<EOF
 global
@@ -26,6 +27,7 @@ global
   # Cluster administrators are still encouraged to use the default values provided below.
   tune.maxrewrite 8192
   tune.bufsize 32768
+  tune.maxaccept ${MAXACCEPT}
 
   # Configure the TLS versions we support
   ssl-default-bind-options ssl-min-ver TLSv1.2
@@ -41,8 +43,6 @@ global
   ssl-default-bind-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
 
 defaults
-  option httplog
-  option dontlog-normal
   log global
   maxconn $MAXCONN
 
@@ -124,11 +124,16 @@ frontend public_ssl
 # traffic
 ##########################################################################
 backend be_sni
-  server fe_sni unix@/tmp/haproxy-sni.sock weight 1 send-proxy
+# server fe_sni unix@/tmp/haproxy-sni.sock weight 1 send-proxy
+  server fe_sni 127.0.0.1:10444 weight 1
 
 frontend fe_sni
+  option httplog
+  option dontlog-normal
+
   # terminate ssl on edge
-  bind unix@/tmp/haproxy-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map accept-proxy
+# bind unix@/tmp/haproxy-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map accept-proxy
+  bind 127.0.0.1:10444 ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)
@@ -161,11 +166,13 @@ frontend fe_sni
 ##########################################################################
 # backend for when sni does not exist, or ssl term needs to happen on the edge
 backend be_no_sni
-  server fe_no_sni unix@/tmp/haproxy-no-sni.sock weight 1 send-proxy
+# server fe_no_sni unix@/tmp/haproxy-no-sni.sock weight 1 send-proxy
+  server fe_no_sni 127.0.0.1:10443 weight 1
 
 frontend fe_no_sni
   # terminate ssl on edge
-  bind unix@/tmp/haproxy-no-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem accept-proxy
+# bind unix@/tmp/haproxy-no-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem accept-proxy
+  bind 127.0.0.1:10443 ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)
