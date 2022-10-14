@@ -3,7 +3,7 @@
 set -eu
 
 : ${MAXCONN:=0}
-: ${NBTHREAD:=4}
+: ${NBTHREAD:=64}
 : ${MAXACCEPT:=64}
 
 cat <<EOF
@@ -27,7 +27,7 @@ global
   # Cluster administrators are still encouraged to use the default values provided below.
   tune.maxrewrite 8192
   tune.bufsize 32768
-  tune.maxaccept ${MAXACCEPT}
+  #tune.maxaccept ${MAXACCEPT}
 
   # Configure the TLS versions we support
   ssl-default-bind-options ssl-min-ver TLSv1.2
