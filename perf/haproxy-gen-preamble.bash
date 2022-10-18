@@ -3,7 +3,7 @@
 set -eu
 
 : ${MAXCONN:=0}
-: ${NBTHREAD:=64}
+: ${NBTHREAD:=4}
 : ${MAXACCEPT:=64}
 
 cat <<EOF

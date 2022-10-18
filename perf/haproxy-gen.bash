@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
+set -eu
+
 : "${HAPROXY_CONFIG_DIR:=$(realpath $PWD/haproxy)}"
 export HAPROXY_CONFIG_DIR
-
-set -eu
 
 rm -rf ${HAPROXY_CONFIG_DIR}
 mkdir -p ${HAPROXY_CONFIG_DIR}/router/{certs,cacerts,whitelists}
