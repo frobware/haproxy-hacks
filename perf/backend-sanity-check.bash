@@ -7,6 +7,5 @@ set -eu
 for name in $(docker_pods | sort -V); do
     port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8443/tcp") 0).HostPort}}' "$name")"
     name=${name//_/-}
-    curl -o /dev/null -s -k --connect-timeout 2 https://"$name.$(domain):$port/1024.html"
-    echo "$name.$(domain) $port OK"
+    curl -4 -o /dev/null -k -L -s -w "${name} status %{http_code}\n" https://"$name.$(domain):$port/1024.html"
 done
