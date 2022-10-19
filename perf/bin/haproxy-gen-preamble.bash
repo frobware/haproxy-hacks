@@ -4,7 +4,6 @@ set -eu
 
 : ${MAXCONN:=0}
 : ${NBTHREAD:=4}
-: ${MAXACCEPT:=64}
 
 cat <<EOF
 global
@@ -27,7 +26,6 @@ global
   # Cluster administrators are still encouraged to use the default values provided below.
   tune.maxrewrite 8192
   tune.bufsize 32768
-  #tune.maxaccept ${MAXACCEPT}
 
   # Configure the TLS versions we support
   ssl-default-bind-options ssl-min-ver TLSv1.2
@@ -43,7 +41,6 @@ global
   ssl-default-bind-ciphersuites TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256
 
 defaults
-  log global
   maxconn $MAXCONN
 
   # To configure custom default errors, you can either uncomment the
@@ -127,8 +124,12 @@ backend be_sni
   server fe_sni unix@/tmp/haproxy-sni.sock weight 1 send-proxy
 
 frontend fe_sni
+  # log global
+  # option httplog
+  # option dontlognull
+
   # terminate ssl on edge
-  bind unix@/tmp/haproxy-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map accept-proxy
+  bind unix@/tmp/haproxy-sni.sock ssl crt /tmp/haproxy-default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map accept-proxy
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)
@@ -164,8 +165,9 @@ backend be_no_sni
   server fe_no_sni unix@/tmp/haproxy-no-sni.sock weight 1 send-proxy
 
 frontend fe_no_sni
+
   # terminate ssl on edge
-  bind unix@/tmp/haproxy-no-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem accept-proxy
+  bind unix@/tmp/haproxy-no-sni.sock ssl crt /tmp/haproxy-default.pem accept-proxy
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)

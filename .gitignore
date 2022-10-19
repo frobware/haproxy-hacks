@@ -5,3 +5,4 @@ benchmark-config:
 /perf/results.bash
 /perf/certs/
 /perf/haproxy/
+perf/bin/certs/haproxy

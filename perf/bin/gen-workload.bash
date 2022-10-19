@@ -2,6 +2,9 @@
 
 set -eu
 
+thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+pushd "$(realpath $thisdir)" >/dev/null
+
 . common.sh
 
 for name in $(docker_pods | sort -V); do

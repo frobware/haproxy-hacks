@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
+set -eu
+
 . common.sh
 
 for name in $(docker_pods | sort -V); do
     name=${name//_/-}
-    echo "${name}.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_secure:${name}"
+    echo "${name}.$(domain)\.?(:[0-9]+)?(/.*)?$ be_secure:${name}"
 done

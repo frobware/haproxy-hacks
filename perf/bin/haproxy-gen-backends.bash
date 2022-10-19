@@ -2,12 +2,9 @@
 
 set -eu
 
-: "${HAPROXY_CONFIG_DIR:=$(realpath $PWD/haproxy)}"
-export HAPROXY_CONFIG_DIR
-
-host=$(dig +search +short $(hostname))
-
 . common.sh
+
+host_ip=$(dig +search +short $(hostname))
 
 for name in $(docker_pods | sort -V); do
     port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8443/tcp") 0).HostPort}}' "$name")"
@@ -28,6 +25,5 @@ backend be_secure:${name}
   http-request add-header X-Forwarded-Proto-Version h2 if { ssl_fc_alpn -i h2 }
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
   cookie $(rev <<<"$container_id") insert indirect nocache httponly secure attr SameSite=None
-  server pod:${name}:https:${host}:$port ${host}:$port cookie $container_id weight 1 ssl verify required ca-file ${HAPROXY_CONFIG_DIR}/router/cacerts/be_secure:${name}.pem"
+  server pod:${name}:https:${host_ip}:$port ${host_ip}:$port cookie $container_id weight 1 ssl verify required ca-file ${HAPROXY_CONFIG_DIR}/router/cacerts/be_secure:${name}.pem"
 done
-

@@ -3,7 +3,8 @@
 docker_pod_prefix=docker-nginx-
 
 case "$(hostname)" in
-    spicy*) docker_pod_prefix=docker_nginx_;;
+    spicy*)
+	docker_pod_prefix=docker_nginx_;;
 esac
 
 function docker_pods() {
@@ -11,6 +12,5 @@ function docker_pods() {
 }
 
 function domain() {
-    local h=$(hostname)
-    echo "${h#*.*}"
+    echo $(hostname -d)
 }
