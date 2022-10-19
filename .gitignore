@@ -1,3 +1,7 @@
 benchmark-config:
 /keda/nodes-ready-app/nodes-ready-app
 /perf/results.json
+/perf/requests.json
+/perf/results.bash
+/perf/certs/
+/perf/haproxy/
