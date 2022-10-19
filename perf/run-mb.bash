@@ -1,8 +1,9 @@
 #! /usr/bin/env bash
 
-set -eu
+set -eux
 
-: "${DOCKER:=podman}"
+: "${PODMAN:=docker}"
 
-"$DOCKER" run --rm -it -v "$(pwd)":/data quay.io/amcdermo/mb -i "${1:-requests.json}" -o "${2:-/dev/stdout}"
+"$PODMAN" run -w /data --rm -it -v "$(pwd)":/data quay.io/amcdermo/mb "$@"
+
 

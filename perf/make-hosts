@@ -2,9 +2,7 @@
 
 . common.sh
 
-host=$(dig +search +short $(hostname))
-
 for name in $(docker_pods | sort -V); do
     name=${name//_/-}
-    echo "10.19.96.50 ${name}.int.frobware.com $name"
+    echo "192.168.7.64 ${name}.int.frobware.com $name"
 done
