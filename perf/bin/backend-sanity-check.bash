@@ -2,10 +2,10 @@
 
 set -eu
 
-. common.sh
+thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+. "${thisdir}/common.sh"
 
-for name in $(docker_pods | sort -V); do
-    port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8443/tcp") 0).HostPort}}' "$name")"
-    name=${name//_/-}
-    curl --connect-timeout 1s -4 -o /dev/null -k -L -s -w "${name} status %{http_code}\n" https://"$name.$(domain):$port/1024.html"
+for name in $(backend_names_sorted); do
+    url="https://$name.${domain}:${BACKEND_PORTS[$name]}/1024.html"
+    curl --connect-timeout 1 -4 -o /dev/null -k -L -s -w "GET $url status %{http_code}\n" "${url}"
 done
