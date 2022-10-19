@@ -1,0 +1,49 @@
+---
+- name: add user aim
+  hosts: all
+  tasks:
+  - name: Install packages
+    become: yes
+    dnf:
+      name: git, zsh, util-linux-user, make
+      state: present
+  - name: add user aim
+    ansible.builtin.user:
+      name: aim
+      shell: /bin/zsh
+      groups: wheel
+      state: present
+  - name: create dummy .zshrc
+    file:
+      path: /home/aim/.zshrc
+      state: touch
+      mode: 0644
+      owner: aim
+  - name: Set authorized keys taken from url
+    ansible.posix.authorized_key:
+      user: aim
+      state: present
+      key: https://github.com/frobware.keys
+  - name: Add user to sudo
+    lineinfile:
+      path: /etc/sudoers.d/aim
+      line: 'aim ALL=(ALL) NOPASSWD: ALL'
+      state: present
+      mode: 0440
+      create: yes
+      validate: 'visudo -cf %s'
+  - name: Clone nix-config
+    git:
+      repo: https://github.com/frobware/nix-config
+      dest: /home/aim/src/github.com/frobware/nix-config
+  - name: fudge
+    command: chown -R aim:aim /home/aim
+- name: add docker group membership for user aim
+  hosts: perf_backend
+  tasks:
+  - name: add docker group to user aim
+    ansible.builtin.user:
+      name: aim
+      groups: wheel,docker
+      append: yes
+      state: present

@@ -1,10 +1,10 @@
 ---
 - hosts: all
   tasks:
-  - name: Add EPEL REPO
-    command: dnf install https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
-  - name: Install EPEL packages
-    yum:
-      name: htop, the_silver_searcher, git, tmux
-      enablerepo: epel
-      state: latest
+  - name: Add repository
+    ansible.builtin.yum_repository:
+      name: epel
+      description: EPEL YUM repo
+      baseurl: https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm
+      state: absent
+    become: yes

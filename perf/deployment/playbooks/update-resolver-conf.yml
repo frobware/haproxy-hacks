@@ -1,9 +1,18 @@
 ---
-- name: update resolver configuration
+- name: set resolver configuration
   hosts: all
-  gather_facts: false
   tasks:
-  - name: Replace /etc/host.conf
-    copy:
-      src: host.conf
-      dest: /etc/host.conf
+  - name: Check for hosts in /etc/host.conf
+    lineinfile:
+      state: absent
+      path: "/etc/host.conf"
+      regexp: "^order hosts,dns"
+    check_mode: true
+    changed_when: false
+    register: check
+  - name: Add hosts to /etc/host.conf
+    lineinfile:
+      state: present
+      path: "/etc/host.conf"
+      line: "order hosts,dns"
+    when: check.found == 0

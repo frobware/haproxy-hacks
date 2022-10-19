@@ -1,0 +1,10 @@
+---
+- hosts: all
+  tasks:
+  - name: subscription-manager register
+    command: "subscription-manager register --username {{ username }} --password {{ password }}"
+    retries: 3
+  - name: Upgrade all packages
+    ansible.builtin.yum:
+      name: '*'
+      state: latest

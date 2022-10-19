@@ -1,5 +1,5 @@
 ---
-- name: install dev tools
+- name: install packages
   gather_facts: false
   hosts: all
   tasks:

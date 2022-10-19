@@ -1,6 +1,5 @@
 ---
 - name: install NFS server
-  gather_facts: false
   hosts: perf_mb
   become: true
   vars:

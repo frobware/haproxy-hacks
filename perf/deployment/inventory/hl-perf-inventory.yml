@@ -1,0 +1,10 @@
+all:
+  hosts:
+    perf_backend:
+      ansible_host: perf-vm-backend
+    perf_haproxy:
+      ansible_host: perf-vm-haproxy
+    perf_mb:
+      ansible_host: perf-vm-mb
+  nfs_servers:
+    perf_mb:
