@@ -124,16 +124,11 @@ frontend public_ssl
 # traffic
 ##########################################################################
 backend be_sni
-# server fe_sni unix@/tmp/haproxy-sni.sock weight 1 send-proxy
-  server fe_sni 127.0.0.1:10444 weight 1
+  server fe_sni unix@/tmp/haproxy-sni.sock weight 1 send-proxy
 
 frontend fe_sni
-  option httplog
-  option dontlog-normal
-
   # terminate ssl on edge
-# bind unix@/tmp/haproxy-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map accept-proxy
-  bind 127.0.0.1:10444 ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map
+  bind unix@/tmp/haproxy-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem crt-list ${HAPROXY_CONFIG_DIR}/conf/cert_config.map accept-proxy
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)
@@ -166,13 +161,11 @@ frontend fe_sni
 ##########################################################################
 # backend for when sni does not exist, or ssl term needs to happen on the edge
 backend be_no_sni
-# server fe_no_sni unix@/tmp/haproxy-no-sni.sock weight 1 send-proxy
-  server fe_no_sni 127.0.0.1:10443 weight 1
+  server fe_no_sni unix@/tmp/haproxy-no-sni.sock weight 1 send-proxy
 
 frontend fe_no_sni
   # terminate ssl on edge
-# bind unix@/tmp/haproxy-no-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem accept-proxy
-  bind 127.0.0.1:10443 ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem
+  bind unix@/tmp/haproxy-no-sni.sock ssl crt ${HAPROXY_CONFIG_DIR}/router/certs/default.pem accept-proxy
   mode http
 
   # Strip off Proxy headers to prevent HTTpoxy (https://httpoxy.org/)

@@ -2,7 +2,9 @@
 
 . common.sh
 
+: "${HOSTIP:=$(dig +short $(hostname))}"
+
 for name in $(docker_pods | sort -V); do
     name=${name//_/-}
-    echo "192.168.7.64 ${name}.int.frobware.com $name"
+    echo "$HOSTIP ${name}.int.frobware.com $name"
 done
