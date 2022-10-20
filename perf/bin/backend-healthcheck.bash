@@ -8,7 +8,7 @@ thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 declare -a failures=()
 
 for name in $(backend_names_sorted); do
-    url="$name.${domain}:${BACKEND_PORTS[$name]}/1024.html"
+    url="$name.${domain}:${BACKEND_HTTPS_PORTS[$name]}/1024.html"
     if ! curl --connect-timeout 3 -o /dev/null -q -k -L -s -w "https://$url %{http_code}\n" "https://${url}"; then
 	failures+=($url)
     fi

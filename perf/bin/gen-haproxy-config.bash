@@ -230,7 +230,7 @@ backend openshift_default
 EOF
 
 for name in $(backend_names_sorted); do
-    port=${BACKEND_PORTS[$name]}
+    port=${BACKEND_HTTPS_PORTS[$name]}
     container_id=${BACKEND_CONTAINER_IDS[$name]}
     echo "
 backend be_secure:${name}

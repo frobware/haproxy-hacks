@@ -18,16 +18,16 @@ if [[ -z "${domain}" ]]; then
 fi
 
 declare -A BACKEND_CONTAINER_IDS
-declare -A BACKEND_PORTS
+declare -A BACKEND_HTTPS_PORTS
 
 for name in $(docker ps --no-trunc --filter name=^/${container_name_prefix} --format '{{.Names}}'); do
     port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8443/tcp") 0).HostPort}}' "$name")"
     container_id="$(docker inspect --format='{{.Id}}' "$name")"
     name=${name//_/-}
     BACKEND_CONTAINER_IDS[$name]=$container_id
-    BACKEND_PORTS[$name]=$port
+    BACKEND_HTTPS_PORTS[$name]=$port
 done
 
 function backend_names_sorted() {
-    printf "%s\n" "${!BACKEND_PORTS[@]}" | sort -V
+    printf "%s\n" "${!BACKEND_HTTPS_PORTS[@]}" | sort -V
 }
