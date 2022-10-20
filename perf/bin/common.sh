@@ -17,8 +17,8 @@ if [[ -z "${domain}" ]]; then
     exit 1
 fi
 
-declare -A -x BACKEND_CONTAINER_IDS
-declare -A -x BACKEND_PORTS
+declare -A BACKEND_CONTAINER_IDS
+declare -A BACKEND_PORTS
 
 for name in $(docker ps --no-trunc --filter name=^/${container_name_prefix} --format '{{.Names}}'); do
     port="$(docker inspect --format='{{(index (index .NetworkSettings.Ports "8443/tcp") 0).HostPort}}' "$name")"
