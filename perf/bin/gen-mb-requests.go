@@ -38,52 +38,143 @@ type Headers struct {
 	ContentType string `json:"Content-Type"`
 }
 
+type Backend struct {
+	Name string
+	Port int64
+}
+
+type Backends map[string]Backend
+
+type TerminationType string
+
+type RequestConfig struct {
+	Clients           int64
+	Domain            string
+	KeepAliveRequests int64
+	TLSSessionReuse   bool
+	TerminationTypes  []TerminationType
+}
+
 var (
-	clients   = flag.Int("clients", 200, "number of clients")
-	keepalive = flag.Int("keepalive", 0, "number of keepalive requests")
-	scheme    = flag.String("scheme", "https", "either http or https")
-	tlsreuse  = flag.Bool("tlsreuse", true, "enable TLS reuse")
-	port      = flag.Int("port", 8443, "port number")
-	direct    = flag.Bool("direct", false, "direct to backend")
+	tlsreuse = flag.Bool("tlsreuse", true, "enable TLS reuse")
+	domain   = flag.String("domain", "", "domain name")
 )
+
+const (
+	EdgeTermination        TerminationType = "edge"
+	HTTPTermination        TerminationType = "http"
+	PassthroughTermination TerminationType = "passthrough"
+	ReEncryptTermination   TerminationType = "reencrypt"
+)
+
+var AllTerminationTypes = [...]TerminationType{
+	EdgeTermination,
+	HTTPTermination,
+	PassthroughTermination,
+	ReEncryptTermination,
+}
+
+func (t TerminationType) TerminationScheme() string {
+	switch t {
+	case HTTPTermination:
+		return "http"
+	default:
+		return "https"
+	}
+}
+
+func (t TerminationType) TerminationPort() int64 {
+	switch t {
+	case HTTPTermination:
+		return 8080
+	default:
+		return 8443
+	}
+}
+
+func writeFile(filename string, data []byte) error {
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		return err
+	}
+	return f.Close()
+}
+
+func generateRequests(config RequestConfig, backends Backends) []Request {
+	var requests []Request
+
+	for _, t := range config.TerminationTypes {
+		for name := range backends {
+			requests = append(requests, Request{
+				Clients:           config.Clients,
+				Host:              fmt.Sprintf("%s.%s", name, config.Domain),
+				KeepAliveRequests: config.KeepAliveRequests,
+				Method:            "GET",
+				Path:              "/1024.html",
+				Port:              t.TerminationPort(),
+				Scheme:            t.TerminationScheme(),
+				TLSSessionReuse:   *tlsreuse,
+			})
+		}
+	}
+
+	return requests
+}
 
 func main() {
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	var requests []Request
+	if *domain == "" {
+		log.Fatal("no domain name specified")
+	}
+
 	scanner := bufio.NewScanner(os.Stdin)
+	backends := Backends{}
+
+	// Input format is lines of the form: <backend-name> <port-number>
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		words := strings.Split(line, " ")
-		if *direct && len(words) > 1 {
-			if n, err := strconv.Atoi(words[1]); err == nil {
-				*port = n
-			} else {
-				panic(err)
+		port, err := strconv.ParseInt(words[1], 10, 64)
+		if err != nil {
+			log.Fatal(err)
+		}
+		backends[words[0]] = Backend{Name: words[0], Port: port}
+		break
+	}
+
+	for _, test := range []struct {
+		Name             string
+		TerminationTypes []TerminationType
+	}{
+		{"edge", []TerminationType{EdgeTermination}},
+		{"http", []TerminationType{HTTPTermination}},
+		{"mix", AllTerminationTypes[:]},
+		{"passthrough", []TerminationType{PassthroughTermination}},
+		{"reencrypt", []TerminationType{ReEncryptTermination}},
+	} {
+		for _, keepAliveRequests := range []int64{0, 1, 50} {
+			config := RequestConfig{
+				Clients:           100,
+				Domain:            *domain,
+				KeepAliveRequests: keepAliveRequests,
+				TLSSessionReuse:   false,
+				TerminationTypes:  test.TerminationTypes,
+			}
+			requests := generateRequests(config, backends)
+			data, err := json.MarshalIndent(requests, "", "  ")
+			if err != nil {
+				log.Fatal(err)
+			}
+			filename := fmt.Sprintf("mb-requests-backends-%v-clients-%v-keepalives-%v-%s.json", 100, config.Clients, config.KeepAliveRequests, test.Name)
+			if err := writeFile(filename, data); err != nil {
+				log.Fatalf("error generating %s: %v", filename, err)
 			}
 		}
-		cfg := Request{
-			Clients:           int64(*clients),
-			Host:              words[0],
-			KeepAliveRequests: int64(*keepalive),
-			Method:            "GET",
-			Path:              "/1024.html",
-			Port:              int64(*port),
-			Scheme:            *scheme,
-			TLSSessionReuse:   *tlsreuse,
-		}
-		requests = append(requests, cfg)
 	}
-
-	if err := scanner.Err(); err != nil {
-		log.Fatal(err)
-	}
-
-	b, err := json.MarshalIndent(requests, "", "  ")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(string(b))
 }
