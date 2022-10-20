@@ -170,12 +170,15 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
-				filename := fmt.Sprintf("mb-backends:%v-clients:%v-keepalives:%v-tlsreuse:%v-traffic:%v.json",
-					len(requests),
+				path := fmt.Sprintf("mb/traffic/%v/backends/%v/clients/%v/keepalives/%v",
+					scenario.Name,
+					len(requests)/len(config.TerminationTypes),
 					config.Clients,
-					config.KeepAliveRequests,
-					*tlsreuse,
-					scenario.Name)
+					config.KeepAliveRequests)
+				if err := os.MkdirAll(path, 0755); err != nil {
+					log.Fatalf("error: failed to create path: %q: %v", path, err)
+				}
+				filename := fmt.Sprintf("%s/requests.json", path)
 				if err := writeFile(filename, data); err != nil {
 					log.Fatalf("error generating %s: %v", filename, err)
 				}
