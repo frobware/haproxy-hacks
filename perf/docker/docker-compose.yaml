@@ -2,5 +2,5 @@ services:
   nginx:
     image: quay.io/openshift-scale/nginx
     ports:
-      - "10100-10500:8443"
-      - "10500-11000:8080"
+      - "10000-11000:8443"
+      - "12000-13000:8080"

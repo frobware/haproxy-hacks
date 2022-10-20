@@ -170,7 +170,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			filename := fmt.Sprintf("mb-requests-backends-%v-clients-%v-keepalives-%v-%s.json", len(requests), config.Clients, config.KeepAliveRequests, scenario.Name)
+			filename := fmt.Sprintf("mb-backends:%v-clients:%v-keepalives:%v-%v.json", len(requests), config.Clients, config.KeepAliveRequests, scenario.Name)
 			if err := writeFile(filename, data); err != nil {
 				log.Fatalf("error generating %s: %v", filename, err)
 			}

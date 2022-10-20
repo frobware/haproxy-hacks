@@ -9,6 +9,7 @@ thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 # This is the output path for the generated haproxy config.
 : "${HAPROXY_CONFIG_DIR:=$(realpath "$PWD"/../haproxy-config)}"
+HAPROXY_CONFIG_DIR=/tmp/${USER:-nouser}-haproxy-config
 export HAPROXY_CONFIG_DIR
 echo "HAProxy configuration directory: $HAPROXY_CONFIG_DIR"
 
@@ -230,14 +231,17 @@ backend openshift_default
 EOF
 
 for name in $(backend_names_sorted); do
-    port=${BACKEND_HTTPS_PORTS[$name]}
+    http_port=${BACKEND_HTTP_PORTS[$name]}
+    https_port=${BACKEND_HTTPS_PORTS[$name]}
     container_id=${BACKEND_CONTAINER_IDS[$name]}
+
     echo "
-backend be_secure:${name}
+backend be_secure:${name}-reencrypt
   mode http
   option redispatch
   option forwardfor
   balance random
+
   timeout check 5000ms
   http-request add-header X-Forwarded-Host %[req.hdr(host)]
   http-request add-header X-Forwarded-Port %[dst_port]
@@ -246,11 +250,64 @@ backend be_secure:${name}
   http-request add-header X-Forwarded-Proto-Version h2 if { ssl_fc_alpn -i h2 }
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
   cookie $(rev <<<"$container_id") insert indirect nocache httponly secure attr SameSite=None
-  server pod:${name}:https:${host_ip}:$port ${host_ip}:$port cookie $container_id weight 1 ssl verify required ca-file ${HAPROXY_CONFIG_DIR}/router/cacerts/be_secure:${name}.pem" >> "${HAPROXY_CONFIG_DIR}/conf/haproxy.config"
+  server pod:${name}:${host_ip}:$https_port ${host_ip}:$https_port cookie $container_id weight 1 ssl verify required ca-file ${HAPROXY_CONFIG_DIR}/router/cacerts/be_secure:${name}-reencrypt.pem
+
+backend be_edge_http:${name}-edge
+  mode http
+  option redispatch
+  option forwardfor
+  balance random
+
+  timeout check 5000ms
+  http-request add-header X-Forwarded-Host %[req.hdr(host)]
+  http-request add-header X-Forwarded-Port %[dst_port]
+  http-request add-header X-Forwarded-Proto http if !{ ssl_fc }
+  http-request add-header X-Forwarded-Proto https if { ssl_fc }
+  http-request add-header X-Forwarded-Proto-Version h2 if { ssl_fc_alpn -i h2 }
+  http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
+  cookie $(rev <<<"$container_id") insert indirect nocache httponly secure attr SameSite=None
+  server pod:${name}:${host_ip}:$http_port ${host_ip}:$http_port cookie $container_id weight 1
+
+backend be_http:${name}-http
+  mode http
+  option redispatch
+  option forwardfor
+  balance random
+
+  timeout check 5000ms
+  http-request add-header X-Forwarded-Host %[req.hdr(host)]
+  http-request add-header X-Forwarded-Port %[dst_port]
+  http-request add-header X-Forwarded-Proto http if !{ ssl_fc }
+  http-request add-header X-Forwarded-Proto https if { ssl_fc }
+  http-request add-header X-Forwarded-Proto-Version h2 if { ssl_fc_alpn -i h2 }
+  http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
+  cookie $(rev <<<"$container_id") insert indirect nocache httponly secure attr SameSite=None
+  server pod:${name}:${host_ip}:$http_port ${host_ip}:$http_port cookie $container_id weight 1
+
+backend be_tcp:${name}-passthrough
+  balance source
+
+  hash-type consistent
+  timeout check 5000ms
+  server pod:${name}:${host_ip}:$https_port ${host_ip}:$https_port weight 1" >> "${HAPROXY_CONFIG_DIR}/conf/haproxy.config"
 done
 
 for name in $(backend_names_sorted); do
-    echo "${name}.${domain}\.?(:[0-9]+)?(/.*)?$ be_secure:${name}" >> "${HAPROXY_CONFIG_DIR}/conf/os_edge_reencrypt_be.map"
+    echo "^${name}-edge.${domain}\.?(:[0-9]+)?(/.*)?$ be_edge_http:${name}-edge" >> "${HAPROXY_CONFIG_DIR}/conf/os_edge_reencrypt_be.map"
+    echo "^${name}-reencrypt.${domain}\.?(:[0-9]+)?(/.*)?$ be_secure:${name}-reencrypt" >> "${HAPROXY_CONFIG_DIR}/conf/os_edge_reencrypt_be.map"
+done
+
+for name in $(backend_names_sorted); do
+    echo "^${name}-http.${domain}\.?(:[0-9]+)?(/.*)?$ be_http:${name}-http" >> "${HAPROXY_CONFIG_DIR}/conf/os_http_be.map"
+done
+
+for name in $(backend_names_sorted); do
+    echo "^${name}-passthrough.${domain}$ 1" >> "${HAPROXY_CONFIG_DIR}/conf/os_sni_passthrough.map"
+done
+
+for name in $(backend_names_sorted); do
+    echo "${name}-passthrough.${domain}\.?(:[0-9]+)?(/.*)?$ be_tcp:${name}-passthrough" >> "${HAPROXY_CONFIG_DIR}/conf/os_tcp_be.map"
+    echo "${name}-reencrypt.${domain}\.?(:[0-9]+)?(/.*)?$ be_secure:${name}-reencrypt" >> "${HAPROXY_CONFIG_DIR}/conf/os_tcp_be.map"
 done
 
 dest_cacrt="$(cat "${thisdir}"/certs/reencrypt/destca.crt)"
@@ -258,7 +315,7 @@ tls_crt="$(cat "${thisdir}"/certs/reencrypt/tls.crt)"
 tls_key="$(cat "${thisdir}"/certs/reencrypt/tls.key)"
 
 for name in $(backend_names_sorted); do
-    printf "%s\n" "${dest_cacrt}" > "${HAPROXY_CONFIG_DIR}/router/cacerts/be_secure:${name}.pem"
-    printf "%s\n%s\n" "$tls_key" "$tls_crt" > "${HAPROXY_CONFIG_DIR}/router/certs/be_secure:${name}.pem"
-    echo "${HAPROXY_CONFIG_DIR}/router/certs/be_secure:${name}.pem ${name}.${domain}" >> "${HAPROXY_CONFIG_DIR}/conf/cert_config.map"
+    printf "%s\n" "${dest_cacrt}" > "${HAPROXY_CONFIG_DIR}/router/cacerts/be_secure:${name}-reencrypt.pem"
+    printf "%s\n%s\n" "$tls_key" "$tls_crt" > "${HAPROXY_CONFIG_DIR}/router/certs/be_secure:${name}-reencrypt.pem"
+    echo "${HAPROXY_CONFIG_DIR}/router/certs/be_secure:${name}-reencrypt.pem [alpn h2,http/1.1] ${name}-reencrypt.${domain}" >> "${HAPROXY_CONFIG_DIR}/conf/cert_config.map"
 done
