@@ -57,6 +57,7 @@ type RequestConfig struct {
 
 var (
 	tlsreuse = flag.Bool("tlsreuse", true, "enable TLS reuse")
+	clients  = flag.Int64("clients", 100, "number of http clients per backend")
 	domain   = flag.String("domain", "", "domain name")
 )
 
@@ -159,7 +160,7 @@ func main() {
 	} {
 		for _, keepAliveRequests := range []int64{0, 1, 50} {
 			config := RequestConfig{
-				Clients:           100,
+				Clients:           *clients,
 				Domain:            *domain,
 				KeepAliveRequests: keepAliveRequests,
 				TLSSessionReuse:   false,
@@ -170,7 +171,12 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			filename := fmt.Sprintf("mb-backends:%v-clients:%v-keepalives:%v-%v.json", len(requests), config.Clients, config.KeepAliveRequests, scenario.Name)
+			filename := fmt.Sprintf("mb-backends:%v-clients:%v-keepalives:%v-tlsreuse:%v-traffic:%v.json",
+				len(requests),
+				config.Clients,
+				config.KeepAliveRequests,
+				*tlsreuse,
+				scenario.Name)
 			if err := writeFile(filename, data); err != nil {
 				log.Fatalf("error generating %s: %v", filename, err)
 			}
