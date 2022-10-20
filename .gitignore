@@ -6,4 +6,4 @@ benchmark-config:
 /perf/certs/
 /perf/haproxy/
 perf/bin/certs/haproxy
-/perf/mb/
+
