@@ -145,7 +145,6 @@ func main() {
 			log.Fatal(err)
 		}
 		backends[words[0]] = Backend{Name: words[0], Port: port}
-		break
 	}
 
 	for _, test := range []struct {
@@ -171,7 +170,7 @@ func main() {
 			if err != nil {
 				log.Fatal(err)
 			}
-			filename := fmt.Sprintf("mb-requests-backends-%v-clients-%v-keepalives-%v-%s.json", 100, config.Clients, config.KeepAliveRequests, test.Name)
+			filename := fmt.Sprintf("mb-requests-backends-%v-clients-%v-keepalives-%v-%s.json", len(requests), config.Clients, config.KeepAliveRequests, test.Name)
 			if err := writeFile(filename, data); err != nil {
 				log.Fatalf("error generating %s: %v", filename, err)
 			}
