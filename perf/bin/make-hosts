@@ -6,6 +6,12 @@ thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 : "${HOSTIP:=$(dig +short $(hostname))}"
 : "${DOMAIN:=$domain}"
 
+# For some sanity invoke this as:
+#
+# $ ./bin/make-hosts | sort -k2 -V > hosts
+
 for name in $(backend_names_sorted); do
-    echo "$HOSTIP ${name}.${domain}"
+    for termination_type in edge http passthrough reencrypt; do
+	echo "$HOSTIP ${termination_type}-${name}.${domain}"
+    done
 done

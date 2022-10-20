@@ -110,7 +110,7 @@ func generateRequests(config RequestConfig, backends Backends) []Request {
 		for name := range backends {
 			requests = append(requests, Request{
 				Clients:           config.Clients,
-				Host:              fmt.Sprintf("%s.%s", name, config.Domain),
+				Host:              fmt.Sprintf("%s-%s.%s", t, name, config.Domain),
 				KeepAliveRequests: config.KeepAliveRequests,
 				Method:            "GET",
 				Path:              "/1024.html",
