@@ -57,7 +57,6 @@ type RequestConfig struct {
 
 var (
 	tlsreuse = flag.Bool("tlsreuse", true, "enable TLS reuse")
-	clients  = flag.Int64("clients", 100, "number of http clients per backend")
 	domain   = flag.String("domain", "", "domain name")
 )
 
@@ -133,11 +132,10 @@ func main() {
 		log.Fatal("no domain name specified")
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
 	backends := Backends{}
 
 	// Input format is lines of the form: <backend-name> <port-number>
-
+	scanner := bufio.NewScanner(os.Stdin)
 	for scanner.Scan() {
 		line := scanner.Text()
 		words := strings.Split(line, " ")
@@ -148,37 +146,39 @@ func main() {
 		backends[words[0]] = Backend{Name: words[0], Port: port}
 	}
 
-	for _, scenario := range []struct {
-		Name             string
-		TerminationTypes []TerminationType
-	}{
-		{"edge", []TerminationType{EdgeTermination}},
-		{"http", []TerminationType{HTTPTermination}},
-		{"mix", AllTerminationTypes[:]},
-		{"passthrough", []TerminationType{PassthroughTermination}},
-		{"reencrypt", []TerminationType{ReEncryptTermination}},
-	} {
-		for _, keepAliveRequests := range []int64{0, 1, 50} {
-			config := RequestConfig{
-				Clients:           *clients,
-				Domain:            *domain,
-				KeepAliveRequests: keepAliveRequests,
-				TLSSessionReuse:   false,
-				TerminationTypes:  scenario.TerminationTypes,
-			}
-			requests := generateRequests(config, backends)
-			data, err := json.MarshalIndent(requests, "", "  ")
-			if err != nil {
-				log.Fatal(err)
-			}
-			filename := fmt.Sprintf("mb-backends:%v-clients:%v-keepalives:%v-tlsreuse:%v-traffic:%v.json",
-				len(requests),
-				config.Clients,
-				config.KeepAliveRequests,
-				*tlsreuse,
-				scenario.Name)
-			if err := writeFile(filename, data); err != nil {
-				log.Fatalf("error generating %s: %v", filename, err)
+	for _, clients := range []int64{1, 4, 100, 200} {
+		for _, scenario := range []struct {
+			Name             string
+			TerminationTypes []TerminationType
+		}{
+			{"edge", []TerminationType{EdgeTermination}},
+			{"http", []TerminationType{HTTPTermination}},
+			{"mix", AllTerminationTypes[:]},
+			{"passthrough", []TerminationType{PassthroughTermination}},
+			{"reencrypt", []TerminationType{ReEncryptTermination}},
+		} {
+			for _, keepAliveRequests := range []int64{0, 1, 50} {
+				config := RequestConfig{
+					Clients:           clients,
+					Domain:            *domain,
+					KeepAliveRequests: keepAliveRequests,
+					TLSSessionReuse:   false,
+					TerminationTypes:  scenario.TerminationTypes,
+				}
+				requests := generateRequests(config, backends)
+				data, err := json.MarshalIndent(requests, "", "  ")
+				if err != nil {
+					log.Fatal(err)
+				}
+				filename := fmt.Sprintf("mb-backends:%v-clients:%v-keepalives:%v-tlsreuse:%v-traffic:%v.json",
+					len(requests),
+					config.Clients,
+					config.KeepAliveRequests,
+					*tlsreuse,
+					scenario.Name)
+				if err := writeFile(filename, data); err != nil {
+					log.Fatalf("error generating %s: %v", filename, err)
+				}
 			}
 		}
 	}
