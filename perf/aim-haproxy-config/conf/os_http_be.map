@@ -1,0 +1,10 @@
+^docker-nginx-1-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-1-http
+^docker-nginx-2-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-2-http
+^docker-nginx-3-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-3-http
+^docker-nginx-4-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-4-http
+^docker-nginx-5-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-5-http
+^docker-nginx-6-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-6-http
+^docker-nginx-7-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-7-http
+^docker-nginx-8-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-8-http
+^docker-nginx-9-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-9-http
+^docker-nginx-10-http.int.frobware.com\.?(:[0-9]+)?(/.*)?$ be_http:docker-nginx-10-http
