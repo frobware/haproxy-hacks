@@ -110,7 +110,7 @@ func generateRequests(config RequestConfig, backends Backends) []Request {
 		for name := range backends {
 			requests = append(requests, Request{
 				Clients:           config.Clients,
-				Host:              fmt.Sprintf("%s-%s.%s", t, name, config.Domain),
+				Host:              fmt.Sprintf("%s-%s.%s", name, t, config.Domain),
 				KeepAliveRequests: config.KeepAliveRequests,
 				Method:            "GET",
 				Path:              "/1024.html",
@@ -147,7 +147,7 @@ func main() {
 		backends[words[0]] = Backend{Name: words[0], Port: port}
 	}
 
-	for _, test := range []struct {
+	for _, scenario := range []struct {
 		Name             string
 		TerminationTypes []TerminationType
 	}{
@@ -163,14 +163,14 @@ func main() {
 				Domain:            *domain,
 				KeepAliveRequests: keepAliveRequests,
 				TLSSessionReuse:   false,
-				TerminationTypes:  test.TerminationTypes,
+				TerminationTypes:  scenario.TerminationTypes,
 			}
 			requests := generateRequests(config, backends)
 			data, err := json.MarshalIndent(requests, "", "  ")
 			if err != nil {
 				log.Fatal(err)
 			}
-			filename := fmt.Sprintf("mb-requests-backends-%v-clients-%v-keepalives-%v-%s.json", len(requests), config.Clients, config.KeepAliveRequests, test.Name)
+			filename := fmt.Sprintf("mb-requests-backends-%v-clients-%v-keepalives-%v-%s.json", len(requests), config.Clients, config.KeepAliveRequests, scenario.Name)
 			if err := writeFile(filename, data); err != nil {
 				log.Fatalf("error generating %s: %v", filename, err)
 			}

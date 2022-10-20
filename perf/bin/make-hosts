@@ -12,6 +12,6 @@ thisdir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
 for name in $(backend_names_sorted); do
     for termination_type in edge http passthrough reencrypt; do
-	echo "$HOSTIP ${termination_type}-${name}.${domain}"
+	echo "$HOSTIP ${name}-${termination_type}.${domain}"
     done
 done
