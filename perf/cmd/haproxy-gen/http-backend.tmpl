@@ -1,3 +1,5 @@
+{{range $element := .DataFields}} {{$element}}
+
 backend be_http:{{.Name}}
   mode http
   option redispatch
@@ -13,3 +15,5 @@ backend be_http:{{.Name}}
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
   cookie {{.Cookie}} insert indirect nocache httponly secure attr SameSite=None
   server pod:{{.Name}:{{.IPAddr}:{{.Port}} {{.IPAddr}}:{{.Port}} cookie {{.ServerCookie} weight 1
+
+{{ end }}

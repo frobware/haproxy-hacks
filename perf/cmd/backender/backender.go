@@ -9,9 +9,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/frobware/haproxy-hacks/perf"
-	"github.com/frobware/haproxy-hacks/perf/certs"
 )
 
 const b1024_html = `<!DOCTYPE html>
@@ -37,104 +37,144 @@ const b1024_html = `<!DOCTYPE html>
 `
 
 var (
-	routes = flag.Int("routes", 100, "number of routes to standup")
+	routes = flag.Int("routes", 5, "number of routes to standup")
 )
 
 type Backend struct {
-	name     string
-	port     int
-	listener net.Listener
+	hostIPAddr string
+	name       string
+	port       int
 }
 
+// Program flags
 var (
 	hostPrefix = flag.String("host-prefxx", "http-scale", "prefix for hostname")
 )
 
-//go:embed *.html
-var htmlFS embed.FS
+var (
+	//go:embed *.html
+	htmlFS embed.FS
 
-var servers = map[perf.TerminationType][]Backend{}
+	//go:embed tls.crt
+	tlsCert string
 
-func printBackendConnectionInfo(w io.Writer, t perf.TerminationType) error {
-	for i := 0; i < len(servers[t]); i++ {
-		io.WriteString(w, fmt.Sprintf("%v %v\n", servers[t][i].name, servers[t][i].port))
+	//go:embed tls.key
+	tlsKey string
+
+	backends = map[perf.TerminationType][]Backend{}
+)
+
+func mustCreateTemporaryFile(data []byte) string {
+	f, err := os.CreateTemp("", strconv.Itoa(os.Getpid()))
+	if err != nil {
+		log.Fatal(err)
 	}
-	return nil
+	_, err = f.Write(data)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		log.Fatal(err)
+	}
+	return f.Name()
 }
 
-func lookupEnv(key, defaultVal string) string {
-	if val, ok := os.LookupEnv(key); ok {
-		return val
+func tlsTemporaryKeyFile() string {
+	return mustCreateTemporaryFile([]byte(tlsKey))
+}
+
+func tlsTemporaryCertFile() string {
+	return mustCreateTemporaryFile([]byte(tlsCert))
+}
+
+func mustResolveCurrentHost() string {
+	hostname, err := os.Hostname()
+	if err != nil {
+		log.Fatal(err)
 	}
-	return defaultVal
+	hostIPAddr, err := net.LookupIP(hostname)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if len(hostIPAddr) == 0 {
+		log.Fatalf("failed to resolve %q", hostname)
+	}
+	return fmt.Sprintf("%v", hostIPAddr[0])
+}
+
+func printBackendConnectionInfo(w io.Writer, t perf.TerminationType) error {
+	for i := 0; i < len(backends[t]); i++ {
+		io.WriteString(w, fmt.Sprintf("%v %v %v\n", backends[t][i].name, backends[t][i].hostIPAddr, backends[t][i].port))
+	}
+	return nil
 }
 
 func main() {
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	// TODO
-	tlsCertFile := lookupEnv("TLS_CRT", certs.TLSCertFile())
-	tlsKeyFile := lookupEnv("TLS_KEY", certs.TLSKeyFile())
+	hostIPAddr := mustResolveCurrentHost()
 
-	http.HandleFunc("/1024.html", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(b1024_html))
-	})
+	tlsCertFile := tlsTemporaryCertFile()
+	defer os.Remove(tlsCertFile)
 
-	http.HandleFunc("/backends", func(w http.ResponseWriter, r *http.Request) {
-		for _, t := range perf.AllTerminationTypes[:] {
-			printBackendConnectionInfo(w, t)
-		}
-	})
-
-	http.HandleFunc("/backends/edge", func(w http.ResponseWriter, r *http.Request) {
-		printBackendConnectionInfo(w, perf.EdgeTermination)
-	})
-
-	http.HandleFunc("/backends/http", func(w http.ResponseWriter, r *http.Request) {
-		printBackendConnectionInfo(w, perf.HTTPTermination)
-	})
-
-	http.HandleFunc("/backends/passthrough", func(w http.ResponseWriter, r *http.Request) {
-		printBackendConnectionInfo(w, perf.PassthroughTermination)
-	})
-
-	http.HandleFunc("/backends/reencrypt", func(w http.ResponseWriter, r *http.Request) {
-		printBackendConnectionInfo(w, perf.ReEncryptTermination)
-	})
+	tlsKeyFile := tlsTemporaryKeyFile()
+	defer os.Remove(tlsKeyFile)
 
 	for _, t := range perf.AllTerminationTypes {
-		htmlHandler := http.FileServer(http.FS(htmlFS))
+		handler := http.FileServer(http.FS(htmlFS))
 
 		for i := 0; i < *routes; i++ {
 			ln, err := net.Listen("tcp", "0.0.0.0:0")
 			if err != nil {
 				log.Fatal(err)
 			}
-			backend := Backend{
-				name:     fmt.Sprintf("%s-%v-%v", *hostPrefix, i, t),
-				port:     ln.Addr().(*net.TCPAddr).Port,
-				listener: ln,
-			}
-			servers[t] = append(servers[t], backend)
-			go func(t perf.TerminationType, b *Backend) {
+			backends[t] = append(backends[t], Backend{
+				hostIPAddr: hostIPAddr,
+				name:       fmt.Sprintf("%s-%v-%v", *hostPrefix, t, i),
+				port:       ln.Addr().(*net.TCPAddr).Port,
+			})
+			go func(t perf.TerminationType, l *net.Listener) {
 				switch t {
 				case perf.HTTPTermination:
-					if err := http.Serve(b.listener, htmlHandler); err != nil {
+					if err := http.Serve(*l, handler); err != nil {
 						log.Fatal(err)
 					}
 				default:
-					if err := http.ServeTLS(b.listener, htmlHandler, tlsCertFile, tlsKeyFile); err != nil {
+					if err := http.ServeTLS(*l, handler, tlsCertFile, tlsKeyFile); err != nil {
 						log.Fatal(err)
 					}
 				}
-			}(t, &backend)
+			}(t, &ln)
 		}
+		printBackendConnectionInfo(os.Stdout, t)
 	}
 
-	printBackendConnectionInfo(os.Stdout, perf.EdgeTermination)
+	backendsMux := http.NewServeMux()
 
-	if err := http.ListenAndServe(":2000", nil); err != nil {
+	backendsMux.HandleFunc("/backends", func(w http.ResponseWriter, r *http.Request) {
+		for _, t := range perf.AllTerminationTypes[:] {
+			printBackendConnectionInfo(w, t)
+		}
+	})
+
+	backendsMux.HandleFunc("/backends/edge", func(w http.ResponseWriter, r *http.Request) {
+		printBackendConnectionInfo(w, perf.EdgeTermination)
+	})
+
+	backendsMux.HandleFunc("/backends/http", func(w http.ResponseWriter, r *http.Request) {
+		printBackendConnectionInfo(w, perf.HTTPTermination)
+	})
+
+	backendsMux.HandleFunc("/backends/passthrough", func(w http.ResponseWriter, r *http.Request) {
+		printBackendConnectionInfo(w, perf.PassthroughTermination)
+	})
+
+	backendsMux.HandleFunc("/backends/reencrypt", func(w http.ResponseWriter, r *http.Request) {
+		printBackendConnectionInfo(w, perf.ReEncryptTermination)
+	})
+
+	if err := http.ListenAndServe(":2000", backendsMux); err != nil {
 		log.Fatal(err)
 	}
 }
