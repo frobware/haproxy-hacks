@@ -55,6 +55,12 @@ var defaultTemplate string
 //go:embed backends.tmpl
 var backendTemplate string
 
+//go:embed error-page-404.http
+var error404 string
+
+//go:embed error-page-503.http
+var error503 string
+
 var (
 	discoveryURL = flag.String("discovery", "http://localhost:2000", "backend discovery URL")
 	httpPort     = flag.Int("http-port", 8080, "haproxy http port setting")
@@ -250,5 +256,13 @@ func main() {
 		if err := writeFile(path.Join(config.ConfigDir, m.Filename), *m.Buffer); err != nil {
 			log.Fatal(err)
 		}
+	}
+
+	if err := writeFile(path.Join(*configDir, "error-page-404.http"), *bytes.NewBuffer([]byte(error404))); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := writeFile(path.Join(*configDir, "error-page-503.http"), *bytes.NewBuffer([]byte(error503))); err != nil {
+		log.Fatal(err)
 	}
 }
