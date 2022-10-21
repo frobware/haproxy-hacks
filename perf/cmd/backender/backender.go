@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
 	"io"
@@ -49,6 +50,9 @@ var (
 	hostPrefix = flag.String("host-prefxx", "http-scale", "prefix for hostname")
 )
 
+//go:embed *.html
+var htmlFS embed.FS
+
 var servers = map[perf.TerminationType][]Backend{}
 
 func printBackendConnectionInfo(w io.Writer, t perf.TerminationType) error {
@@ -69,6 +73,7 @@ func main() {
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
+	// TODO
 	tlsCertFile := lookupEnv("TLS_CRT", certs.TLSCertFile())
 	tlsKeyFile := lookupEnv("TLS_KEY", certs.TLSKeyFile())
 
@@ -99,6 +104,8 @@ func main() {
 	})
 
 	for _, t := range perf.AllTerminationTypes {
+		htmlHandler := http.FileServer(http.FS(htmlFS))
+
 		for i := 0; i < *routes; i++ {
 			ln, err := net.Listen("tcp", "0.0.0.0:0")
 			if err != nil {
@@ -113,17 +120,19 @@ func main() {
 			go func(t perf.TerminationType, b *Backend) {
 				switch t {
 				case perf.HTTPTermination:
-					if err := http.Serve(b.listener, nil); err != nil {
+					if err := http.Serve(b.listener, htmlHandler); err != nil {
 						log.Fatal(err)
 					}
 				default:
-					if err := http.ServeTLS(b.listener, nil, tlsCertFile, tlsKeyFile); err != nil {
+					if err := http.ServeTLS(b.listener, htmlHandler, tlsCertFile, tlsKeyFile); err != nil {
 						log.Fatal(err)
 					}
 				}
 			}(t, &backend)
 		}
 	}
+
+	printBackendConnectionInfo(os.Stdout, perf.EdgeTermination)
 
 	if err := http.ListenAndServe(":2000", nil); err != nil {
 		log.Fatal(err)
