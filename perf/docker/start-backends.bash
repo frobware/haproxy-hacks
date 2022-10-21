@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
-set -eu
+#set -eu
 
-docker-compose up --remove-orphans -t 1 --scale nginx=${1:-100}
+for i in edge passthrough reencrypt http; do
+    docker-compose -f "$i.yaml" up --detach --no-color --timeout 1 --scale "nginx_$i"=${1:-100}
+done
+
 
