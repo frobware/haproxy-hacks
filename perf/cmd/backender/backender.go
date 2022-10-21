@@ -67,14 +67,7 @@ func mustResolveCurrentHost() string {
 	if err != nil {
 		log.Fatal(err)
 	}
-	hostIPAddr, err := net.LookupIP(hostname)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if len(hostIPAddr) == 0 {
-		log.Fatalf("failed to resolve %q", hostname)
-	}
-	return fmt.Sprintf("%v", hostIPAddr[0])
+	return hostname
 }
 
 func printBackendConnectionInfo(w io.Writer, t perf.TerminationType) error {
@@ -138,11 +131,12 @@ func main() {
 	mux.HandleFunc("/backends/http", func(w http.ResponseWriter, r *http.Request) {
 		printBackendConnectionInfo(w, perf.HTTPTermination)
 	})
+
 	mux.HandleFunc("/backends/passthrough", func(w http.ResponseWriter, r *http.Request) {
 		printBackendConnectionInfo(w, perf.PassthroughTermination)
 	})
 	mux.HandleFunc("/backends/reencrypt", func(w http.ResponseWriter, r *http.Request) {
-		printBackendConnectionInfo(w, perf.ReEncryptTermination)
+		printBackendConnectionInfo(w, perf.ReencryptTermination)
 	})
 
 	if err := http.ListenAndServe(":2000", mux); err != nil {

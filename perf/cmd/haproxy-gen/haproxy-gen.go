@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -37,6 +38,13 @@ type BackendConfig struct {
 	ServerCookie    string
 	TerminationType perf.TerminationType
 }
+
+const (
+	HTTPBackendMapName      = "os_http_be.map"
+	ReencryptBackendMapName = "os_edge_reencrypt_be.map"
+	SNIPassthroughMapName   = "os_sni_passthrough.map"
+	TCPBackendMapName       = "os_tcp_be.map"
+)
 
 //go:embed globals.tmpl
 var globalTemplate string
@@ -109,12 +117,24 @@ func fetchAllBackendMetadata() ([]BackendConfig, error) {
 	return backends, nil
 }
 
-func writeFileData(filename string, data bytes.Buffer) error {
-	dirname := filepath.Dir(filename)
+func filterBackendsByType(t perf.TerminationType, backends []BackendConfig) []BackendConfig {
+	var result []BackendConfig
+
+	for i := range backends {
+		if backends[i].TerminationType == t {
+			result = append(result, backends[i])
+		}
+	}
+
+	return result
+}
+
+func writeFile(path string, data bytes.Buffer) error {
+	dirname := filepath.Dir(path)
 	if err := os.MkdirAll(dirname, 0755); err != nil {
 		return err
 	}
-	f, err := os.Create(filename)
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
@@ -129,7 +149,7 @@ func main() {
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	backends, err := fetchAllBackendMetadata()
+	allBackends, err := fetchAllBackendMetadata()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -141,7 +161,7 @@ func main() {
 		Maxconn:   *maxconn,
 		Nbthread:  *nbthread,
 		StatsPort: *statsPort,
-		Backends:  backends,
+		Backends:  allBackends,
 	}
 
 	var haproxyConf bytes.Buffer
@@ -156,21 +176,79 @@ func main() {
 		}
 	}
 
-	if err := writeFileData(path.Join(*configDir, "haproxy.config"), haproxyConf); err != nil {
+	if err := writeFile(path.Join(*configDir, "haproxy.config"), haproxyConf); err != nil {
 		log.Fatal(err)
 	}
 
-	mapData := map[perf.TerminationType]*bytes.Buffer{}
+	type MapEntryFunc func(backend BackendConfig) string
 
-	for _, backend := range backends {
-		switch backend.TerminationType {
-		case perf.EdgeTermination:
-			"^${name}-edge.${domain}\.?(:[0-9]+)?(/.*)?$ be_edge_http:${name}-edge"			
-		case perf.HTTPTermination:
-		case perf.PassthroughTermination:
-		case perf.ReEncryptTermination:
-		default:
-			panic("unexpected termination type")
+	maps := []struct {
+		Filename         string
+		TerminationTypes []perf.TerminationType
+		MapEntry         MapEntryFunc
+		Buffer           *bytes.Buffer
+	}{{
+		Filename:         HTTPBackendMapName,
+		TerminationTypes: []perf.TerminationType{perf.HTTPTermination},
+		Buffer:           &bytes.Buffer{},
+		MapEntry: func(b BackendConfig) string {
+			switch b.TerminationType {
+			case perf.HTTPTermination:
+				return fmt.Sprintf("^%s\\.?(:[0-9]+)?(/.*)?$ be_http:%s\n", b.Name, b.Name)
+			default:
+				panic(b.TerminationType)
+			}
+		},
+	}, {
+		Filename:         ReencryptBackendMapName,
+		TerminationTypes: []perf.TerminationType{perf.ReencryptTermination, perf.EdgeTermination},
+		Buffer:           &bytes.Buffer{},
+		MapEntry: func(b BackendConfig) string {
+			switch b.TerminationType {
+			case perf.EdgeTermination:
+				return fmt.Sprintf("^%s\\.?(:[0-9]+)?(/.*)?$ be_secure:%s\n", b.Name, b.Name)
+			case perf.ReencryptTermination:
+				return fmt.Sprintf("^%s\\.?(:[0-9]+)?(/.*)?$ be_edge_http:%s\n", b.Name, b.Name)
+			default:
+				panic(b.TerminationType)
+			}
+		},
+	}, {
+		Filename:         SNIPassthroughMapName,
+		TerminationTypes: []perf.TerminationType{perf.PassthroughTermination},
+		Buffer:           &bytes.Buffer{},
+		MapEntry: func(b BackendConfig) string {
+			switch b.TerminationType {
+			case perf.PassthroughTermination:
+				return fmt.Sprintf("^%s$ 1\n", b.Name)
+			default:
+				panic(b.TerminationType)
+			}
+		},
+	}, {
+		Filename:         TCPBackendMapName,
+		TerminationTypes: []perf.TerminationType{perf.PassthroughTermination},
+		Buffer:           &bytes.Buffer{},
+		MapEntry: func(b BackendConfig) string {
+			switch b.TerminationType {
+			case perf.PassthroughTermination:
+				return fmt.Sprintf("^%s\\.?(:[0-9]+)?(/.*)?$ be_tcp:%s\n", b.Name, b.Name)
+			default:
+				panic(b.TerminationType)
+			}
+		},
+	}}
+
+	for _, m := range maps {
+		for _, t := range m.TerminationTypes {
+			for _, b := range filterBackendsByType(t, allBackends) {
+				if _, err := io.WriteString(m.Buffer, m.MapEntry(b)); err != nil {
+					log.Fatal(err)
+				}
+			}
+		}
+		if err := writeFile(path.Join(config.ConfigDir, m.Filename), *m.Buffer); err != nil {
+			log.Fatal(err)
 		}
 	}
 }

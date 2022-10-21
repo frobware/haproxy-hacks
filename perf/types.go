@@ -6,14 +6,14 @@ const (
 	EdgeTermination        TerminationType = "edge"
 	HTTPTermination        TerminationType = "http"
 	PassthroughTermination TerminationType = "passthrough"
-	ReEncryptTermination   TerminationType = "reencrypt"
+	ReencryptTermination   TerminationType = "reencrypt"
 )
 
 var AllTerminationTypes = [...]TerminationType{
 	EdgeTermination,
 	HTTPTermination,
 	PassthroughTermination,
-	ReEncryptTermination,
+	ReencryptTermination,
 }
 
 func (t TerminationType) TerminationScheme() string {
