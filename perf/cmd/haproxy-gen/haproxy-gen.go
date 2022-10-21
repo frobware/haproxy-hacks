@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	_ "embed"
 	"flag"
 	"fmt"
@@ -10,23 +11,21 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"strconv"
+	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/frobware/haproxy-hacks/perf"
 )
 
-type GlobalConfig struct {
+type HAProxyConfig struct {
 	ConfigDir string
 	HTTPPort  int
 	HTTPSPort int
 	Maxconn   int
 	Nbthread  int
 	StatsPort int
-}
-
-type Backends struct {
-	Backends []BackendConfig
+	Backends  []BackendConfig
 }
 
 type BackendConfig struct {
@@ -39,11 +38,14 @@ type BackendConfig struct {
 	TerminationType perf.TerminationType
 }
 
-//go:embed preamble.tmpl
-var preambleTemplate string
+//go:embed globals.tmpl
+var globalTemplate string
+
+//go:embed defaults.tmpl
+var defaultTemplate string
 
 //go:embed backends.tmpl
-var backendsTemplate string
+var backendTemplate string
 
 var (
 	discoveryURL = flag.String("discovery", "http://localhost:2000", "backend discovery URL")
@@ -107,57 +109,68 @@ func fetchAllBackendMetadata() ([]BackendConfig, error) {
 	return backends, nil
 }
 
-func generateHTTPBackends(lines []string) {
-	config := []BackendConfig{}
-
-	for _, line := range lines {
-		words := strings.Split(line, " ")
-		_, err := strconv.ParseInt(words[1], 10, 64)
-		if err != nil {
-			log.Fatal(err)
-		}
-		config = append(config, BackendConfig{
-			Name: words[0],
-			Port: words[1],
-		})
+func writeFileData(filename string, data bytes.Buffer) error {
+	dirname := filepath.Dir(filename)
+	if err := os.MkdirAll(dirname, 0755); err != nil {
+		return err
 	}
+	f, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data.Bytes())
+	if err != nil {
+		return err
+	}
+	return f.Close()
 }
 
 func main() {
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
-	// preambleTmpl, err := template.New("preamble").Parse(preamble)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// err = preambleTmpl.Execute(os.Stdout, Preamble{
-	// 	ConfigDir: *configDir,
-	// 	HTTPPort:  *httpPort,
-	// 	HTTPSPort: *httpsPort,
-	// 	Maxconn:   *maxconn,
-	// 	Nbthread:  *nbthread,
-	// 	StatsPort: *statsPort,
-	// })
-
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	backendTmpl, err := template.New("backends").Parse(backendsTemplate)
+	backends, err := fetchAllBackendMetadata()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	allBackendConfigs, err := fetchAllBackendMetadata()
-	if err != nil {
+	config := HAProxyConfig{
+		ConfigDir: *configDir,
+		HTTPPort:  *httpPort,
+		HTTPSPort: *httpsPort,
+		Maxconn:   *maxconn,
+		Nbthread:  *nbthread,
+		StatsPort: *statsPort,
+		Backends:  backends,
+	}
+
+	var haproxyConf bytes.Buffer
+
+	for _, tmpl := range []*template.Template{
+		template.Must(template.New("globals").Parse(globalTemplate)),
+		template.Must(template.New("defaults").Parse(defaultTemplate)),
+		template.Must(template.New("backends").Parse(backendTemplate)),
+	} {
+		if err := tmpl.Execute(&haproxyConf, config); err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	if err := writeFileData(path.Join(*configDir, "haproxy.config"), haproxyConf); err != nil {
 		log.Fatal(err)
 	}
 
-	if err = backendTmpl.Execute(os.Stdout, Backends{
-		Backends: allBackendConfigs,
-	}); err != nil {
-		log.Fatal(err)
+	mapData := map[perf.TerminationType]*bytes.Buffer{}
+
+	for _, backend := range backends {
+		switch backend.TerminationType {
+		case perf.EdgeTermination:
+			"^${name}-edge.${domain}\.?(:[0-9]+)?(/.*)?$ be_edge_http:${name}-edge"			
+		case perf.HTTPTermination:
+		case perf.PassthroughTermination:
+		case perf.ReEncryptTermination:
+		default:
+			panic("unexpected termination type")
+		}
 	}
 }

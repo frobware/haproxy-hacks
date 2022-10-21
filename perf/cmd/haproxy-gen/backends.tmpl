@@ -1,4 +1,4 @@
-{{ range .Backends -}}
+{{- range .Backends -}}
   {{ if eq .TerminationType "edge" }}
 backend be_edge_http:{{.Name}}
   mode http
@@ -14,8 +14,7 @@ backend be_edge_http:{{.Name}}
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
   cookie {{.BackendCookie}} insert indirect nocache httponly secure attr SameSite=None
   server pod:{{.Name}}:{{.HostAddr}}:{{.Port}} {{.HostAddr}}:{{.Port}} cookie {{.ServerCookie}} weight 1
-  {{ end -}}
-  {{ if eq .TerminationType "http" }}
+  {{ else if eq .TerminationType "http" }}
 backend be_http:{{.Name}}
   mode http
   option redispatch
@@ -30,8 +29,7 @@ backend be_http:{{.Name}}
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
   cookie {{.BackendCookie}} insert indirect nocache httponly secure attr SameSite=None
   server pod:{{.Name}}:{{.HostAddr}}:{{.Port}} {{.HostAddr}}:{{.Port}} cookie {{.ServerCookie}} weight 1
-  {{ end -}}
-  {{ if eq .TerminationType "reencrypt" }}
+  {{ else if eq .TerminationType "reencrypt" }}
 backend be_secure:{{.Name}}
   mode http
   option redispatch
@@ -46,12 +44,11 @@ backend be_secure:{{.Name}}
   http-request add-header Forwarded for=%[src];host=%[req.hdr(host)];proto=%[req.hdr(X-Forwarded-Proto)]
   cookie {{.BackendCookie}} insert indirect nocache httponly secure attr SameSite=None
   server pod:{{.Name}}:{{.HostAddr}}:{{.Port}} {{.HostAddr}}:{{.Port}} cookie {{.ServerCookie}} weight 1 ssl verify required ca-file {{.ConfigDir}}/router/cacerts/be_secure:{{.Name}}.pem
-  {{ end -}}
-  {{ if eq .TerminationType "passthrough" }}
+  {{ else if eq .TerminationType "passthrough" }}
 backend be_tcp:{{.Name}}
   balance source
   hash-type consistent
   timeout check 5000ms
   server pod:{{.Name}}:{{.HostAddr}}:{{.Port}} {{.HostAddr}}:{{.Port}} weight 1
-  {{ end -}}
+  {{ end }}
 {{- end }}
