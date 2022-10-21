@@ -155,6 +155,10 @@ func main() {
 	flag.Parse()
 	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
 
+	if err := os.RemoveAll(*configDir); err != nil {
+		log.Fatal(err)
+	}
+
 	allBackends, err := fetchAllBackendMetadata()
 	if err != nil {
 		log.Fatal(err)
