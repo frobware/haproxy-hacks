@@ -14,32 +14,6 @@ import (
 	"github.com/frobware/haproxy-hacks/perf"
 )
 
-const b1024_html = `<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome 1024B</title>
-</head>
-<body>
-<h1>Welcome 1024B</h1>
-
-<pre>
-1234567891123456789212345678931234567894123456789512345678961234567897123456789812345678991234567890123456789112345678921234567
-1234567891123456789212345678931234567894123456789512345678961234567897123456789812345678991234567890123456789112345678921234567
-1234567891123456789212345678931234567894123456789512345678961234567897123456789812345678991234567890123456789112345678921234567
-1234567891123456789212345678931234567894123456789512345678961234567897123456789812345678991234567890123456789112345678921234567
-1234567891123456789212345678931234567894123456789512345678961234567897123456789812345678991234567890123456789112345678921234567
-1234567891123456789212345678931234567894123456789512345678961234567897123456789812345678991234567890123456789112345678921234567
-1234567891123456789212345678931234567894123456789512345678961234567897123456789812345678991234567890123456789112345678921234567
-</pre>
-
-</body>
-</html>
-`
-
-var (
-	routes = flag.Int("routes", 5, "number of routes to standup")
-)
-
 type Backend struct {
 	hostIPAddr string
 	name       string
@@ -49,6 +23,7 @@ type Backend struct {
 // Program flags
 var (
 	hostPrefix = flag.String("host-prefxx", "http-scale", "prefix for hostname")
+	nbackends  = flag.Int("nbackends", 5, "number of backends servers to create")
 )
 
 var (
@@ -121,10 +96,10 @@ func main() {
 	tlsKeyFile := tlsTemporaryKeyFile()
 	defer os.Remove(tlsKeyFile)
 
-	for _, t := range perf.AllTerminationTypes {
-		handler := http.FileServer(http.FS(htmlFS))
+	htmlHandler := http.FileServer(http.FS(htmlFS))
 
-		for i := 0; i < *routes; i++ {
+	for _, t := range perf.AllTerminationTypes {
+		for i := 0; i < *nbackends; i++ {
 			ln, err := net.Listen("tcp", "0.0.0.0:0")
 			if err != nil {
 				log.Fatal(err)
@@ -137,11 +112,11 @@ func main() {
 			go func(t perf.TerminationType, l *net.Listener) {
 				switch t {
 				case perf.HTTPTermination:
-					if err := http.Serve(*l, handler); err != nil {
+					if err := http.Serve(*l, htmlHandler); err != nil {
 						log.Fatal(err)
 					}
 				default:
-					if err := http.ServeTLS(*l, handler, tlsCertFile, tlsKeyFile); err != nil {
+					if err := http.ServeTLS(*l, htmlHandler, tlsCertFile, tlsKeyFile); err != nil {
 						log.Fatal(err)
 					}
 				}
@@ -150,31 +125,27 @@ func main() {
 		printBackendConnectionInfo(os.Stdout, t)
 	}
 
-	backendsMux := http.NewServeMux()
+	mux := http.NewServeMux()
 
-	backendsMux.HandleFunc("/backends", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/backends", func(w http.ResponseWriter, r *http.Request) {
 		for _, t := range perf.AllTerminationTypes[:] {
 			printBackendConnectionInfo(w, t)
 		}
 	})
-
-	backendsMux.HandleFunc("/backends/edge", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/backends/edge", func(w http.ResponseWriter, r *http.Request) {
 		printBackendConnectionInfo(w, perf.EdgeTermination)
 	})
-
-	backendsMux.HandleFunc("/backends/http", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/backends/http", func(w http.ResponseWriter, r *http.Request) {
 		printBackendConnectionInfo(w, perf.HTTPTermination)
 	})
-
-	backendsMux.HandleFunc("/backends/passthrough", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/backends/passthrough", func(w http.ResponseWriter, r *http.Request) {
 		printBackendConnectionInfo(w, perf.PassthroughTermination)
 	})
-
-	backendsMux.HandleFunc("/backends/reencrypt", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/backends/reencrypt", func(w http.ResponseWriter, r *http.Request) {
 		printBackendConnectionInfo(w, perf.ReEncryptTermination)
 	})
 
-	if err := http.ListenAndServe(":2000", backendsMux); err != nil {
+	if err := http.ListenAndServe(":2000", mux); err != nil {
 		log.Fatal(err)
 	}
 }
