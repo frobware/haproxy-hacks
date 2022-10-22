@@ -3,8 +3,7 @@
 set -eu
 
 if [[ -z "$(hostname -d)" ]]; then
-    echo "no domain"
-    exit 1
+    domain="localdomain"
 fi
 
 tmpdir="$(mktemp -d)"
