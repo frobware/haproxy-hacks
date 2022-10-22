@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html/template"
@@ -18,6 +19,48 @@ import (
 
 	"github.com/frobware/haproxy-hacks/perf"
 )
+
+type Request struct {
+	Body              *Body    `json:"body,omitempty"`
+	Clients           int64    `json:"clients"`
+	Delay             Delay    `json:"delay"`
+	Headers           *Headers `json:"headers,omitempty"`
+	Host              string   `json:"host"`
+	KeepAliveRequests int64    `json:"keep-alive-requests"`
+	Method            string   `json:"method"`
+	Path              string   `json:"path"`
+	Port              int64    `json:"port"`
+	Scheme            string   `json:"scheme"`
+	TLSSessionReuse   bool     `json:"tls-session-reuse"`
+}
+
+type Body struct {
+	Content string `json:"content"`
+}
+
+type Delay struct {
+	Max int64 `json:"max"`
+	Min int64 `json:"min"`
+}
+
+type Headers struct {
+	ContentType string `json:"Content-Type"`
+}
+
+type Backend struct {
+	Name     string
+	HostAddr string
+	Port     int64
+}
+
+type Backends map[string]Backend
+
+type RequestConfig struct {
+	Clients           int64
+	KeepAliveRequests int64
+	TLSSessionReuse   bool
+	TerminationTypes  []perf.TerminationType
+}
 
 type HAProxyConfig struct {
 	ConfigDir string
@@ -62,13 +105,14 @@ var error404 string
 var error503 string
 
 var (
+	configDir    = flag.String("config-dir", fmt.Sprintf("/tmp/%v-haproxy-gen", os.Getenv("USER")), "output path")
 	discoveryURL = flag.String("discovery", "http://localhost:2000", "backend discovery URL")
 	httpPort     = flag.Int("http-port", 8080, "haproxy http port setting")
 	httpsPort    = flag.Int("https-port", 8443, "haproxy https port setting")
 	maxconn      = flag.Int("maxconn", 0, "haproxy maxconn setting")
 	nbthread     = flag.Int("nbthread", 4, "haproxy nbthread setting")
 	statsPort    = flag.Int("stats-port", 1936, "haproxy https port setting")
-	configDir    = flag.String("config-dir", fmt.Sprintf("/tmp/%v-haproxy-gen", os.Getenv("USER")), "output path")
+	tlsreuse     = flag.Bool("tlsreuse", true, "enable TLS reuse")
 )
 
 func cookie() string {
@@ -123,19 +167,21 @@ func fetchAllBackendMetadata() ([]BackendConfig, error) {
 	return backends, nil
 }
 
-func filterBackendsByType(t perf.TerminationType, backends []BackendConfig) []BackendConfig {
+func filterBackendsByType(types []perf.TerminationType, backends []BackendConfig) []BackendConfig {
 	var result []BackendConfig
 
-	for i := range backends {
-		if backends[i].TerminationType == t {
-			result = append(result, backends[i])
+	for _, t := range types {
+		for i := range backends {
+			if backends[i].TerminationType == t {
+				result = append(result, backends[i])
+			}
 		}
 	}
 
 	return result
 }
 
-func writeFile(path string, data bytes.Buffer) error {
+func writeFile(path string, data []byte) error {
 	dirname := filepath.Dir(path)
 	if err := os.MkdirAll(dirname, 0755); err != nil {
 		return err
@@ -144,11 +190,30 @@ func writeFile(path string, data bytes.Buffer) error {
 	if err != nil {
 		return err
 	}
-	_, err = f.Write(data.Bytes())
+	_, err = f.Write(data)
 	if err != nil {
 		return err
 	}
 	return f.Close()
+}
+
+func generateRequests(config RequestConfig, backends []BackendConfig) []Request {
+	var requests []Request
+
+	for _, b := range backends {
+		requests = append(requests, Request{
+			Clients:           config.Clients,
+			Host:              fmt.Sprintf("%s", b.Name),
+			KeepAliveRequests: config.KeepAliveRequests,
+			Method:            "GET",
+			Path:              "/1024.html",
+			Port:              b.TerminationType.TerminationPort(),
+			Scheme:            b.TerminationType.TerminationScheme(),
+			TLSSessionReuse:   *tlsreuse,
+		})
+	}
+
+	return requests
 }
 
 func main() {
@@ -245,29 +310,67 @@ func main() {
 		},
 	}}
 
-	if err := writeFile(path.Join(*configDir, "conf", "haproxy.config"), haproxyConf); err != nil {
+	if err := writeFile(path.Join(*configDir, "conf", "haproxy.config"), haproxyConf.Bytes()); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := writeFile(path.Join(*configDir, "conf", "error-page-404.http"), *bytes.NewBuffer([]byte(error404))); err != nil {
+	if err := writeFile(path.Join(*configDir, "conf", "error-page-404.http"), bytes.NewBuffer([]byte(error404)).Bytes()); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := writeFile(path.Join(*configDir, "conf", "error-page-503.http"), *bytes.NewBuffer([]byte(error503))); err != nil {
+	if err := writeFile(path.Join(*configDir, "conf", "error-page-503.http"), bytes.NewBuffer([]byte(error503)).Bytes()); err != nil {
 		log.Fatal(err)
 	}
 
 	for _, m := range maps {
-		for _, t := range m.TerminationTypes {
-			for _, b := range filterBackendsByType(t, allBackends) {
-				if _, err := io.WriteString(m.Buffer, m.MapEntry(b)); err != nil {
-					log.Fatal(err)
-				}
+		for _, b := range filterBackendsByType(m.TerminationTypes, allBackends) {
+			if _, err := io.WriteString(m.Buffer, m.MapEntry(b)); err != nil {
+				log.Fatal(err)
 			}
 		}
-		if err := writeFile(path.Join(config.ConfigDir, "conf", m.Filename), *m.Buffer); err != nil {
+		if err := writeFile(path.Join(config.ConfigDir, "conf", m.Filename), m.Buffer.Bytes()); err != nil {
 			log.Fatal(err)
 		}
 	}
 
+	for _, clients := range []int64{100} {
+		for _, scenario := range []struct {
+			Name             string
+			TerminationTypes []perf.TerminationType
+		}{
+			{"edge", []perf.TerminationType{perf.EdgeTermination}},
+			{"http", []perf.TerminationType{perf.HTTPTermination}},
+			{"mix", perf.AllTerminationTypes[:]},
+			{"passthrough", []perf.TerminationType{perf.PassthroughTermination}},
+			{"reencrypt", []perf.TerminationType{perf.ReencryptTermination}},
+		} {
+			for _, keepAliveRequests := range []int64{0} {
+				config := RequestConfig{
+					Clients:           clients,
+					KeepAliveRequests: keepAliveRequests,
+					TLSSessionReuse:   false,
+					TerminationTypes:  scenario.TerminationTypes,
+				}
+				requests := generateRequests(config, filterBackendsByType(scenario.TerminationTypes, allBackends))
+				data, err := json.MarshalIndent(requests, "", "  ")
+				if err != nil {
+					log.Fatal(err)
+				}
+				path := fmt.Sprintf("%s/mb/traffic/%v/backends/%v/clients/%v/keepalives/%v",
+					*configDir,
+					scenario.Name,
+					len(requests)/len(config.TerminationTypes),
+					config.Clients,
+					config.KeepAliveRequests)
+				fmt.Println(path)
+				if err := os.MkdirAll(path, 0755); err != nil {
+					log.Fatalf("error: failed to create path: %q: %v", path, err)
+				}
+				filename := fmt.Sprintf("%s/requests.json", path)
+				if err := writeFile(filename, data); err != nil {
+					log.Fatalf("error generating %s: %v", filename, err)
+				}
+			}
+		}
+	}
 }
