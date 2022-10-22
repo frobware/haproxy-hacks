@@ -104,7 +104,7 @@ func main() {
 			})
 			go func(t perf.TerminationType, l *net.Listener) {
 				switch t {
-				case perf.HTTPTermination:
+				case perf.HTTPTermination, perf.EdgeTermination:
 					if err := http.Serve(*l, htmlHandler); err != nil {
 						log.Fatal(err)
 					}
