@@ -186,10 +186,6 @@ func main() {
 		}
 	}
 
-	if err := writeFile(path.Join(*configDir, "haproxy.config"), haproxyConf); err != nil {
-		log.Fatal(err)
-	}
-
 	type MapEntryFunc func(backend BackendConfig) string
 
 	maps := []struct {
@@ -216,9 +212,9 @@ func main() {
 		MapEntry: func(b BackendConfig) string {
 			switch b.TerminationType {
 			case perf.EdgeTermination:
-				return fmt.Sprintf("^%s\\.?(:[0-9]+)?(/.*)?$ be_secure:%s\n", b.Name, b.Name)
-			case perf.ReencryptTermination:
 				return fmt.Sprintf("^%s\\.?(:[0-9]+)?(/.*)?$ be_edge_http:%s\n", b.Name, b.Name)
+			case perf.ReencryptTermination:
+				return fmt.Sprintf("^%s\\.?(:[0-9]+)?(/.*)?$ be_secure:%s\n", b.Name, b.Name)
 			default:
 				panic(b.TerminationType)
 			}
@@ -249,6 +245,18 @@ func main() {
 		},
 	}}
 
+	if err := writeFile(path.Join(*configDir, "conf", "haproxy.config"), haproxyConf); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := writeFile(path.Join(*configDir, "conf", "error-page-404.http"), *bytes.NewBuffer([]byte(error404))); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := writeFile(path.Join(*configDir, "conf", "error-page-503.http"), *bytes.NewBuffer([]byte(error503))); err != nil {
+		log.Fatal(err)
+	}
+
 	for _, m := range maps {
 		for _, t := range m.TerminationTypes {
 			for _, b := range filterBackendsByType(t, allBackends) {
@@ -257,16 +265,9 @@ func main() {
 				}
 			}
 		}
-		if err := writeFile(path.Join(config.ConfigDir, m.Filename), *m.Buffer); err != nil {
+		if err := writeFile(path.Join(config.ConfigDir, "conf", m.Filename), *m.Buffer); err != nil {
 			log.Fatal(err)
 		}
 	}
 
-	if err := writeFile(path.Join(*configDir, "error-page-404.http"), *bytes.NewBuffer([]byte(error404))); err != nil {
-		log.Fatal(err)
-	}
-
-	if err := writeFile(path.Join(*configDir, "error-page-503.http"), *bytes.NewBuffer([]byte(error503))); err != nil {
-		log.Fatal(err)
-	}
 }
