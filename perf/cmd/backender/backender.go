@@ -33,7 +33,7 @@ type BackendsByTerminationType map[perf.TerminationType][]Backend
 
 // Program flags
 var (
-	nbackends = flag.Int("nbackends", 200, "number of backends servers to create")
+	nbackends = flag.Int("nbackends", 100, "number of backends servers to create")
 )
 
 var (
@@ -92,7 +92,7 @@ func mustResolveCurrentHost() string {
 	return hostname
 }
 
-func startMetadataServer(backendsByType BackendsByTerminationType, port int, ready chan bool) {
+func startMetadataServer(backendsByType BackendsByTerminationType, port int) {
 	var mu sync.Mutex
 
 	printBackendsForType := func(w io.Writer, t perf.TerminationType) error {
@@ -105,8 +105,6 @@ func startMetadataServer(backendsByType BackendsByTerminationType, port int, rea
 	}
 
 	mux := http.NewServeMux()
-
-	var postHits int
 
 	mux.HandleFunc("/backends", func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -131,12 +129,6 @@ func startMetadataServer(backendsByType BackendsByTerminationType, port int, rea
 				return
 			}
 			backendsByType[x.TerminationType][i].Port = x.Port
-			if postHits < *nbackends*4 {
-				postHits += 1
-				if postHits == *nbackends*4 {
-					ready <- true
-				}
-			}
 		default:
 			for _, t := range perf.AllTerminationTypes[:] {
 				printBackendsForType(w, t)
@@ -186,9 +178,7 @@ func startBackends(backendsByType BackendsByTerminationType, port int) {
 		os.Exit(1)
 	}()
 
-	ready := make(chan bool)
-
-	go startMetadataServer(backendsByType, port, ready)
+	go startMetadataServer(backendsByType, port)
 
 	var children []int
 
@@ -220,23 +210,6 @@ func startBackends(backendsByType BackendsByTerminationType, port int) {
 			}
 		}
 	}
-
-	for t, backends := range backendsByType {
-		for _, b := range backends {
-			url := fmt.Sprintf("%s://x1c:%v/1024.html", t.TerminationScheme(), b.Port)
-			resp, err := http.Get(url)
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			defer resp.Body.Close()
-			defer io.Copy(ioutil.Discard, resp.Body)
-			fmt.Println(resp.StatusCode)
-		}
-	}
-	fmt.Println("waiting for all ports")
-	<-ready
-	fmt.Println("ready!")
 
 	select {}
 }
