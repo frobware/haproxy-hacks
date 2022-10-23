@@ -333,7 +333,7 @@ func main() {
 		}
 	}
 
-	for _, clients := range []int64{100} {
+	for _, clients := range []int64{1, 50, 100, 200} {
 		for _, scenario := range []struct {
 			Name             string
 			TerminationTypes []perf.TerminationType
@@ -344,7 +344,7 @@ func main() {
 			{"passthrough", []perf.TerminationType{perf.PassthroughTermination}},
 			{"reencrypt", []perf.TerminationType{perf.ReencryptTermination}},
 		} {
-			for _, keepAliveRequests := range []int64{0} {
+			for _, keepAliveRequests := range []int64{0, 1, 50} {
 				config := RequestConfig{
 					Clients:           clients,
 					KeepAliveRequests: keepAliveRequests,
@@ -356,7 +356,7 @@ func main() {
 				if err != nil {
 					log.Fatal(err)
 				}
-				path := fmt.Sprintf("%s/mb/traffic/%v/backends/%v/clients/%v/keepalives/%v",
+				path := fmt.Sprintf("%s/mb/traffic-%v-backends-%v-clients-%v-keepalives-%v",
 					*configDir,
 					scenario.Name,
 					len(requests)/len(config.TerminationTypes),
