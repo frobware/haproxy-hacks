@@ -33,7 +33,7 @@ type BackendsByTerminationType map[perf.TerminationType][]Backend
 
 // Program flags
 var (
-	nbackends = flag.Int("nbackends", 100, "number of backends servers to create")
+	nbackends = flag.Int("nbackends", 200, "number of backends servers to create")
 )
 
 var (
@@ -92,7 +92,7 @@ func mustResolveCurrentHost() string {
 	return hostname
 }
 
-func startMetadataServer(backendsByType BackendsByTerminationType, port int) {
+func startMetadataServer(backendsByType BackendsByTerminationType, port int, ready chan bool) {
 	var mu sync.Mutex
 
 	printBackendsForType := func(w io.Writer, t perf.TerminationType) error {
@@ -105,6 +105,8 @@ func startMetadataServer(backendsByType BackendsByTerminationType, port int) {
 	}
 
 	mux := http.NewServeMux()
+
+	var postHits int
 
 	mux.HandleFunc("/backends", func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
@@ -129,6 +131,12 @@ func startMetadataServer(backendsByType BackendsByTerminationType, port int) {
 				return
 			}
 			backendsByType[x.TerminationType][i].Port = x.Port
+			if postHits < *nbackends*4 {
+				postHits += 1
+				if postHits == *nbackends*4 {
+					ready <- true
+				}
+			}
 		default:
 			for _, t := range perf.AllTerminationTypes[:] {
 				printBackendsForType(w, t)
@@ -178,7 +186,9 @@ func startBackends(backendsByType BackendsByTerminationType, port int) {
 		os.Exit(1)
 	}()
 
-	go startMetadataServer(backendsByType, port)
+	ready := make(chan bool)
+
+	go startMetadataServer(backendsByType, port, ready)
 
 	var children []int
 
@@ -211,10 +221,27 @@ func startBackends(backendsByType BackendsByTerminationType, port int) {
 		}
 	}
 
+	for t, backends := range backendsByType {
+		for _, b := range backends {
+			url := fmt.Sprintf("%s://x1c:%v/1024.html", t.TerminationScheme(), b.Port)
+			resp, err := http.Get(url)
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			defer resp.Body.Close()
+			defer io.Copy(ioutil.Discard, resp.Body)
+			fmt.Println(resp.StatusCode)
+		}
+	}
+	fmt.Println("waiting for all ports")
+	<-ready
+	fmt.Println("ready!")
+
 	select {}
 }
 
-func serveBackend(name, terminationType string) {
+func serveBackend(name, terminationType string, port int) {
 	log.SetPrefix(fmt.Sprintf("[c %v %s] ", os.Getpid(), name))
 
 	var t perf.TerminationType = toTerminationType(terminationType)
@@ -263,7 +290,7 @@ func serveBackend(name, terminationType string) {
 	)
 
 	for retries > 0 {
-		resp, err = http.Post("http://127.0.0.1:2000/backends", "application/json", bytes.NewBuffer(jsonValue))
+		resp, err = http.Post(fmt.Sprintf("http://127.0.0.1:%d/backends", port), "application/json", bytes.NewBuffer(jsonValue))
 		if err != nil {
 			retries -= 1
 		} else {
@@ -281,21 +308,8 @@ func serveBackend(name, terminationType string) {
 		//fmt.Printf("status = %v, data = %s\n", resp.Status, data)
 	}
 
-	// reader := bufio.NewReader(os.NewFile(3, "<pipe>"))
-
-	// for {
-	// 	n, err := io.Copy(os.Stdout, reader)
-	// 	if err != nil && err == io.EOF {
-	// 		log.Println(err)
-	// 	}
-	// 	log.Fatal(n, err)
-	// }
-
-	// reader := bufio.NewReader(os.NewFile(3, "<pipe>"))
-	// n, err := io.Copy(os.Stdout, reader)
+	os.NewFile(3, "<pipe>").Read(make([]byte, 1))
 	// log.Println(n, err)
-	n, err := os.NewFile(3, "<pipe>").Read(make([]byte, 1))
-	log.Println(n, err)
 	os.Exit(2)
 }
 
@@ -322,6 +336,6 @@ func main() {
 	} else {
 		backend, _ := os.LookupEnv("CHILD_BACKEND_NAME")
 		terminationType, _ := os.LookupEnv("CHILD_BACKEND_TERMINATION_TYPE")
-		serveBackend(backend, terminationType)
+		serveBackend(backend, terminationType, 2000)
 	}
 }
