@@ -11,6 +11,12 @@
     systemd:
       name: firewalld
       state: started
+  - name: permit traffic for port 2000
+    ansible.posix.firewalld:
+      port: 2000/tcp
+      permanent: true
+      immediate: true
+      state: enabled
   - name: permit traffic for port 8443
     ansible.posix.firewalld:
       port: 8443/tcp
