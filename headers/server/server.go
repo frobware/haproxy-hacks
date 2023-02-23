@@ -5,6 +5,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 const (
@@ -21,10 +24,27 @@ func lookupEnv(key, defaultVal string) string {
 func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		log.Println("connection from", req.RemoteAddr)
-		for k, v := range req.Header {
-			log.Printf("%s: %v\n", k, v)
+
+		names := make([]string, 0, len(req.Header))
+		for k := range req.Header {
+			names = append(names, k)
 		}
-		w.Header().Set("set-cookie2", "X=Y")
+
+		sort.SliceStable(names, func(i, j int) bool {
+			iTestHdr := strings.HasPrefix(names[i], "Testhdr_")
+			jTestHdr := strings.HasPrefix(names[j], "Testhdr_")
+			if iTestHdr && jTestHdr {
+				ix, _ := strconv.Atoi(strings.Split(names[i], "_")[1])
+				jx, _ := strconv.Atoi(strings.Split(names[j], "_")[1])
+				return ix < jx
+			}
+			return names[i] < names[j]
+		})
+
+		for _, name := range names {
+			log.Printf("%s: %q\n", name, req.Header[name])
+		}
+
 		fmt.Fprintln(w, req.Proto)
 		log.Println()
 		log.Println()
