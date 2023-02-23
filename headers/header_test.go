@@ -46,7 +46,7 @@ func TestSamples(t *testing.T) {
 		{description: "quoted field", input: `%[req.hdr(%{+Q}Host)]`, valid: true},
 		{description: "value with conditional expression", input: `%[req.hdr(Host)] if foo`, valid: false},
 		{description: "value with what looks like a conditional expression", input: `%[req.hdr(Host)]\ if\ foo`, valid: true},
-		{description: "unsuported fetcher", input: `%[date(3600),http_date`, valid: false},
+		{description: "unsuported fetcher", input: `%[date(3600),http_date]`, valid: false},
 	}
 
 	for _, tc := range tests {
