@@ -31,8 +31,8 @@ func main() {
 		}
 
 		sort.SliceStable(names, func(i, j int) bool {
-			iTestHdr := strings.HasPrefix(names[i], "Testhdr_")
-			jTestHdr := strings.HasPrefix(names[j], "Testhdr_")
+			iTestHdr := strings.HasPrefix(names[i], "Test")
+			jTestHdr := strings.HasPrefix(names[j], "Test")
 			if iTestHdr && jTestHdr {
 				ix, _ := strconv.Atoi(strings.Split(names[i], "_")[1])
 				jx, _ := strconv.Atoi(strings.Split(names[j], "_")[1])
