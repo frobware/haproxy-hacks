@@ -24,7 +24,7 @@ func TestHeaderValues(t *testing.T) {
 	}
 
 	tests := []HeaderValueTest{
-		// {description: "empty string", input: ``, valid: true},
+		// {description: "empty string", input: ``, valid: true}, // this is unfortunate and sematically broken
 		{description: "single character", input: `a`, validInput: true},
 		{description: "multiple characters", input: `abc`, validInput: true},
 		{description: "multiple words without escaped space", input: `abc def`, validInput: true},
@@ -50,34 +50,50 @@ func TestHeaderValues(t *testing.T) {
 		{description: "value with conditional expression", input: `%[XYZ.hdr(Host)] if foo`, validInput: true},
 		{description: "value with what looks like a conditional expression", input: `%[XYZ.hdr(Host)]\ if\ foo`, validInput: true},
 		{description: "unsuported fetcher", input: `%[date(3600),http_date]`, validInput: false},
+		{description: "nonexistent sample fetches or converters", input: `%[foo,lower]`, validInput: false},
+		{description: "nonexistent converters", input: `%[req.hdr(host),foo]`, validInput: false},
+		{description: "missing parentheses or braces", input: `%{Q[req.hdr(host)]`, validInput: false},
+		{description: "missing parentheses or braces", input: `%Q}[req.hdr(host)]`, validInput: false},
+		{description: "missing parentheses or braces", input: `%{{Q}[req.hdr(host)]`, validInput: false},
+		{description: "missing parentheses or braces", input: `%[req.hdr(host)`, validInput: false},
+		{description: "missing parentheses or braces", input: `%req.hdr(host)]`, validInput: false},
+		{description: "missing parentheses or braces", input: `%[req.hdrhost)]`, validInput: false},
+		{description: "missing parentheses or braces", input: `%[req.hdr(host]`, validInput: false},
+		{description: "missing parentheses or braces", input: `%[req.hdr(host`, validInput: false},
+		{description: "missing parentheses or braces", input: `%{req.hdr(host)}`, validInput: false},
+		{description: "parameters for a sample fetch that doesn't take parameters", input: `%[ssl_c_der(host)]`, validInput: false},
+		{description: "dangerous sample fetches and converters", input: `%[env(FOO)]`, validInput: false},
+		{description: "dangerous sample fetches and converters", input: `%[req.hdr(host),debug()]`, validInput: false},
+		{description: "extra comma", input: `%[req.hdr(host),,lower]`, validInput: false},
+		{description: "linefeed", input: "", validInput: false},
 	}
 
-	var requests = []struct {
-		name             string
-		regexp           *regexp.Regexp
-		inputSubstituter func(s string) string
+	var requestTypes = []struct {
+		description          string
+		regexp               *regexp.Regexp
+		testInputSubstituter func(s string) string
 	}{{
-		name:             "request",
-		regexp:           permittedRequestHeaderValueRE,
-		inputSubstituter: func(s string) string { return strings.ReplaceAll(s, "XYZ", "req") },
+		description:          "request",
+		regexp:               permittedRequestHeaderValueRE,
+		testInputSubstituter: func(s string) string { return strings.ReplaceAll(s, "XYZ", "req") },
 	}, {
-		name:             "response",
-		regexp:           permittedResponseHeaderValueRE,
-		inputSubstituter: func(s string) string { return strings.ReplaceAll(s, "XYZ", "res") },
+		description:          "response",
+		regexp:               permittedResponseHeaderValueRE,
+		testInputSubstituter: func(s string) string { return strings.ReplaceAll(s, "XYZ", "res") },
 	}}
 
 	var haproxyContent []string // local testing only
 
-	for _, rt := range requests {
-		t.Run(rt.name, func(t *testing.T) {
+	for _, rt := range requestTypes {
+		t.Run(rt.description, func(t *testing.T) {
 			for j, tc := range tests {
 				t.Run(tc.description, func(t *testing.T) {
-					input := rt.inputSubstituter(tc.input)
+					input := rt.testInputSubstituter(tc.input)
 					if got := rt.regexp.MatchString(input); got != tc.validInput {
 						t.Errorf("%q: expected %v, got %t", input, tc.validInput, got)
 					}
 					haproxyTestIdent := fmt.Sprintf("# %v %s", j, t.Name())
-					haproxyTestItem := fmt.Sprintf("http-%s set-header Test%shdr_%v %s", rt.name, rt.name, j, quoteValue(input))
+					haproxyTestItem := fmt.Sprintf("http-%s set-header Test%shdr_%v %s", rt.description, rt.description, j, quoteValue(input))
 					if !tc.validInput {
 						haproxyTestItem = "# " + haproxyTestItem
 					}
