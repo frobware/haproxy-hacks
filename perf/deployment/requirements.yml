@@ -1,5 +1,0 @@
-# Install this with: ansible-galaxy install -r requirements.yml
----
-collections:
-- ansible.posix
-- community.general

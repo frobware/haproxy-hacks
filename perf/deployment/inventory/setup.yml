@@ -1,9 +1,0 @@
----
-- import_playbook: ../playbooks/epel.yml
-- import_playbook: ../playbooks/nofile.yml
-- import_playbook: ../playbooks/sshd.yml
-- import_playbook: ../playbooks/update-resolver-conf.yml
-- import_playbook: ../playbooks/simple-nfs.yaml
-  
-
-  

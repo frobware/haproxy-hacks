@@ -1,5 +1,0 @@
-services:
-  nginx_reencrypt:
-    image: quay.io/openshift-scale/nginx
-    ports:
-    - "10000-12000:8443"

@@ -1,6 +1,0 @@
-services:
-  nginx:
-    image: quay.io/openshift-scale/nginx
-    ports:
-      - "10000-11000:8443"
-      - "12000-13000:8080"

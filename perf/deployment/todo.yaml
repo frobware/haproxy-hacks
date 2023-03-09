@@ -1,4 +1,0 @@
----
-- name: Started
-  gather_facts: true
-  hosts: all
