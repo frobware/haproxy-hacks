@@ -1,0 +1,24 @@
+HTTP/1.0 503 Service Unavailable
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Custom 503 - Service unavailable</title>
+</head>
+<body>
+    <h1>503 - Service unavailable</h1>
+    <p>Sorry, the service you are looking for has gone KAAAAAAAAAAAABOOOM.</p>
+    <pre>
+#####   ####    ###
+#      #   ##  #   #
+#      #  # #      #
+#####  # #  #   ###
+    #  ##   #      #
+    #  #    #  #   #
+#####   ####    ###
+    </pre>
+</body>
+</html>

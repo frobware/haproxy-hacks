@@ -1,0 +1,24 @@
+HTTP/1.0 404 Service Unavailable
+Cache-Control: no-cache
+Connection: close
+Content-Type: text/html
+
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>Custom 404 - Page Not Found</title>
+  </head>
+  <body>
+    <h1>404 - Page Not Found</h1>
+    <p>Sorry, the page you are looking for does not exist.</p>
+    <pre>
+< 404 >
+ -----
+	\   ^__^
+	 \  (oo)\_______
+	    (__)\       )\/\
+		||----w |
+		||     ||
+    </pre>
+  </body>
+</html>

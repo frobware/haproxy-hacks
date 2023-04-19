@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+set -e
+
+oc delete --ignore-not-found configmap  -n openshift-config my-custom-error-code-pages
+oc create -n openshift-config configmap my-custom-error-code-pages --from-file=error-page-404.http --from-file=error-page-503.http
+oc patch -n openshift-ingress-operator ingresscontroller/default --patch '{"spec":{"httpErrorCodePages":null}}' --type=merge
+oc patch -n openshift-ingress-operator ingresscontroller/default --patch '{"spec":{"httpErrorCodePages":{"name":"my-custom-error-code-pages"}}}' --type=merge

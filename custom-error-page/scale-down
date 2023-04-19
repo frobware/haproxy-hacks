@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+set -e
+
+oc scale --replicas=1 -n openshift-ingress-operator ingresscontroller/default

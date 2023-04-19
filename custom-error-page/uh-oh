@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+while :; do
+    oc get pods -n openshift-ingress | ts
+    sleep 1
+    curl -s -L foo-console-openshift-console.apps.ocp413.int.frobware.com | ts
+    sleep 1
+done
+

@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+set -e
+
+oc patch -n openshift-ingress-operator ingresscontroller/default --patch '{"spec":{"httpErrorCodePages":null}}' --type=merge
