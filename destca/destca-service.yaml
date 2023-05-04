@@ -26,6 +26,9 @@ metadata:
 spec:
   containers:
   - image: quay.io/openshift/origin-cluster-ingress-operator:4.13.0
+    env:
+    - name: GODEBUG
+      value: http2debug=2
     name: server
     command: ["ingress-operator", "serve-http2-test-server"]
     readinessProbe:

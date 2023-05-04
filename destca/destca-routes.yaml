@@ -9,7 +9,7 @@ objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: destca1-without-dest-cacert
+    name: destca1-with-key-and-cert
   spec:
     port:
       targetPort: 8443
@@ -30,7 +30,7 @@ objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: destca2-without-dest-cacert
+    name: destca2-with-key-and-cert
   spec:
     port:
       targetPort: 8443
