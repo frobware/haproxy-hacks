@@ -25,7 +25,7 @@ metadata:
     name: destca
 spec:
   containers:
-  - image: quay.io/openshift/origin-cluster-ingress-operator:4.9.0
+  - image: quay.io/openshift/origin-cluster-ingress-operator:4.13.0
     name: server
     command: ["ingress-operator", "serve-http2-test-server"]
     readinessProbe:

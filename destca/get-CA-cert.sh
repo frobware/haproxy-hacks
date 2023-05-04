@@ -9,4 +9,3 @@ if [ -z "$pod" ]; then
 fi
 
 oc exec -n openshift-ingress -c router $pod -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
-

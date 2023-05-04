@@ -4,11 +4,12 @@ parameters:
 - name: TLS_CACRT
 - name: TLS_CRT
 - name: TLS_KEY
+- name: DEST_CACRT
 objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: destca-default-cert-reencrypt
+    name: destca1-without-dest-cacert
   spec:
     port:
       targetPort: 8443
@@ -21,6 +22,73 @@ objects:
         ${TLS_CRT}
       caCertificate: |-
         ${TLS_CACRT}
+    to:
+      kind: Service
+      name: destca
+      weight: 100
+    wildcardPolicy: None
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: destca2-without-dest-cacert
+  spec:
+    port:
+      targetPort: 8443
+    tls:
+      termination: reencrypt
+      insecureEdgeTerminationPolicy: Redirect
+      key: |-
+        ${TLS_KEY}
+      certificate: |-
+        ${TLS_CRT}
+      caCertificate: |-
+        ${TLS_CACRT}
+    to:
+      kind: Service
+      name: destca
+      weight: 100
+    wildcardPolicy: None
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: destca1-with-only-dest-cacert
+  spec:
+    port:
+      targetPort: 8443
+    tls:
+      termination: reencrypt
+      insecureEdgeTerminationPolicy: Redirect
+      # When you configure a secure route with "reencrypt" or
+      # "passthrough" termination, you can use the
+      # destinationCACertificate field to specify the CA certificate to
+      # be used for validating the backend service's certificate. This
+      # ensures that the router only forwards traffic to backend
+      # services with a valid TLS certificate signed by the trusted CA.
+      destinationCACertificate: |
+        ${DEST_CACRT}
+    to:
+      kind: Service
+      name: destca
+      weight: 100
+    wildcardPolicy: None
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: destca2-with-only-dest-cacert
+  spec:
+    port:
+      targetPort: 8443
+    tls:
+      termination: reencrypt
+      insecureEdgeTerminationPolicy: Redirect
+      # When you configure a secure route with "reencrypt" or
+      # "passthrough" termination, you can use the
+      # destinationCACertificate field to specify the CA certificate to
+      # be used for validating the backend service's certificate. This
+      # ensures that the router only forwards traffic to backend
+      # services with a valid TLS certificate signed by the trusted CA.
+      destinationCACertificate: |
+        ${DEST_CACRT}
     to:
       kind: Service
       name: destca
