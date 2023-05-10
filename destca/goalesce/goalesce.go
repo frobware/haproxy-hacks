@@ -8,17 +8,16 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"os"
-
-	"golang.org/x/net/http2"
 )
 
 func main() {
 	client := &http.Client{
-		Transport: &http2.Transport{
+		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
 				InsecureSkipVerify: true,
 			},
-			//ForceAttemptHTTP2: true, // Attempt to use HTTP/2, but fall back to HTTP/1.1 if needed
+			DisableKeepAlives: true,
+			ForceAttemptHTTP2: true, // Attempt to use HTTP/2, but fall back to HTTP/1.1 if needed
 		},
 	}
 

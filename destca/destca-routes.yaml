@@ -9,7 +9,7 @@ objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: destca1-with-key-and-cert
+    name: scripts-with-key-and-cert
   spec:
     port:
       targetPort: 8443
@@ -24,13 +24,13 @@ objects:
         ${TLS_CACRT}
     to:
       kind: Service
-      name: destca
+      name: html-server
       weight: 100
     wildcardPolicy: None
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: destca2-with-key-and-cert
+    name: images-with-key-and-cert
   spec:
     port:
       targetPort: 8443
@@ -45,13 +45,13 @@ objects:
         ${TLS_CACRT}
     to:
       kind: Service
-      name: destca
+      name: html-server
       weight: 100
     wildcardPolicy: None
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: destca1-with-only-dest-cacert
+    name: scripts-with-only-dest-cacert
   spec:
     port:
       targetPort: 8443
@@ -68,13 +68,13 @@ objects:
         ${DEST_CACRT}
     to:
       kind: Service
-      name: destca
+      name: html-server
       weight: 100
     wildcardPolicy: None
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: destca2-with-only-dest-cacert
+    name: images-with-only-dest-cacert
   spec:
     port:
       targetPort: 8443
@@ -91,13 +91,13 @@ objects:
         ${DEST_CACRT}
     to:
       kind: Service
-      name: destca
+      name: html-server
       weight: 100
     wildcardPolicy: None
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: destca-edge
+    name: html-server-edge
   spec:
     port:
       targetPort: 8080
@@ -106,6 +106,6 @@ objects:
       insecureEdgeTerminationPolicy: Redirect
     to:
       kind: Service
-      name: destca
+      name: html-server
       weight: 100
     wildcardPolicy: None

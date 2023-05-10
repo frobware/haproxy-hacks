@@ -6,54 +6,13 @@ metadata:
     service.beta.openshift.io/serving-cert-secret-name: serving-cert-destca
 spec:
   selector:
-    name: destca
+    app: destca
   ports:
-    - name: https
-      protocol: TCP
-      port: 8443
-      targetPort: 8443
-    - name: http
-      protocol: TCP
-      port: 8080
-      targetPort: 8080
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: destca
-  labels:
-    name: destca
-spec:
-  containers:
-  - image: quay.io/openshift/origin-cluster-ingress-operator:4.13.0
-    env:
-    - name: GODEBUG
-      value: http2debug=2
-    name: server
-    command: ["ingress-operator", "serve-http2-test-server"]
-    readinessProbe:
-      failureThreshold: 3
-      tcpSocket:
-        port: 8080
-      initialDelaySeconds: 10
-      periodSeconds: 30
-      successThreshold: 1
-    livenessProbe:
-      failureThreshold: 3
-      tcpSocket:
-        port: 8080
-      initialDelaySeconds: 10
-      periodSeconds: 30
-      successThreshold: 1
-    ports:
-    - containerPort: 8443
-      protocol: TCP
-    - containerPort: 8080
-      protocol: TCP
-    volumeMounts:
-    - mountPath: /etc/serving-cert
-      name: cert
-  volumes:
-  - name: cert
-    secret:
-      secretName: serving-cert-destca
+  - name: https
+    protocol: TCP
+    port: 8443
+    targetPort: 8443
+  - name: http
+    protocol: TCP
+    port: 8080
+    targetPort: 8080

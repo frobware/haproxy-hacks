@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fetch URLs and Display Results</title>
+    <style>
+	table {
+	    width: 100%;
+	    border-collapse: collapse;
+	}
+	th, td {
+	    border: 1px solid black;
+	    padding: 8px;
+	    text-align: left;
+	}
+	th {
+	    background-color: #f2f2f2;
+	}
+    </style>
+</head>
+<body>
+    <h1>URL Results</h1>
+    <table>
+	<thead>
+	    <tr>
+		<th>URL</th>
+		<th>Response</th>
+	    </tr>
+	</thead>
+	<tbody id="results">
+	</tbody>
+    </table>
+    <script>
+	const urls = [
+	    'https://scripts-with-key-and-cert-destca.apps.ocp411.int.frobware.com/test',
+	    'https://images-with-key-and-cert-destca.apps.ocp411.int.frobware.com/test',
+	];
+
+	async function fetchUrl(url) {
+	    try {
+		const response = await fetch(url);
+		const data = await response.text();
+		return data;
+	    } catch (error) {
+		console.error('Error fetching URL:', error);
+		return error.message;
+	    }
+	}
+
+	async function fetchUrls() {
+	    const resultsElement = document.getElementById('results');
+	    for (let i = 0; i < 10; i++) {
+		for (const url of urls) {
+		    const result = await fetchUrl(url);
+		    const row = document.createElement('tr');
+		    const urlCell = document.createElement('td');
+		    const resultCell = document.createElement('td');
+		    urlCell.textContent = url;
+		    resultCell.textContent = result;
+		    row.appendChild(urlCell);
+		    row.appendChild(resultCell);
+		    resultsElement.appendChild(row);
+		}
+	    }
+	}
+
+	fetchUrls();
+    </script>
+</body>
+</html>
