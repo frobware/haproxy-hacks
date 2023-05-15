@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: temp-pod
+spec:
+  nodeName: ip-10-0-132-123.us-east-2.compute.internal
+  restartPolicy: Never
+  containers:
+  - name: temp-container
+    image: docker.io/library/alpine:latest
+    command: ["sh", "-c", "sleep infinity"]
+    securityContext:
+      privileged: true
+    volumeMounts:
+    - name: host-volume
+      mountPath: /host
+  volumes:
+  - name: host-volume
+    hostPath:
+      path: /
