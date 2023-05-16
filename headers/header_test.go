@@ -8,14 +8,19 @@ import (
 	"testing"
 )
 
-var permittedHeaderValueTemplate = `^(?:%(?:%|(?:\{[-+]?[QXE](,[-+]?[QXE])*\})?\[(?:XYZ\.hdr\([0-9A-Za-z-]+\)|ssl_c_der)(?:,(?:lower|base64))*\])|[^%[:cntrl:]])*$`
+var permittedHeaderValueTemplate = `^(?:%(?:%|(?:\{[-+]?[QXE](?:,[-+]?[QXE])*\})?\[(?:XYZ\.hdr\([0-9A-Za-z-]+\)|ssl_c_der)(?:,(?:lower|base64))*\])|[^%[:cntrl:]])+$`
 var permittedRequestHeaderValueRE = regexp.MustCompile(strings.Replace(permittedHeaderValueTemplate, "XYZ", "req", 1))
 var permittedResponseHeaderValueRE = regexp.MustCompile(strings.Replace(permittedHeaderValueTemplate, "XYZ", "res", 1))
+
+func validateInput(input string) bool {
+	re := regexp.MustCompile(`^(?:%(?:%|(?:\{[-+]?[QXE](?:,[-+]?[QXE])*\})?\[(?:XYZ\.hdr\([0-9A-Za-z-]+\)|ssl_c_der)(?:,(?:lower|base64))*\])|[^%[:cntrl:]])+$`)
+	return re.MatchString(input)
+}
 
 func TestHeaderValues(t *testing.T) {
 	type HeaderValueTest struct {
 		description string
-		validInput  bool
+		isValid     bool
 		input       string
 	}
 
@@ -24,48 +29,85 @@ func TestHeaderValues(t *testing.T) {
 	}
 
 	tests := []HeaderValueTest{
-		// {description: "empty string", input: ``, valid: true}, // this is unfortunate and sematically broken
-		{description: "single character", input: `a`, validInput: true},
-		{description: "multiple characters", input: `abc`, validInput: true},
-		{description: "multiple words without escaped space", input: `abc def`, validInput: true},
-		{description: "multiple words with escaped space", input: `abc\ def`, validInput: true},
-		{description: "multiple words each word quoted", input: `"abc"\ "def"`, validInput: true},
-		{description: "multiple words each word quoted and with an embedded space", input: `"abc "\ "def "`, validInput: true},
-		{description: "single % character", input: `%`, validInput: false},
-		{description: "escaped % character", input: `%%`, validInput: true}, // hmm?
-		{description: "escaped % and only a % character", input: `%%%`, validInput: false},
-		{description: "two literal % characters", input: `%%%%`, validInput: true},
-		{description: "zero percent", input: `%%%%%%0`, validInput: true},
-		{description: "escaped expression", input: `%%[XYZ.hdr(Host)]\ %[XYZ.hdr(Host)]`, validInput: true},
-		{description: "simple empty expression", input: `%[]`, validInput: false},
-		{description: "nested empty expressions", input: `%[%[]]`, validInput: false},
-		{description: "empty quoted value", input: `%{+Q}`, validInput: false},
-		{description: "quoted value", input: `%{+Q}foo`, validInput: false},
-		{description: "hdr with empty field", input: `%[XYZ.hdr()]`, validInput: false},
-		{description: "hdr with percent field", input: `%[XYZ.hdr(%)]`, validInput: false},
-		{description: "hdr with known field", input: `%[XYZ.hdr(Host)]`, validInput: true},
-		{description: "hdr with syntax error", input: `%[XYZ.hdr(Host]`, validInput: false},
-		{description: "incomplete expression", input: `%[req`, validInput: false},
-		{description: "quoted field", input: `%[XYZ.hdr(%{+Q}Host)]`, validInput: false},
-		{description: "value with conditional expression", input: `%[XYZ.hdr(Host)] if foo`, validInput: true},
-		{description: "value with what looks like a conditional expression", input: `%[XYZ.hdr(Host)]\ if\ foo`, validInput: true},
-		{description: "unsuported fetcher", input: `%[date(3600),http_date]`, validInput: false},
-		{description: "nonexistent sample fetches or converters", input: `%[foo,lower]`, validInput: false},
-		{description: "nonexistent converters", input: `%[req.hdr(host),foo]`, validInput: false},
-		{description: "missing parentheses or braces", input: `%{Q[req.hdr(host)]`, validInput: false},
-		{description: "missing parentheses or braces", input: `%Q}[req.hdr(host)]`, validInput: false},
-		{description: "missing parentheses or braces", input: `%{{Q}[req.hdr(host)]`, validInput: false},
-		{description: "missing parentheses or braces", input: `%[req.hdr(host)`, validInput: false},
-		{description: "missing parentheses or braces", input: `%req.hdr(host)]`, validInput: false},
-		{description: "missing parentheses or braces", input: `%[req.hdrhost)]`, validInput: false},
-		{description: "missing parentheses or braces", input: `%[req.hdr(host]`, validInput: false},
-		{description: "missing parentheses or braces", input: `%[req.hdr(host`, validInput: false},
-		{description: "missing parentheses or braces", input: `%{req.hdr(host)}`, validInput: false},
-		{description: "parameters for a sample fetch that doesn't take parameters", input: `%[ssl_c_der(host)]`, validInput: false},
-		{description: "dangerous sample fetches and converters", input: `%[env(FOO)]`, validInput: false},
-		{description: "dangerous sample fetches and converters", input: `%[req.hdr(host),debug()]`, validInput: false},
-		{description: "extra comma", input: `%[req.hdr(host),,lower]`, validInput: false},
-		{description: "linefeed", input: "", validInput: false},
+		{
+			input:   "%%[ssl_c_der,lower]",
+			isValid: true,
+		},
+		{description: "empty value", input: ``, isValid: false},
+		{description: "single character", input: `a`, isValid: true},
+		{description: "multiple characters", input: `abc`, isValid: true},
+		{description: "multiple words without escaped space", input: `abc def`, isValid: true},
+		{description: "multiple words with escaped space", input: `abc\ def`, isValid: true},
+		{description: "multiple words each word quoted", input: `"abc"\ "def"`, isValid: true},
+		{description: "multiple words each word quoted and with an embedded space", input: `"abc "\ "def "`, isValid: true},
+		{description: "multiple words each word one double quoted and other single quoted and with an embedded space", input: `"abc "\ 'def '`, isValid: true},
+		{description: "single % character", input: `%`, isValid: false},
+		{description: "escaped % character", input: `%%`, isValid: true},
+		{description: "escaped % and only a % character", input: `%%%`, isValid: false},
+		{description: "two literal % characters", input: `%%%%`, isValid: true},
+		{description: "zero percent", input: `%%%%%%0`, isValid: true},
+		{description: "escaped expression", input: `%%[XYZ.hdr(Host)]\ %[XYZ.hdr(Host)]`, isValid: true},
+		{description: "simple empty expression", input: `%[]`, isValid: false},
+		{description: "nested empty expressions", input: `%[%[]]`, isValid: false},
+		{description: "empty quoted value", input: `%{+Q}`, isValid: false},
+		{description: "quoted value", input: `%{+Q}foo`, isValid: false},
+		{description: "hdr with empty field", input: `%[XYZ.hdr()]`, isValid: false},
+		{description: "hdr with percent field", input: `%[XYZ.hdr(%)]`, isValid: false},
+		{description: "hdr with known field", input: `%[XYZ.hdr(Host)]`, isValid: true},
+		{description: "hdr with syntax error", input: `%[XYZ.hdr(Host]`, isValid: false},
+		{description: "hdr with url", input: `%[XYZ.hdr(Host)] http://url/hack`, isValid: true},
+
+		{description: "hdr with valid X-XSS-Protection value", input: `1;mode=block`, isValid: true},
+		{description: "hdr with valid Content-Type value", input: `text/plain,text/html`, isValid: true},
+		{description: "hdr with url", input: `text/plain,text/html`, isValid: true},
+
+		{description: "incomplete expression", input: `%[req`, isValid: false},
+		{description: "quoted field", input: `%[XYZ.hdr(%{+Q}Host)]`, isValid: false},
+		{description: "value with conditional expression", input: `%[XYZ.hdr(Host)] if foo`, isValid: true},
+		{description: "value with what looks like a conditional expression", input: `%[XYZ.hdr(Host)]\ if\ foo`, isValid: true},
+		{description: "unsupported fetcher and converter", input: `%[date(3600),http_date]`, isValid: false},
+		{description: "not allowed sample fetches", input: `%[foo,lower]`, isValid: false},
+		{description: "not allowed converters", input: `%[req.hdr(host),foo]`, isValid: false},
+		{description: "missing parentheses or braces", input: `%{Q[req.hdr(host)]`, isValid: false},
+		{description: "missing parentheses or braces", input: `%Q}[req.hdr(host)]`, isValid: false},
+		{description: "missing parentheses or braces", input: `%{{Q}[req.hdr(host)]`, isValid: false},
+		{description: "missing parentheses or braces", input: `%[req.hdr(host)`, isValid: false},
+		{description: "missing parentheses or braces", input: `%req.hdr(host)]`, isValid: false},
+		{description: "missing parentheses or braces", input: `%[req.hdrhost)]`, isValid: false},
+		{description: "missing parentheses or braces", input: `%[req.hdr(host]`, isValid: false},
+		{description: "missing parentheses or braces", input: `%[req.hdr(host`, isValid: false},
+		{description: "missing parentheses or braces", input: `%{req.hdr(host)}`, isValid: false},
+		{description: "parameters for a sample fetch that doesn't take parameters", input: `%[ssl_c_der(host)]`, isValid: false},
+		{description: "dangerous sample fetchers and converters", input: `%[env(FOO)]`, isValid: false},
+		{description: "dangerous sample fetchers and converters", input: `%[req.hdr(host),debug()]`, isValid: false},
+		{description: "extra comma", input: `%[req.hdr(host),,lower]`, isValid: false},
+
+		// CR and LF are not allowed in header value as per RFC https://datatracker.ietf.org/doc/html/rfc7230#section-3.2.4
+		// {description: "carriage return", input: "\r", isValid: false},
+		// {description: "CRLF", input: "\r\n", isValid: false},
+
+		// This value is allowed in haproxy.config and does not cause haproxy to crash. The input strings are sanitized by escaping single quotes in the value and then
+		// single quoting the whole value which helps haproxy not to crash in the event of an invalid string provided.
+		{description: "environment variable with a bracket missing", input: "${NET_COOLOCP_HOSTPRIMARY", isValid: true},
+		{description: "value with conditional expression and env var", input: `%[XYZ.hdr(Host)] if ${NET_COOLOCP_HOSTPRIMARY`, isValid: true},
+		{description: "value with what looks like a conditional expression and env var", input: `%[XYZ.hdr(Host)]\ if\ ${NET_COOLOCP_HOSTPRIMARY}`, isValid: true},
+
+		{description: "sample value", input: "%ci:%cp [%tr] %ft %ac/%fc %[fc_err]/\\%[ssl_fc_err,hex]/%[ssl_c_err]/%[ssl_c_ca_err]/%[ssl_fc_is_resumed] \\%[ssl_fc_sni]/%sslv/%sslc", isValid: false},
+		{description: "interpolation of T i.e %T", input: `%T`, isValid: false},
+
+		// url
+		// regex does not check validity of url in a header value.
+		{description: "hdr with url", input: `%[XYZ.hdr(Host)] http:??//url/hack`, isValid: true},
+		{description: "hdr with url", input: `http:??//url/hack`, isValid: true},
+
+		// spaces and tab
+		// regex allows spaces before and after. The reason is that after a dynamic value is provided someone might provide a condition `%[XYZ.hdr(Host)] if foo` which would have
+		// spaces after the dynamic value and if condition.
+		// tab is rejected as control characters are not allowed by the regex.
+		{description: "space before and after the value", input: ` T `, isValid: true},
+		{description: "double space before and after the value", input: `  T  `, isValid: true},
+		{description: "tab before and after the value", input: `	T	`, isValid: false},
+		{description: "tab before and after the value", input: "\tT\t", isValid: false},
 	}
 
 	var requestTypes = []struct {
@@ -89,12 +131,12 @@ func TestHeaderValues(t *testing.T) {
 			for j, tc := range tests {
 				t.Run(tc.description, func(t *testing.T) {
 					input := rt.testInputSubstituter(tc.input)
-					if got := rt.regexp.MatchString(input); got != tc.validInput {
-						t.Errorf("%q: expected %v, got %t", input, tc.validInput, got)
+					if got := rt.regexp.MatchString(input); got != tc.isValid {
+						t.Errorf("%q: expected %v, got %t", input, tc.isValid, got)
 					}
 					haproxyTestIdent := fmt.Sprintf("# %v %s", j, t.Name())
 					haproxyTestItem := fmt.Sprintf("http-%s set-header Test%shdr_%v %s", rt.description, rt.description, j, quoteValue(input))
-					if !tc.validInput {
+					if !tc.isValid {
 						haproxyTestItem = "# " + haproxyTestItem
 					}
 					haproxyContent = append(haproxyContent, haproxyTestIdent, haproxyTestItem, "\n")
