@@ -14,42 +14,6 @@ objects:
     port:
       targetPort: 8443
     tls:
-      termination: passthrough
-      insecureEdgeTerminationPolicy: Redirect
-    to:
-      kind: Service
-      name: html-server
-      weight: 100
-    wildcardPolicy: None
-# - apiVersion: route.openshift.io/v1
-#   kind: Route
-#   metadata:
-#     name: images-with-key-and-cert
-#   spec:
-#     port:
-#       targetPort: 8443
-#     tls:
-#       termination: reencrypt
-#       insecureEdgeTerminationPolicy: Redirect
-#       key: |-
-#         ${TLS_KEY}
-#       certificate: |-
-#         ${TLS_CRT}
-#       caCertificate: |-
-#         ${TLS_CACRT}
-#     to:
-#       kind: Service
-#       name: html-server
-#       weight: 100
-#     wildcardPolicy: None
-- apiVersion: route.openshift.io/v1
-  kind: Route
-  metadata:
-    name: images-with-key-and-cert
-  spec:
-    port:
-      targetPort: 8443
-    tls:
       termination: reencrypt
       insecureEdgeTerminationPolicy: Redirect
       key: |-
@@ -66,59 +30,19 @@ objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: scripts-with-only-dest-cacert
+    name: images-with-key-and-cert
   spec:
     port:
       targetPort: 8443
     tls:
       termination: reencrypt
       insecureEdgeTerminationPolicy: Redirect
-      # When you configure a secure route with "reencrypt" or
-      # "passthrough" termination, you can use the
-      # destinationCACertificate field to specify the CA certificate to
-      # be used for validating the backend service's certificate. This
-      # ensures that the router only forwards traffic to backend
-      # services with a valid TLS certificate signed by the trusted CA.
-      destinationCACertificate: |
-        ${DEST_CACRT}
-    to:
-      kind: Service
-      name: html-server
-      weight: 100
-    wildcardPolicy: None
-- apiVersion: route.openshift.io/v1
-  kind: Route
-  metadata:
-    name: images-with-only-dest-cacert
-  spec:
-    port:
-      targetPort: 8443
-    tls:
-      termination: reencrypt
-      insecureEdgeTerminationPolicy: Redirect
-      # When you configure a secure route with "reencrypt" or
-      # "passthrough" termination, you can use the
-      # destinationCACertificate field to specify the CA certificate to
-      # be used for validating the backend service's certificate. This
-      # ensures that the router only forwards traffic to backend
-      # services with a valid TLS certificate signed by the trusted CA.
-      destinationCACertificate: |
-        ${DEST_CACRT}
-    to:
-      kind: Service
-      name: html-server
-      weight: 100
-    wildcardPolicy: None
-- apiVersion: route.openshift.io/v1
-  kind: Route
-  metadata:
-    name: html-server-edge
-  spec:
-    port:
-      targetPort: 8080
-    tls:
-      termination: edge
-      insecureEdgeTerminationPolicy: Redirect
+      key: |-
+        ${TLS_KEY}
+      certificate: |-
+        ${TLS_CRT}
+      caCertificate: |-
+        ${TLS_CACRT}
     to:
       kind: Service
       name: html-server

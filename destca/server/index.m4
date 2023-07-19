@@ -26,6 +26,7 @@
         <tr>
         <th>URL</th>
         <th>Response</th>
+        <th>Time (ms)</th>
         </tr>
     </thead>
     <tbody id="results">
@@ -37,33 +38,56 @@
 	'https://scripts-with-key-and-cert-destca.apps.' + subdomain + '/test',
 	'https://images-with-key-and-cert-destca.apps.' + subdomain + '/test',
     ];
+    async function fetchUrl(url) {
+	const options = {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+            redirect: 'follow',
+            referrerPolicy: 'no-referrer',
+	};
 
-    async function fetchUrl(url, resultCell) {
+        const startMark = 'start-${url}';
+        const endMark = 'end-${url}';
+        performance.mark(startMark);
         try {
-            const response = await fetch(url);
+            const response = await fetch(url, options);
             const data = await response.text();
-            resultCell.textContent = data;
+            performance.mark(endMark);
+            performance.measure('Fetching: ${url}', startMark, endMark);
+            const measure = performance.getEntriesByName('Fetching: ${url}')[0];
+            return { data, duration: measure.duration };
         } catch (error) {
             console.error('Error fetching URL:', error);
-            resultCell.textContent = error.message;
+            return { error: error.message, duration: null };
         }
     }
 
-    function fetchUrls() {
-	const resultsElement = document.getElementById('results');
-	for (const url of urls) {
-            const row = document.createElement('tr');
-            const urlCell = document.createElement('td');
-            const resultCell = document.createElement('td');
-            const link = document.createElement('a');  // create a new <a> element
-            link.href = url;  // set its href to the URL
-            link.textContent = url;  // set its text to the URL
-            urlCell.appendChild(link);  // append the <a> element to the URL cell
-            row.appendChild(urlCell);
-            row.appendChild(resultCell);
-            resultsElement.appendChild(row);
-            fetchUrl(url, resultCell);
-	}
+    async function fetchUrls() {
+        const resultsElement = document.getElementById('results');
+	for (let i = 0; i < 100; i++) {
+            for (const url of urls) {
+		const { data, duration } = await fetchUrl(url);
+		const row = document.createElement('tr');
+		const urlCell = document.createElement('td');
+		const resultCell = document.createElement('td');
+		const timeCell = document.createElement('td');
+
+		const link = document.createElement('a');  // create a new <a> element
+		link.href = url;  // set its href to the URL
+		link.textContent = url;  // set its text to the URL
+		urlCell.appendChild(link);  // append the <a> element to the URL cell
+
+		resultCell.textContent = data;
+		timeCell.textContent = duration ? duration.toFixed(2) + ' ms' : 'Error';
+
+		row.appendChild(urlCell);
+		row.appendChild(resultCell);
+		row.appendChild(timeCell);
+
+		resultsElement.appendChild(row);
+            }
+        }
     }
 
     fetchUrls();

@@ -30,7 +30,7 @@ podman build -t html-server .
 podman tag localhost/html-server:latest registry.int.frobware.com/destca/html-server
 podman push registry.int.frobware.com/destca/html-server
 
-oc process TLS_KEY="$TLS_KEY" TLS_CRT="$TLS_CRT" TLS_CACRT="$TLS_CACRT" -f ./route.yaml -o yaml | oc apply -f -
+oc process TLS_KEY="$TLS_KEY" TLS_CRT="$TLS_CRT" TLS_CACRT="$TLS_CACRT" -f ./routes.yaml -o yaml | oc apply -f -
 
 oc apply -f deployment.yaml
 oc apply -f service.yaml
