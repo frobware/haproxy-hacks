@@ -14,19 +14,34 @@ objects:
     port:
       targetPort: 8443
     tls:
-      termination: reencrypt
+      termination: passthrough
       insecureEdgeTerminationPolicy: Redirect
-      key: |-
-        ${TLS_KEY}
-      certificate: |-
-        ${TLS_CRT}
-      caCertificate: |-
-        ${TLS_CACRT}
     to:
       kind: Service
       name: html-server
       weight: 100
     wildcardPolicy: None
+# - apiVersion: route.openshift.io/v1
+#   kind: Route
+#   metadata:
+#     name: images-with-key-and-cert
+#   spec:
+#     port:
+#       targetPort: 8443
+#     tls:
+#       termination: reencrypt
+#       insecureEdgeTerminationPolicy: Redirect
+#       key: |-
+#         ${TLS_KEY}
+#       certificate: |-
+#         ${TLS_CRT}
+#       caCertificate: |-
+#         ${TLS_CACRT}
+#     to:
+#       kind: Service
+#       name: html-server
+#       weight: 100
+#     wildcardPolicy: None
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:

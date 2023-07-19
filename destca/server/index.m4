@@ -32,7 +32,7 @@
     </tbody>
     </table>
     <script>
-    const subdomain = 'ocp414.int.frobware.com';  // this will be replaced by M4
+    const subdomain = 'SUBDOMAIN';  // this will be replaced by M4
     const urls = [
 	'https://scripts-with-key-and-cert-destca.apps.' + subdomain + '/test',
 	'https://images-with-key-and-cert-destca.apps.' + subdomain + '/test',

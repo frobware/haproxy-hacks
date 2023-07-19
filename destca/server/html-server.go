@@ -25,15 +25,15 @@ func lookupEnv(key, defaultVal string) string {
 	return defaultVal
 }
 
-func enableCors(w *http.ResponseWriter) {
-	(*w).Header().Set("Access-Control-Allow-Origin", "*")
-	(*w).Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT")
-	(*w).Header().Set("Access-Control-Allow-Headers", "Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With")
+func enableCors(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET,POST,OPTIONS,DELETE,PUT")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With")
 }
 
 func cors(fs http.Handler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		enableCors(&w)
+		enableCors(w)
 		fs.ServeHTTP(w, r)
 	}
 }
@@ -50,7 +50,7 @@ func main() {
 	})
 
 	http.HandleFunc("/test", func(w http.ResponseWriter, req *http.Request) {
-		enableCors(&w)
+		enableCors(w)
 		fmt.Fprint(w, req.Proto, "\n")
 		log.Println("connection from", req.RemoteAddr)
 	})
