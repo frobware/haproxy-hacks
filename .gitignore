@@ -2,3 +2,5 @@ benchmark-config:
 /keda/nodes-ready-app/nodes-ready-app
 
 /destca/server/html-server
+/destca/payroll-certs/
+/destca/catpictures-certs/
