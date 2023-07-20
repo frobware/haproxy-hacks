@@ -9,7 +9,7 @@ objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: scripts-with-key-and-cert
+    name: payroll
   spec:
     port:
       targetPort: 8443
@@ -30,7 +30,7 @@ objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: images-with-key-and-cert
+    name: catpictures
   spec:
     port:
       targetPort: 8443
