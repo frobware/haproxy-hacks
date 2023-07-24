@@ -1,3 +1,5 @@
+<!-- -*- mode: html -*- -->
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -34,9 +36,10 @@
     </table>
     <script>
     const subdomain = 'SUBDOMAIN';  // this will be replaced by M4
+    const namespace = 'NAMESPACE';  // this will be replaced by M4
     const urls = [
-	'https://payroll-destca.apps.' + subdomain + '/test',
-	'https://catpictures-destca.apps.' + subdomain + '/test',
+	'https://payroll-' + namespace + '.' + subdomain + '/test',
+	'https://catpictures-' + namespace + '.' + subdomain + '/test',
     ];
     async function fetchUrl(url) {
 	const options = {
