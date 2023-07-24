@@ -44,15 +44,20 @@ func main() {
 
 	http.Handle("/", cors(http.FileServer(http.FS(BackendFS))))
 
-	http.HandleFunc("/healthz", func(w http.ResponseWriter, req *http.Request) {
-		log.Println("/healthz connection from", req.RemoteAddr)
+	http.HandleFunc("/healthy", func(w http.ResponseWriter, req *http.Request) {
+		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
+		fmt.Fprint(w, req.Proto, "\n")
+	})
+
+	http.HandleFunc("/ready", func(w http.ResponseWriter, req *http.Request) {
+		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 		fmt.Fprint(w, req.Proto, "\n")
 	})
 
 	http.HandleFunc("/test", func(w http.ResponseWriter, req *http.Request) {
+		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 		enableCors(w)
 		fmt.Fprint(w, req.Proto, "\n")
-		log.Println("/test connection from", req.RemoteAddr)
 	})
 
 	go func() {
