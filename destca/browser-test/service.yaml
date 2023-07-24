@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: html-server
+  name: browser-test
   annotations:
-    service.beta.openshift.io/serving-cert-secret-name: serving-cert-html-server
+    service.beta.openshift.io/serving-cert-secret-name: serving-cert-browser-test
 spec:
   selector:
-    app: html-server
+    app: browser-test
   ports:
   - name: https
     protocol: TCP

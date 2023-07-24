@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: destca
+  name: destca-test
 spec:
   selector:
     matchLabels:
-      app: destca
+      app: destca-test
   template:
     metadata:
       labels:
-        app: destca
+        app: destca-test
     spec:
       containers:
-      - name: server
+      - name: destca-test
         image: registry.int.frobware.com/destca/html-server
         imagePullPolicy: Always
         securityContext:
@@ -23,17 +23,19 @@ spec:
             - ALL
           seccompProfile:
             type: RuntimeDefault
-        ports:
-        - containerPort: 8080
-          name: http
-        - containerPort: 8443
-          name: https
-        volumeMounts:
-        - mountPath: /etc/serving-cert
-          name: cert
         env:
         - name: GODEBUG
           value: http2debug=2
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+          name: "https"
+        - containerPort: 8080
+          protocol: TCP
+          name: "http"
+        volumeMounts:
+        - mountPath: /etc/serving-cert
+          name: cert
         readinessProbe:
           failureThreshold: 3
           httpGet:
@@ -53,4 +55,4 @@ spec:
       volumes:
       - name: cert
         secret:
-          secretName: serving-cert-destca
+          secretName: serving-cert-destca-test

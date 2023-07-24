@@ -8,14 +8,14 @@ objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
-    name: html-server-insecure
+    name: browser-test-insecure
     labels:
-      app: html-server
+      app: browser-test
   spec:
     port:
       targetPort: 8080
     to:
       kind: Service
-      name: html-server
+      name: browser-test
       weight: 100
     wildcardPolicy: None

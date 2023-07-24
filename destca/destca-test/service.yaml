@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: destca
+  name: destca-test
   annotations:
-    service.beta.openshift.io/serving-cert-secret-name: serving-cert-destca
+    service.beta.openshift.io/serving-cert-secret-name: serving-cert-destca-test
 spec:
   selector:
-    app: destca
+    app: destca-test
   ports:
   - name: https
     protocol: TCP

@@ -1,19 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: html-server
+  name: browser-test
 spec:
   selector:
     matchLabels:
-      app: html-server
+      app: browser-test
   template:
     metadata:
       labels:
-        app: html-server
+        app: browser-test
     spec:
       replicas: 2
       containers:
-      - name: html-server
+      - name: browser-test
         image: registry.int.frobware.com/destca/html-server
         imagePullPolicy: Always
         securityContext:
@@ -24,6 +24,9 @@ spec:
             - ALL
           seccompProfile:
             type: RuntimeDefault
+        env:
+        - name: GODEBUG
+          value: http2debug=2
         ports:
         - containerPort: 8443
           protocol: TCP
@@ -53,4 +56,4 @@ spec:
       volumes:
       - name: cert
         secret:
-          secretName: serving-cert-html-server
+          secretName: serving-cert-browser-test

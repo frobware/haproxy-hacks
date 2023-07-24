@@ -11,7 +11,7 @@ objects:
   metadata:
     name: payroll
     labels:
-      app: destca
+      app: destca-test
   spec:
     port:
       targetPort: 8443
@@ -26,29 +26,6 @@ objects:
         ${TLS_CACRT}
     to:
       kind: Service
-      name: destca
-      weight: 100
-    wildcardPolicy: None
-- apiVersion: route.openshift.io/v1
-  kind: Route
-  metadata:
-    name: catpictures
-    labels:
-      app: destca
-  spec:
-    port:
-      targetPort: 8443
-    tls:
-      termination: reencrypt
-      insecureEdgeTerminationPolicy: Redirect
-      key: |-
-        ${TLS_KEY}
-      certificate: |-
-        ${TLS_CRT}
-      caCertificate: |-
-        ${TLS_CACRT}
-    to:
-      kind: Service
-      name: destca
+      name: destca-test
       weight: 100
     wildcardPolicy: None
