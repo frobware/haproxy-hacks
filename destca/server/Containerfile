@@ -1,5 +1,5 @@
 FROM scratch
-COPY ./html-server /usr/bin/html-server
+COPY ./server /usr/bin/server
 # 65532 is numeric for nonroot
 USER 65532:65532
-ENTRYPOINT ["/usr/bin/html-server"]
+ENTRYPOINT ["/usr/bin/server"]

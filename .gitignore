@@ -6,3 +6,4 @@ benchmark-config:
 /destca/catpictures-certs/
 /destca/certs/
 /destca/ca.crt
+/destca/server/server

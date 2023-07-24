@@ -14,7 +14,7 @@ spec:
       replicas: 2
       containers:
       - name: browser-test
-        image: registry.int.frobware.com/destca/html-server
+        image: registry.int.frobware.com/destca/server
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false
