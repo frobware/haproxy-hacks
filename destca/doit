@@ -37,7 +37,9 @@ oc apply -f service.yaml
 
 popd
 
-oc process DEST_CACRT="$DEST_CACRT" TLS_KEY="$TLS_KEY" TLS_CRT="$TLS_CRT" TLS_CACRT="$TLS_CACRT" -f ./destca-routes.yaml -o yaml | oc apply -f -
+./process-routes.sh ./certs/catpictures-destca.apps.ocp414.int.frobware.com catpictures-route.yaml
+./process-routes.sh ./certs/payroll-destca.apps.ocp414.int.frobware.com payroll-route.yaml
+
 oc apply -f destca-service.yaml
 oc apply -f destca-deployment.yaml
 oc get all

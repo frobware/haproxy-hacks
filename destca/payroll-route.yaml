@@ -1,0 +1,29 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+parameters:
+- name: TLS_CACRT
+- name: TLS_CRT
+- name: TLS_KEY
+- name: DEST_CACRT
+objects:
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: payroll
+  spec:
+    port:
+      targetPort: 8443
+    tls:
+      termination: reencrypt
+      insecureEdgeTerminationPolicy: Redirect
+      key: |-
+        ${TLS_KEY}
+      certificate: |-
+        ${TLS_CRT}
+      caCertificate: |-
+        ${TLS_CACRT}
+    to:
+      kind: Service
+      name: html-server
+      weight: 100
+    wildcardPolicy: None

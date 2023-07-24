@@ -11,6 +11,7 @@ spec:
       labels:
         app: html-server
     spec:
+      replicas: 2
       containers:
       - name: html-server
         image: registry.int.frobware.com/destca/html-server
@@ -33,6 +34,22 @@ spec:
         volumeMounts:
         - mountPath: /etc/serving-cert
           name: cert
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 30
+          successThreshold: 1
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 30
+          successThreshold: 1
       volumes:
       - name: cert
         secret:

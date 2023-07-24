@@ -5,3 +5,4 @@ benchmark-config:
 /destca/payroll-certs/
 /destca/catpictures-certs/
 /destca/certs/
+/destca/ca.crt
