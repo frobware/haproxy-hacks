@@ -38,6 +38,24 @@ func cors(fs http.Handler) http.HandlerFunc {
 	}
 }
 
+func writeResponse(w http.ResponseWriter, req *http.Request) {
+	if false {
+		fmt.Printf("Headers: ")
+		for name, headers := range req.Header {
+			for _, h := range headers {
+				fmt.Printf("%v: %v\n", name, h)
+			}
+		}
+		fmt.Println()
+	}
+	fmt.Fprintf(w, "%s %s://%s:%s%s\n",
+		req.RemoteAddr,
+		req.Header.Get("X-Forwarded-Proto"),
+		req.Header.Get("X-Forwarded-Host"),
+		req.Header.Get("X-Forwarded-Port"),
+		req.URL)
+}
+
 func main() {
 	crtFile := lookupEnv("TLS_CRT", defaultTLSCrt)
 	keyFile := lookupEnv("TLS_KEY", defaultTLSKey)
@@ -46,18 +64,18 @@ func main() {
 
 	http.HandleFunc("/healthy", func(w http.ResponseWriter, req *http.Request) {
 		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
-		fmt.Fprint(w, req.Proto, "\n")
+		writeResponse(w, req)
 	})
 
 	http.HandleFunc("/ready", func(w http.ResponseWriter, req *http.Request) {
 		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
-		fmt.Fprint(w, req.Proto, "\n")
+		writeResponse(w, req)
 	})
 
 	http.HandleFunc("/test", func(w http.ResponseWriter, req *http.Request) {
 		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 		enableCors(w)
-		fmt.Fprint(w, req.Proto, "\n")
+		writeResponse(w, req)
 	})
 
 	go func() {
