@@ -1,0 +1,16 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: passthrough
+  labels:
+    app: destca-test
+spec:
+  port:
+    targetPort: 8443
+  tls:
+    termination: passthrough
+  to:
+    kind: Service
+    name: destca-test
+    weight: 100
+  wildcardPolicy: None

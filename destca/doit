@@ -43,6 +43,8 @@ oc apply -f service.yaml
 oc apply -f deployment.yaml
 ./process-routes.sh ../certs/catpictures-destca.apps.ocp414.int.frobware.com catpictures-route.yaml
 ./process-routes.sh ../certs/payroll-destca.apps.ocp414.int.frobware.com payroll-route.yaml
+oc delete --ignore-not-found -f ./passthrough-route.yaml
+oc create -f ./passthrough-route.yaml
 popd
 
 #oc get all
