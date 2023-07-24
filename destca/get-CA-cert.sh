@@ -8,4 +8,4 @@ if [ -z "$pod" ]; then
     exit 1
 fi
 
-oc exec -n openshift-ingress -c router $pod -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
+oc exec -n openshift-ingress -c router "$pod" -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt
