@@ -64,20 +64,22 @@ func main() {
 	http.Handle("/", cors(http.FileServer(http.FS(BackendFS))))
 
 	http.HandleFunc("/healthy", func(w http.ResponseWriter, req *http.Request) {
-		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 		writeResponse(w, req)
+		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 	})
 
 	http.HandleFunc("/ready", func(w http.ResponseWriter, req *http.Request) {
-		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 		writeResponse(w, req)
+		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 	})
 
 	http.HandleFunc("/test", func(w http.ResponseWriter, req *http.Request) {
-		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 		enableCors(w)
 		writeResponse(w, req)
+		log.Println(req.Proto, req.URL, "connection from", req.RemoteAddr)
 	})
+
+	log.Println("GODEBUG", lookupEnv("GODEBUG", "<unset>"))
 
 	go func() {
 		port := lookupEnv("HTTP_PORT", defaultHTTPPort)
