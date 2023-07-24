@@ -34,6 +34,22 @@ spec:
         env:
         - name: GODEBUG
           value: http2debug=2
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 30
+          successThreshold: 1
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 30
+          successThreshold: 1
       volumes:
       - name: cert
         secret:
