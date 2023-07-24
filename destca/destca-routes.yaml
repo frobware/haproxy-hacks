@@ -10,6 +10,8 @@ objects:
   kind: Route
   metadata:
     name: payroll
+    labels:
+      app: destca
   spec:
     port:
       targetPort: 8443
@@ -24,13 +26,15 @@ objects:
         ${TLS_CACRT}
     to:
       kind: Service
-      name: html-server
+      name: destca
       weight: 100
     wildcardPolicy: None
 - apiVersion: route.openshift.io/v1
   kind: Route
   metadata:
     name: catpictures
+    labels:
+      app: destca
   spec:
     port:
       targetPort: 8443
@@ -45,6 +49,6 @@ objects:
         ${TLS_CACRT}
     to:
       kind: Service
-      name: html-server
+      name: destca
       weight: 100
     wildcardPolicy: None

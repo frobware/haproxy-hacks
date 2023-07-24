@@ -24,6 +24,6 @@ objects:
         ${TLS_CACRT}
     to:
       kind: Service
-      name: html-server
+      name: destca
       weight: 100
     wildcardPolicy: None
