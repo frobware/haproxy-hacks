@@ -7,3 +7,4 @@ benchmark-config:
 /destca/certs/
 /destca/ca.crt
 /destca/server/server
+/destca/server/index.html

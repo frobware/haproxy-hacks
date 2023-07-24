@@ -24,10 +24,6 @@ oc delete --all deployments
 
 pushd server
 make
-CGO_ENABLED=0 go build server.go
-podman build -t server .
-podman tag localhost/server:latest registry.int.frobware.com/destca/server
-podman push registry.int.frobware.com/destca/server
 popd
 
 pushd browser-test
