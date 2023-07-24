@@ -2,6 +2,11 @@
 
 set -eu
 
+if [[ "$(oc project -q)" != "destca" ]]; then
+    echo "Expecting current namespace to \"destca\"."
+    exit 1
+fi
+
 domain=$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)
 
 tls_key="$(cat /home/aim/.acme.sh/*.${domain}/*.${domain}.key)"
