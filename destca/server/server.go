@@ -48,7 +48,8 @@ func writeResponse(w http.ResponseWriter, req *http.Request) {
 		}
 		fmt.Println()
 	}
-	fmt.Fprintf(w, "%s %s://%s:%s%s\n",
+	fmt.Fprintf(w, "%s %s %s://%s:%s%s\n",
+		req.Proto,
 		req.RemoteAddr,
 		req.Header.Get("X-Forwarded-Proto"),
 		req.Header.Get("X-Forwarded-Host"),
