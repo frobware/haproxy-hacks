@@ -58,9 +58,6 @@ func writeResponse(w http.ResponseWriter, req *http.Request) {
 }
 
 func main() {
-	crtFile := lookupEnv("TLS_CRT", defaultTLSCrt)
-	keyFile := lookupEnv("TLS_KEY", defaultTLSKey)
-
 	http.Handle("/", cors(http.FileServer(http.FS(BackendFS))))
 
 	http.HandleFunc("/healthy", func(w http.ResponseWriter, req *http.Request) {
@@ -91,6 +88,8 @@ func main() {
 	}()
 
 	go func() {
+		crtFile := lookupEnv("TLS_CRT", defaultTLSCrt)
+		keyFile := lookupEnv("TLS_KEY", defaultTLSKey)
 		port := lookupEnv("HTTPS_PORT", defaultHTTPSPort)
 		log.Printf("Listening securely on port %v\n", port)
 
