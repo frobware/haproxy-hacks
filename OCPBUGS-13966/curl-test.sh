@@ -17,7 +17,7 @@ route_hostnames=$(oc get routes -o jsonpath='{.items[*].spec.host}')
 
 for i in $(seq 1 ${1:-10}); do
     for host in $route_hostnames; do
-	url="http://$host/test"
+	url="https://$host/test"
 	result=$(curl -o /dev/null -k -L -s -w "%{http_code}\n" $url)
 	echo "status $result for $url"
     done
