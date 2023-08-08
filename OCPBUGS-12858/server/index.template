@@ -36,14 +36,14 @@
     </table>
     <script>
     const urls = [
-	'https://payroll-' + 'NAMESPACE' + '.' + 'SUBDOMAIN' + '/test',
-	'https://catpictures-' + 'NAMESPACE' + '.' + 'SUBDOMAIN' + '/test',
+	'https://medicalrecords-' + 'NAMESPACE' + '.' + 'SUBDOMAIN' + '/test',
+	'https://publicblog-' + 'NAMESPACE' + '.' + 'SUBDOMAIN' + '/test',
     ];
 
 async function fetchUrl(url) {
     const options = {
 	method: 'GET',
-	mode: 'cors',
+	mode: 'no-cors',
 	cache: 'no-cache',
 	redirect: 'follow',
 	referrerPolicy: 'no-referrer',

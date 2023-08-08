@@ -36,14 +36,14 @@
     </table>
     <script>
     const urls = [
-	'https://payroll-' + 'ocpbugs12858' + '.' + 'apps.ocp414.int.frobware.com' + '/test',
-	'https://catpictures-' + 'ocpbugs12858' + '.' + 'apps.ocp414.int.frobware.com' + '/test',
+	'https://medicalrecords-' + 'ocpbugs12858' + '.' + 'apps.ocp414.int.frobware.com' + '/test',
+	'https://publicblog-' + 'ocpbugs12858' + '.' + 'apps.ocp414.int.frobware.com' + '/test',
     ];
 
 async function fetchUrl(url) {
     const options = {
 	method: 'GET',
-	mode: 'cors',
+	mode: 'no-cors',
 	cache: 'no-cache',
 	redirect: 'follow',
 	referrerPolicy: 'no-referrer',
