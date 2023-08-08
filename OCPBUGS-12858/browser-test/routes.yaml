@@ -1,21 +1,14 @@
-apiVersion: template.openshift.io/v1
-kind: Template
-parameters:
-- name: TLS_CACRT
-- name: TLS_CRT
-- name: TLS_KEY
-objects:
-- apiVersion: route.openshift.io/v1
-  kind: Route
-  metadata:
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: browser-test
+  labels:
+    app: browser-test
+spec:
+  port:
+    targetPort: 8080
+  to:
+    kind: Service
     name: browser-test
-    labels:
-      app: browser-test
-  spec:
-    port:
-      targetPort: 8080
-    to:
-      kind: Service
-      name: browser-test
-      weight: 100
-    wildcardPolicy: None
+    weight: 100
+  wildcardPolicy: None

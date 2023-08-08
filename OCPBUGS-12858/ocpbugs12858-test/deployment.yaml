@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: ocpbugs12858-test
 spec:
-  replicas: 10
+  replicas: 1
   selector:
     matchLabels:
       app: ocpbugs12858-test
@@ -39,20 +39,17 @@ spec:
           name: cert
         readinessProbe:
           failureThreshold: 3
-          httpGet:
-            path: /ready
-            port: 8080
-            scheme: HTTP
+          tcpSocket:
+            port: 4242
           initialDelaySeconds: 1
-          periodSeconds: 30
+          periodSeconds: 1
           successThreshold: 1
         livenessProbe:
-          failureThreshold: 30
-          httpGet:
-            path: /healthy
-            port: 8080
+          failureThreshold: 1
+          tcpSocket:
+            port: 4242
           initialDelaySeconds: 1
-          periodSeconds: 30
+          periodSeconds: 1
           successThreshold: 1
       volumes:
       - name: cert

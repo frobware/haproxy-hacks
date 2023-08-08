@@ -13,10 +13,11 @@ import (
 var BackendFS embed.FS
 
 const (
-	defaultHTTPPort  = "8080"
-	defaultHTTPSPort = "8443"
-	defaultTLSCrt    = "/etc/serving-cert/tls.crt"
-	defaultTLSKey    = "/etc/serving-cert/tls.key"
+	defaultHealthPort = "4242"
+	defaultHTTPPort   = "8080"
+	defaultHTTPSPort  = "8443"
+	defaultTLSCrt     = "/etc/serving-cert/tls.crt"
+	defaultTLSKey     = "/etc/serving-cert/tls.key"
 )
 
 func lookupEnv(key, defaultVal string) string {
@@ -96,6 +97,14 @@ func main() {
 		log.Printf("Listening securely on port %v\n", port)
 
 		if err := http.ListenAndServeTLS(":"+port, crtFile, keyFile, nil); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	go func() {
+		port := lookupEnv("HEALTH_PORT", defaultHealthPort)
+		log.Printf("Listening on port %v for health checks\n", port)
+		if err := http.ListenAndServe(":"+port, nil); err != nil {
 			log.Fatal(err)
 		}
 	}()
