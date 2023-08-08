@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ocpbugs12858-test
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: ocpbugs12858-test
+  template:
+    metadata:
+      labels:
+        app: ocpbugs12858-test
+    spec:
+      containers:
+      - name: ocpbugs12858-test
+        image: registry.int.frobware.com/ocpbugs12858/server
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        env:
+        - name: GODEBUG
+          value: http2debug=1
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+          name: "https"
+        - containerPort: 8080
+          protocol: TCP
+          name: "http"
+        volumeMounts:
+        - mountPath: /etc/serving-cert
+          name: cert
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /ready
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 1
+          periodSeconds: 30
+          successThreshold: 1
+        livenessProbe:
+          failureThreshold: 30
+          httpGet:
+            path: /healthy
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 30
+          successThreshold: 1
+      volumes:
+      - name: cert
+        secret:
+          secretName: serving-cert-ocpbugs12858-test
