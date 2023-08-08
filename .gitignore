@@ -1,6 +1,5 @@
 benchmark-config:
 /keda/nodes-ready-app/nodes-ready-app
-
 /destca/server/html-server
 /destca/payroll-certs/
 /destca/catpictures-certs/
@@ -8,7 +7,12 @@ benchmark-config:
 /destca/ca.crt
 /destca/server/server
 /destca/server/index.html
-
-certs
 /OCPBUGS-13966/server/server
 /OCPBUGS-12858/server/server
+certs
+ca.cer
+cert.pem
+fullchain.pem
+key.pem
+tls.crt
+tls.key
