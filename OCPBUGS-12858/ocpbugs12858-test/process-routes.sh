@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eu
+set -eux
 
 # Find the first router pod in the openshift-ingress namespace.
 pod=$(oc get pods -n openshift-ingress -l ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default -o jsonpath='{.items[0].metadata.name}')
@@ -16,11 +16,16 @@ if [[ $# -lt 2 ]]; then
 fi
 
 certdir=$1
-route_spec=$2
+route_file=$2
+dest_cacrt=$3
 
-tls_key="$(cat $certdir/tls.key)"
-tls_crt="$(cat $certdir/tls.crt)"
+if [[ -z "$dest_cacrt" ]]; then
+    tls_key="$(cat "$certdir/tls.key")"
+    tls_crt="$(cat "$certdir/tls.crt")"
+else
+    tls_key=""
+    tls_crt=""
+fi
 
-dest_cacrt="$(oc exec -n openshift-ingress -c router "$pod" -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt)"
-oc process DEST_CACRT="$dest_cacrt" TLS_KEY="$tls_key" TLS_CRT="$tls_crt" -f $route_spec -o yaml | oc delete --ignore-not-found -f -
-oc process DEST_CACRT="$dest_cacrt" TLS_KEY="$tls_key" TLS_CRT="$tls_crt" -f $route_spec -o yaml | oc apply -f -
+oc process DEST_CACRT="$dest_cacrt" TLS_KEY="$tls_key" TLS_CRT="$tls_crt" -f "$route_file" -o yaml | oc delete --ignore-not-found -f -
+oc process DEST_CACRT="$dest_cacrt" TLS_KEY="$tls_key" TLS_CRT="$tls_crt" -f "$route_file" -o yaml | oc apply -f -

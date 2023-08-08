@@ -21,6 +21,8 @@ objects:
         ${TLS_KEY}
       certificate: |-
         ${TLS_CRT}
+      destinationCACertificate: |
+        ${DEST_CACRT}
     to:
       kind: Service
       name: ocpbugs12858-test

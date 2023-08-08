@@ -25,14 +25,14 @@ medicalrecords_certdir="$PWD/certs/medicalrecords-${project}.${domain}"
 publicblog_certdir="$PWD/certs/publicblog-${project}.${domain}"
 use_wildcard_domain=0
 wildcard_cert_dir=$(mktemp -d)
-add_destca=0
+use_destca_only=0
 
 trap 'rm -rf -- "$wildcard_cert_dir"' EXIT INT TERM HUP QUIT
 
 PARAMS=""
 while (( "$#" )); do
     case "$1" in
-	--medicalrecords_certdir)
+	--medicalrecords-certdir)
 	    if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
 		medicalrecords_certdir=$2
 		shift 2
@@ -41,7 +41,7 @@ while (( "$#" )); do
 		exit 1
 	    fi
 	    ;;
-	--publicblog_certdir)
+	--publicblog-certdir)
 	    if [ -n "$2" ] && [ "${2:0:1}" != "-" ]; then
 		publicblog_certdir=$2
 		shift 2
@@ -50,8 +50,12 @@ while (( "$#" )); do
 		exit 1
 	    fi
 	    ;;
-	-w|--use_wildcard_domain)
+	-w|--use-wildcard-domain)
 	    use_wildcard_domain=1
+	    shift
+	    ;;
+	-d|--use_dest-ca-only)
+	    use_destca_only=1
 	    shift
 	    ;;
 	--*)
@@ -77,8 +81,6 @@ fi
 # reset positional arguments
 eval set -- "$PARAMS"
 
-dest_cacrt="$(oc exec -n openshift-ingress -c router "$pod" -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt)"
-
 oc delete --all routes
 oc delete --all services
 oc delete --all deployments
@@ -93,11 +95,11 @@ popd
 
 if [[ $use_wildcard_domain -eq 1 ]]; then
     echo "Extracting secrets from $ROUTER_CERT_NAME"
-    oc extract secret/$ROUTER_CERT_NAME -n openshift-ingress --keys=tls.crt --to=- > "$wildcard_cert_dir/tls.crt"
-    oc extract secret/$ROUTER_CERT_NAME -n openshift-ingress --keys=tls.key --to=- > "$wildcard_cert_dir/tls.key"
+    oc extract "secret/$ROUTER_CERT_NAME" -n openshift-ingress --keys=tls.crt --to=- > "$wildcard_cert_dir/tls.crt"
+    oc extract "secret/$ROUTER_CERT_NAME" -n openshift-ingress --keys=tls.key --to=- > "$wildcard_cert_dir/tls.key"
     medicalrecords_certdir="$wildcard_cert_dir"
     publicblog_certdir="$wildcard_cert_dir"
-    ls -lR $wildcard_cert_dir
+    ls -lR "$wildcard_cert_dir"
 fi
 
 pushd ocpbugs12858-test
@@ -105,13 +107,19 @@ oc apply -f service.yaml
 oc apply -f deployment.yaml
 
 echo -n "medicalrecords CN: "
-openssl x509 -in $medicalrecords_certdir/tls.crt -noout -subject | awk -F= '/CN/ {print $NF}'
+openssl x509 -in "$medicalrecords_certdir/tls.crt" -noout -subject | awk -F= '/CN/ {print $NF}'
 
 echo -n "publicblog_certdir CN: "
-openssl x509 -in $publicblog_certdir/tls.crt -noout -subject | awk -F= '/CN/ {print $NF}'
+openssl x509 -in "$publicblog_certdir/tls.crt" -noout -subject | awk -F= '/CN/ {print $NF}'
 
-./process-routes.sh "$publicblog_certdir" publicblog-route.yaml
-./process-routes.sh "$medicalrecords_certdir" medicalrecords-route.yaml
+if [[ $use_destca_only -eq 1 ]]; then
+    dest_cacrt="$(oc exec -n openshift-ingress -c router "$pod" -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt)"
+else
+    dest_cacrt=""
+fi
+
+./process-routes.sh "$publicblog_certdir" publicblog-route.yaml "$dest_cacrt"
+./process-routes.sh "$medicalrecords_certdir" medicalrecords-route.yaml "$dest_cacrt"
 popd
 
 oc rollout status "deployment/${project}-test"
