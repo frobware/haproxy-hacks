@@ -69,27 +69,34 @@ async function fetchUrl(url) {
 async function fetchUrls() {
     const resultsElement = document.getElementById('results');
     for (let i = 0; i < 100; i++) {
-	for (const url of urls) {
-	    const { data, duration } = await fetchUrl(url);
-	    const row = document.createElement('tr');
-	    const urlCell = document.createElement('td');
-	    const resultCell = document.createElement('td');
-	    const timeCell = document.createElement('td');
+        for (const url of urls) {
+            const { data, duration } = await fetchUrl(url);
+            const row = document.createElement('tr');
+            const urlCell = document.createElement('td');
+            const resultCell = document.createElement('td');
+            const timeCell = document.createElement('td');
 
-	    const link = document.createElement('a');  // create a new <a> element
-	    link.href = url;  // set its href to the URL
-	    link.textContent = url;  // set its text to the URL
-	    urlCell.appendChild(link);  // append the <a> element to the URL cell
+            const link = document.createElement('a');  // create a new <a> element
+            link.href = url;  // set its href to the URL
 
-	    resultCell.textContent = data;
-	    timeCell.textContent = duration ? duration.toFixed(2) + ' ms' : 'Error';
+            // Extract the specific segment from the hostname
+            const urlObj = new URL(url);
+            const subdomain = urlObj.hostname.split('.')[0];
+            const modifiedSubdomain = subdomain.replace("records", "-records"); // Replace "records" with "-records"
 
-	    row.appendChild(urlCell);
-	    row.appendChild(resultCell);
-	    row.appendChild(timeCell);
+            link.textContent = modifiedSubdomain;
 
-	    resultsElement.appendChild(row);
-	}
+            urlCell.appendChild(link);  // append the <a> element to the URL cell
+
+            resultCell.textContent = data;
+            timeCell.textContent = duration ? duration.toFixed(2) + ' ms' : 'Error';
+
+            row.appendChild(urlCell);
+            row.appendChild(resultCell);
+            row.appendChild(timeCell);
+
+            resultsElement.appendChild(row);
+        }
     }
 }
 
