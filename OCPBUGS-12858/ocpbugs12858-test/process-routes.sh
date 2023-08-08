@@ -18,10 +18,9 @@ fi
 certdir=$1
 route_spec=$2
 
-tls_key="$(cat $certdir/key.pem)"
-tls_crt="$(cat $certdir/fullchain.pem)"
-tls_cacrt="$(cat $certdir/ca.cer)"
+tls_key="$(cat $certdir/tls.key)"
+tls_crt="$(cat $certdir/tls.crt)"
 
 dest_cacrt="$(oc exec -n openshift-ingress -c router "$pod" -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt)"
-oc process DEST_CACRT="$dest_cacrt" TLS_KEY="$tls_key" TLS_CRT="$tls_crt" TLS_CACRT="$tls_cacrt" -f $route_spec -o yaml | oc delete --ignore-not-found -f -
-oc process DEST_CACRT="$dest_cacrt" TLS_KEY="$tls_key" TLS_CRT="$tls_crt" TLS_CACRT="$tls_cacrt" -f $route_spec -o yaml | oc apply -f -
+oc process DEST_CACRT="$dest_cacrt" TLS_KEY="$tls_key" TLS_CRT="$tls_crt" -f $route_spec -o yaml | oc delete --ignore-not-found -f -
+oc process DEST_CACRT="$dest_cacrt" TLS_KEY="$tls_key" TLS_CRT="$tls_crt" -f $route_spec -o yaml | oc apply -f -

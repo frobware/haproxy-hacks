@@ -1,7 +1,6 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 parameters:
-- name: TLS_CACRT
 - name: TLS_CRT
 - name: TLS_KEY
 - name: DEST_CACRT
@@ -22,8 +21,6 @@ objects:
         ${TLS_KEY}
       certificate: |-
         ${TLS_CRT}
-      caCertificate: |-
-        ${TLS_CACRT}
     to:
       kind: Service
       name: ocpbugs12858-test

@@ -50,8 +50,8 @@ fi
 # reset positional arguments
 eval set -- "$PARAMS"
 
-export certdir=$PWD/certs/$domain
+certdir=$PWD/certs/$domain
 mkdir -p "$certdir"
 
 "${HOME}/acme.sh/acme.sh" $force_renewal $operation --keylength 2048 --server letsencrypt -d "$domain" --dns dns_cf
-"${HOME}/acme.sh/acme.sh" --install-cert -d "$domain" --keylength 2048 --cert-file "$certdir/cert.pem" --key-file "$certdir/key.pem" --fullchain-file "$certdir/fullchain.pem" --ca-file "$certdir/ca.cer"
+"${HOME}/acme.sh/acme.sh" --install-cert -d "$domain" --keylength 2048 --cert-file "$certdir/cert.pem" --key-file "$certdir/tls.key" --fullchain-file "$certdir/tls.crt" --ca-file "$certdir/ca.cer"

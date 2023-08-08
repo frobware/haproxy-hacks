@@ -2,6 +2,8 @@
 
 set -eu
 
+: "${ROUTER_CERT_NAME:=router-certs-default}"
+
 project="$(oc project -q)"
 
 if [[ "$project" != "ocpbugs12858" ]]; then
@@ -20,7 +22,12 @@ if [[ -z "$pod" ]]; then
 fi
 
 medicalrecords_certdir="$PWD/certs/medicalrecords-${project}.${domain}"
-publicblog_certdir="$PWD/certs/medicalrecords-${project}.${domain}"
+publicblog_certdir="$PWD/certs/publicblog-${project}.${domain}"
+use_wildcard_domain=0
+wildcard_cert_dir=$(mktemp -d)
+add_destca=0
+
+trap 'rm -rf -- "$wildcard_cert_dir"' EXIT INT TERM HUP QUIT
 
 PARAMS=""
 while (( "$#" )); do
@@ -44,8 +51,7 @@ while (( "$#" )); do
 	    fi
 	    ;;
 	-w|--use_wildcard_domain)
-	    medicalrecords_certdir=~/src/github.com/frobware/infra/ocp414.int.frobware.com/ingress-certs
-	    publicblog_certdir=~/src/github.com/frobware/infra/ocp414.int.frobware.com/ingress-certs
+	    use_wildcard_domain=1
 	    shift
 	    ;;
 	--*)
@@ -85,9 +91,25 @@ oc apply -f service.yaml
 oc apply -f routes.yaml
 popd
 
+if [[ $use_wildcard_domain -eq 1 ]]; then
+    echo "Extracting secrets from $ROUTER_CERT_NAME"
+    oc extract secret/$ROUTER_CERT_NAME -n openshift-ingress --keys=tls.crt --to=- > "$wildcard_cert_dir/tls.crt"
+    oc extract secret/$ROUTER_CERT_NAME -n openshift-ingress --keys=tls.key --to=- > "$wildcard_cert_dir/tls.key"
+    medicalrecords_certdir="$wildcard_cert_dir"
+    publicblog_certdir="$wildcard_cert_dir"
+    ls -lR $wildcard_cert_dir
+fi
+
 pushd ocpbugs12858-test
 oc apply -f service.yaml
 oc apply -f deployment.yaml
+
+echo -n "medicalrecords CN: "
+openssl x509 -in $medicalrecords_certdir/tls.crt -noout -subject | awk -F= '/CN/ {print $NF}'
+
+echo -n "publicblog_certdir CN: "
+openssl x509 -in $publicblog_certdir/tls.crt -noout -subject | awk -F= '/CN/ {print $NF}'
+
 ./process-routes.sh "$publicblog_certdir" publicblog-route.yaml
 ./process-routes.sh "$medicalrecords_certdir" medicalrecords-route.yaml
 popd
