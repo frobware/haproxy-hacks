@@ -7,6 +7,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fetch URLs and Display Results</title>
     <style>
+    body {
+        background-color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* Current styles */
     table {
 	width: 100%;
 	border-collapse: collapse;
@@ -18,6 +23,13 @@
     }
     th {
 	background-color: #f2f2f2;
+    }
+    /* New styles for alternating row colors */
+    tbody tr:nth-child(odd) {
+	background-color: #f9f9f9; /* This is a very light gray color */
+    }
+    tbody tr:nth-child(even) {
+	background-color: #e6e6e6; /* This is a slightly darker gray than the odd rows */
     }
     </style>
 </head>
@@ -55,7 +67,7 @@ async function fetchUrl(url) {
     performance.mark(startMark);
     const response = await fetch(url);
     if (!response.ok) {  // Check if the response is successful
-        throw new Error(`Failed to fetch ${url}. Status: ${response.status}`);
+	throw new Error(`Failed to fetch ${url}. Status: ${response.status}`);
     }
     performance.mark(endMark);
 
@@ -69,35 +81,64 @@ async function fetchUrl(url) {
 async function fetchUrls() {
     const resultsElement = document.getElementById('results');
     for (let i = 0; i < 100; i++) {
-        for (const url of urls) {
-            const { data, duration } = await fetchUrl(url);
-            const row = document.createElement('tr');
-            const urlCell = document.createElement('td');
-            const resultCell = document.createElement('td');
-            const timeCell = document.createElement('td');
+	for (const url of urls) {
+	    const { data, duration } = await fetchUrl(url);
+	    const row = document.createElement('tr');
+	    const urlCell = document.createElement('td');
+	    const resultCell = document.createElement('td');
+	    const timeCell = document.createElement('td');
 
-            const link = document.createElement('a');  // create a new <a> element
-            link.href = url;  // set its href to the URL
+	    const link = document.createElement('a');
+	    link.href = url;  // set its href to the URL
 
-            // Extract the specific segment from the hostname
-            const urlObj = new URL(url);
-            const subdomain = urlObj.hostname.split('.')[0];
-            const modifiedSubdomain = subdomain.replace("records", "-records"); // Replace "records" with "-records"
+	    // Transform the hostname
+	    const transformedText = transformHostname(url);
+	    link.textContent = transformedText.text;
 
-            link.textContent = modifiedSubdomain;
+	    if (transformedText.color) {
+		urlCell.style.backgroundColor = transformedText.color;
+	    }
 
-            urlCell.appendChild(link);  // append the <a> element to the URL cell
+	    if (transformedText.textColor) {
+		urlCell.style.color = transformedText.textColor;
+	    }
 
-            resultCell.textContent = data;
-            timeCell.textContent = duration ? duration.toFixed(2) + ' ms' : 'Error';
+	    urlCell.appendChild(link);  // append the <a> element to the URL cell
 
-            row.appendChild(urlCell);
-            row.appendChild(resultCell);
-            row.appendChild(timeCell);
+	    resultCell.textContent = data;
+	    timeCell.textContent = duration ? duration.toFixed(2) + ' ms' : 'Error';
 
-            resultsElement.appendChild(row);
-        }
+	    row.appendChild(urlCell);
+	    row.appendChild(resultCell);
+	    row.appendChild(timeCell);
+
+	    resultsElement.appendChild(row);
+	}
     }
+}
+
+// Helper function to transform the hostname
+function transformHostname(url) {
+    const urlObj = new URL(url);
+    const subdomain = urlObj.hostname.split('.')[0];
+
+    if (subdomain.startsWith('medicalrecords')) {
+	return {
+	    text: "MEDICAL RECORDS",
+	    // color: "red",
+	    // textColor: "black"
+	};
+    }
+    else if (subdomain.startsWith('publicblog')) {
+	return {
+	    text: "public blog",
+	    color: "green",
+	    // textColor: "black"
+	};
+    }
+    return {
+	text: subdomain  // default case, just return the subdomain as is
+    };
 }
 
     fetchUrls();
