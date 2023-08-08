@@ -43,7 +43,7 @@
 async function fetchUrl(url) {
     const options = {
 	method: 'GET',
-	mode: 'no-cors',
+	mode: 'cors',
 	cache: 'no-cache',
 	redirect: 'follow',
 	referrerPolicy: 'no-referrer',
@@ -53,7 +53,10 @@ async function fetchUrl(url) {
     const endMark = `end-${url}`;
 
     performance.mark(startMark);
-    const response = await fetch(url, options);
+    const response = await fetch(url);
+    if (!response.ok) {  // Check if the response is successful
+        throw new Error(`Failed to fetch ${url}. Status: ${response.status}`);
+    }
     performance.mark(endMark);
 
     const data = await response.text();
