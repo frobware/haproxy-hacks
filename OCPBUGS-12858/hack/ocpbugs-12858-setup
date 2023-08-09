@@ -48,7 +48,7 @@ process_route() {
     local tls_crt=""
 
     if [[ "$set_destination_certificate_only" -eq 1 ]]; then
-        dest_cacrt="$(extract-certificate.pl 2 < "$cert_dir/tls.crt")"
+	dest_cacrt="$(oc exec -n openshift-ingress -c router "$pod" -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt)"
     else
         tls_key="$(cat "$cert_dir/tls.key")"
         tls_crt="$(cat "$cert_dir/tls.crt")"
