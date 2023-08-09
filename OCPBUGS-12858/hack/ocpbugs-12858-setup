@@ -2,6 +2,9 @@
 
 set -eu
 
+this_script_dir=$(cd "$(dirname "$0")" && pwd)
+export PATH="$this_script_dir:$PATH"
+
 : "${ROUTER_CERT_NAME:=router-certs-default}"
 
 project="$(oc project -q)"
@@ -13,6 +16,11 @@ fi
 
 domain=$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)
 
+if [[ -z "$domain" ]]; then
+    echo "ingresscontroller/default has no domain set."
+    exit 1
+fi
+
 # Find the first router pod in the openshift-ingress namespace.
 pod=$(oc get pods -n openshift-ingress -l ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default -o jsonpath='{.items[0].metadata.name}')
 
@@ -21,13 +29,33 @@ if [[ -z "$pod" ]]; then
     exit 1
 fi
 
+# Default certificate directories for the respective test routes.
 medicalrecords_certdir="$PWD/certs/medicalrecords-${project}.${domain}"
 publicblog_certdir="$PWD/certs/publicblog-${project}.${domain}"
-use_wildcard_domain=0
-wildcard_cert_dir=$(mktemp -d)
-use_destca_only=0
 
-trap 'rm -rf -- "$wildcard_cert_dir"' EXIT INT TERM HUP QUIT
+use_ingress_wildcard_cert_for_each_route=0
+set_destination_certificate_only=0
+
+ingress_cert_tempdir=$(mktemp -d)
+
+trap 'rm -rf -- "$ingress_cert_tempdir"' EXIT INT TERM HUP QUIT
+
+process_route() {
+    local cert_dir="$1"
+    local route_yaml="$2"
+    local dest_cacrt=""
+    local tls_key=""
+    local tls_crt=""
+
+    if [[ "$set_destination_certificate_only" -eq 1 ]]; then
+        dest_cacrt="$(extract-certificate.pl 2 < "$cert_dir/tls.crt")"
+    else
+        tls_key="$(cat "$cert_dir/tls.key")"
+        tls_crt="$(cat "$cert_dir/tls.crt")"
+    fi
+
+    oc process TLS_KEY="$tls_key" TLS_CRT="$tls_crt" DEST_CACRT="$dest_cacrt" -f "$route_yaml" -o yaml | oc apply -f -
+}
 
 PARAMS=""
 while (( "$#" )); do
@@ -50,12 +78,12 @@ while (( "$#" )); do
 		exit 1
 	    fi
 	    ;;
-	-w|--use-wildcard-domain)
-	    use_wildcard_domain=1
+	--use-ingress-wildcard-certificate-for-each-route)
+	    use_ingress_wildcard_cert_for_each_route=1
 	    shift
 	    ;;
-	-d|--use_dest-ca-only)
-	    use_destca_only=1
+	--set-destination-certificate-only)
+	    set_destination_certificate_only=1
 	    shift
 	    ;;
 	--*)
@@ -73,13 +101,13 @@ while (( "$#" )); do
     esac
 done
 
-if [[ -z "$domain" ]]; then
-    echo "Please supply a domain."
-    exit 1
-fi
-
 # reset positional arguments
 eval set -- "$PARAMS"
+
+if [ "$use_ingress_wildcard_cert_for_each_route" -eq 1 ] && [ "$set_destination_certificate_only" -eq 1 ]; then
+    echo "Error: The flags --use-ingress-wildcard-certificate-for-each-route and --set-destination-certificate-only are mutually exclusive." >&2
+    exit 1
+fi
 
 oc delete --all routes
 oc delete --all services
@@ -93,13 +121,13 @@ oc apply -f service.yaml
 oc apply -f routes.yaml
 popd
 
-if [[ $use_wildcard_domain -eq 1 ]]; then
+if [[ $use_ingress_wildcard_cert_for_each_route -eq 1 ]]; then
     echo "Extracting secrets from $ROUTER_CERT_NAME"
-    oc extract "secret/$ROUTER_CERT_NAME" -n openshift-ingress --keys=tls.crt --to=- > "$wildcard_cert_dir/tls.crt"
-    oc extract "secret/$ROUTER_CERT_NAME" -n openshift-ingress --keys=tls.key --to=- > "$wildcard_cert_dir/tls.key"
-    medicalrecords_certdir="$wildcard_cert_dir"
-    publicblog_certdir="$wildcard_cert_dir"
-    ls -lR "$wildcard_cert_dir"
+    oc extract "secret/$ROUTER_CERT_NAME" -n openshift-ingress --keys=tls.crt --to=- > "$ingress_cert_tempdir/tls.crt"
+    oc extract "secret/$ROUTER_CERT_NAME" -n openshift-ingress --keys=tls.key --to=- > "$ingress_cert_tempdir/tls.key"
+    medicalrecords_certdir="$ingress_cert_tempdir"
+    publicblog_certdir="$ingress_cert_tempdir"
+    ls -lR "$ingress_cert_tempdir"
 fi
 
 pushd ocpbugs12858-test
@@ -112,14 +140,9 @@ openssl x509 -in "$medicalrecords_certdir/tls.crt" -noout -subject | awk -F= '/C
 echo -n "publicblog_certdir CN: "
 openssl x509 -in "$publicblog_certdir/tls.crt" -noout -subject | awk -F= '/CN/ {print $NF}'
 
-if [[ $use_destca_only -eq 1 ]]; then
-    dest_cacrt="$(oc exec -n openshift-ingress -c router "$pod" -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt)"
-else
-    dest_cacrt=""
-fi
+process_route "$medicalrecords_certdir" "./medicalrecords-route.yaml"
+process_route "$publicblog_certdir" "./publicblog-route.yaml"
 
-./process-routes.sh "$publicblog_certdir" publicblog-route.yaml "$dest_cacrt"
-./process-routes.sh "$medicalrecords_certdir" medicalrecords-route.yaml "$dest_cacrt"
 popd
 
 oc rollout status "deployment/${project}-test"

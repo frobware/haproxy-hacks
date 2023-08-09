@@ -1,0 +1,16 @@
+#compdef ocpbugs-12858-setup
+
+_ocpbugs-12858-setup() {
+    local -a args
+
+    args=(
+	'--medicalrecords-certdir[Set custom medical records cert directory]:directory:_directories'
+	'--publicblog-certdir[Set custom public blog cert directory]:directory:_directories'
+	'--use-ingress-wildcard-certificate-for-each-route[Use ingress wildcard certificate for each route]'
+	'--set-destination-certificate-only[Set destination certificate only]'
+    )
+
+    _arguments $args
+}
+
+_ocpbugs-12858-setup "$@"

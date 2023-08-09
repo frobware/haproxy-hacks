@@ -1,0 +1,8 @@
+# -*- shell-script -*-
+
+export fpath=($PWD/completions $fpath)
+
+autoload -Uz _ocpbugs-12858-setup
+
+autoload -Uz compinit
+compinit

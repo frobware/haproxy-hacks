@@ -11,6 +11,7 @@ benchmark-config:
 /OCPBUGS-12858/server/server
 certs
 ca.cer
+ca.crt
 cert.pem
 fullchain.pem
 key.pem
