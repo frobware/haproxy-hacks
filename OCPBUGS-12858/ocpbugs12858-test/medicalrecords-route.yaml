@@ -2,8 +2,11 @@ apiVersion: template.openshift.io/v1
 kind: Template
 parameters:
 - name: TLS_CRT
+  value: "null"
 - name: TLS_KEY
+  value: "null"
 - name: DEST_CACRT
+  value: "null"
 objects:
 - apiVersion: route.openshift.io/v1
   kind: Route
@@ -17,12 +20,9 @@ objects:
     tls:
       termination: reencrypt
       insecureEdgeTerminationPolicy: Redirect
-      key: |-
-        ${TLS_KEY}
-      certificate: |-
-        ${TLS_CRT}
-      destinationCACertificate: |
-        ${DEST_CACRT}
+      key: ${TLS_KEY}
+      certificate: ${TLS_CRT}
+      destinationCACertificate: ${DEST_CACRT}
     to:
       kind: Service
       name: ocpbugs12858-test
