@@ -155,7 +155,7 @@ that is made by the browser-test page to either the "medicalrecords"
 or "publicblog" URLs. This shows that the browser is reusing the
 connection for both routes, although the routes are distict by name.
 
-![image](./screenshot/connection-coalescing.png)
+![image](./screenshots/connection-coalescing.png)
 
 Why was the browser able to reuse the connection?
 
@@ -263,7 +263,7 @@ negotiation for these two domains:
 	./cert_config.map:/var/lib/haproxy/router/certs/ocpbugs12858:medicalrecords.pem [alpn h2,http/1.1] medicalrecords-ocpbugs12858.apps.ocp414.int.frobware.com
 
 
-![image](./screenshot/connection-no-coalescing.png)
+![image](./screenshots/connection-no-coalescing.png)
 
 With regard to the question in this bug: "what happens when you only
 specify a destination CA certificate?"
