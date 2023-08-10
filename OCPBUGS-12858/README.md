@@ -2,7 +2,7 @@
 
 - https://daniel.haxx.se/blog/2016/08/18/http2-connection-coalescing/
 
-I pushed scripts & setup to experiement and debug this issue to:
+I pushed scripts & setup to experiment and debug this issue to:
 https://github.com/frobware/haproxy-hacks/tree/master/OCPBUGS-12858
 
 To prove that connection coalescing takes place I have configured my
@@ -153,7 +153,7 @@ Ctrl-C when viewing the page) and, via the network tab, look at the
 connection ID; I see the same connection ID used for every request
 that is made by the browser-test page to either the "medicalrecords"
 or "publicblog" URLs. This shows that the browser is reusing the
-connection for both routes, although the routes are distict by name.
+connection for both routes, although the routes are distinct by name.
 
 ![image](./screenshots/connection-coalescing.png)
 
@@ -181,7 +181,7 @@ is my load balancer:
 	lb-ocp414.int.frobware.com.
 
 As for "do the certificates match?" the answer in this particular
-setup is also "yes" becase I ran my setup scripts with
+setup is also "yes" because I ran my setup scripts with
 `--use-ingress-wildcard-certificate-for-each-route`. That option
 extracts the TLS certificate from the ingress controller (my
 `custom-certs`) which is a wildcard certificate. It then uses that
@@ -261,7 +261,6 @@ negotiation for these two domains:
 	Defaulted container "router" out of: router, logs
 	./cert_config.map:/var/lib/haproxy/router/certs/ocpbugs12858:publicblog.pem [alpn h2,http/1.1] publicblog-ocpbugs12858.apps.ocp414.int.frobware.com
 	./cert_config.map:/var/lib/haproxy/router/certs/ocpbugs12858:medicalrecords.pem [alpn h2,http/1.1] medicalrecords-ocpbugs12858.apps.ocp414.int.frobware.com
-
 
 ![image](./screenshots/connection-no-coalescing.png)
 
