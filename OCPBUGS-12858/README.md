@@ -423,4 +423,5 @@ certificate we can only negotiate HTTP/1.1:
 	<
 	Source port: 47546 | HTTP/2.0 10.129.2.1:47546 https://publicblog-ocpbugs12858.apps.ocp414.int.frobware.com:443/test
 
-As this is now HTTP/1.1 no connection coalescing can take place.
+As the client can now only do HTTP/1.1, no connection coalescing can
+take place.
