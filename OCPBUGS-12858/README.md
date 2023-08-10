@@ -250,12 +250,12 @@ certificate:
 If we re-run the browser test we can see that the answer to the
 questions about "same DNS" and "same certificate" no longer hold true;
 the DNS is still the same but each route now has its own certificate.
-As such connections to the "publicblog" use connection ID 19206 and
+As such, connections to the "publicblog" use connection ID 19206 and
 connections to "medicalrecords" use connection ID 19196; they are no
 longer shared.
 
-Note: with discrete certificates haproxy is able to do ALPN
-negotiation for these two domains:
+With discrete certificates haproxy is able to do ALPN
+negotiation for these two domains and this is reflected in the haproxy configuration:
 
 	% oc rsh -n openshift-ingress router-default-7f55df7c8b-zqssw grep -r alpn . | grep cert_config.map
 	Defaulted container "router" out of: router, logs
