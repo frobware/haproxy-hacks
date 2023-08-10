@@ -25,7 +25,7 @@ spec:
           seccompProfile:
             type: RuntimeDefault
         env:
-        - name: GODEBUG
+        - name: XGODEBUG
           value: http2debug=2
         ports:
         - containerPort: 8443
