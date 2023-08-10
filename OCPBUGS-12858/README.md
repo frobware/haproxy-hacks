@@ -270,8 +270,8 @@ the haproxy configuration:
 ![image](./screenshots/connection-no-coalescing.png)
 
 With regard to the question in this bug: "what happens when you only
-specify a destination CA certificate only?" then can re-run the setup
-to test this scenario:
+specify a destination CA certificate only?" we can re-run the setup to
+test this scenario:
 
 	% ./hack/ocpbugs-12858-setup --set-destination-certificate-only
 	route.route.openshift.io "browser-test" deleted
