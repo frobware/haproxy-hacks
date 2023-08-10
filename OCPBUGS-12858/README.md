@@ -194,8 +194,8 @@ If the browser's answer to both these questions is "yes"
 - Do the DNS entries match?
 - Has "medicalrecords" provided a certificate that ALSO matches "publicblog"?
 
-then the browser will not initiate a second discrete connection but
-instead reuse the existing connection and this is what we see in the
+then the browser will not initiate a second connection but instead
+reuse the existing connection and this is what we see in the
 screenshot. The connection ID is always 6180 irrespective of whether
 the request was to the "medicalrecords" URL or the "publicblog" URL.
 
