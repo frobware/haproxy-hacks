@@ -84,13 +84,15 @@ configuration, specifically the cert_config.map:
 	./cert_config.map:/var/lib/haproxy/router/certs/ocpbugs12858:publicblog.pem [alpn h2,http/1.1] publicblog-ocpbugs12858.apps.ocp414.int.frobware.com
 	./cert_config.map:/var/lib/haproxy/router/certs/ocpbugs12858:medicalrecords.pem [alpn h2,http/1.1] medicalrecords-ocpbugs12858.apps.ocp414.int.frobware.com
 
+Accessing the routes we see:
+
 	% curl https://medicalrecords-ocpbugs12858.apps.ocp414.int.frobware.com/test
 	Source port: 48308 | HTTP/2.0 10.129.2.1:48308 https://medicalrecords-ocpbugs12858.apps.ocp414.int.frobware.com:443/test
 
 	% curl https://publicblog-ocpbugs12858.apps.ocp414.int.frobware.com/test
 	Source port: 35534 | HTTP/2.0 10.129.2.1:35534 https://publicblog-ocpbugs12858.apps.ocp414.int.frobware.com:443/test
 
-	% curl -vv https://publicblog-ocpbugs12858.apps.ocp414.int.frobware.com/test                       
+	% curl -vv https://publicblog-ocpbugs12858.apps.ocp414.int.frobware.com/test
 	*   Trying 192.168.7.164:443...
 	* Connected to publicblog-ocpbugs12858.apps.ocp414.int.frobware.com (192.168.7.164) port 443 (#0)
 	* ALPN: offers h2,http/1.1
@@ -112,7 +114,7 @@ configuration, specifically the cert_config.map:
 	*  issuer: C=US; O=Let's Encrypt; CN=R3
 	*  SSL certificate verify ok.
 	* using HTTP/2
-	
+
 	^^^^^^^^^^^^^^
 
 	* h2 [:method: GET]
@@ -126,11 +128,11 @@ configuration, specifically the cert_config.map:
 	> Host: publicblog-ocpbugs12858.apps.ocp414.int.frobware.com
 	> User-Agent: curl/8.1.1
 	> Accept: */*
-	> 
+	>
 	* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
 	* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
 	* old SSL session ID is stale, removing
-	< HTTP/2 200 
+	< HTTP/2 200
 	< access-control-allow-headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With
 	< access-control-allow-methods: GET,POST,OPTIONS,DELETE,PUT
 	< access-control-allow-origin: *
@@ -138,7 +140,7 @@ configuration, specifically the cert_config.map:
 	< content-length: 117
 	< date: Thu, 10 Aug 2023 10:58:32 GMT
 	< set-cookie: 98c58f861899cef2d1f1693476547973=c592555d9f4bb00858081ea57509768f; path=/; HttpOnly; Secure; SameSite=None
-	< 
+	<
 	Source port: 47190 | HTTP/2.0 10.129.2.1:47190 https://publicblog-ocpbugs12858.apps.ocp414.int.frobware.com:443/test
 
 The detailed curl request shows that HTTP/2.0 was negotiated.
@@ -167,9 +169,9 @@ resolves to IP address "192.168.7.164" and later connects to
 - Has "medicalrecords" provided a certificate that ALSO matches "publicblog"
 
 In this case the answer to the DNS question is "yes". The IP address
-is my load balancer:
+is my LB:
 
-	% dig publicblog-ocpbugs12858.apps.ocp414.int.frobware.com +short    
+	% dig publicblog-ocpbugs12858.apps.ocp414.int.frobware.com +short
 	192.168.7.164
 
 	% dig medicalrecords-ocpbugs12858.apps.ocp414.int.frobware.com +short
@@ -183,14 +185,17 @@ is my load balancer:
 As for "do the certificates match?" the answer in this particular
 setup is also "yes" because I ran my setup scripts with
 `--use-ingress-wildcard-certificate-for-each-route`. That option
-extracts the TLS certificate from the ingress controller (my
-`custom-certs`) which is a wildcard certificate. It then uses that
-wildcard certificate in the tls.spec.{key,certificate} for both the
-"medicalrecords" and "publicblog" routes.
+extracts the TLS certificate from the ingress controller
+(`custom-certs`) which is a wildcard certificate. and uses that
+certificate for both the "medicalrecords" and "publicblog" routes.
 
-If the browser's answer to both these questions is "yes" then the
-browser will not initiate a second discrete connection but instead
-reuse the existing connection and this is what we see in the
+If the browser's answer to both these questions is "yes"
+
+- Do the DNS entries match?
+- Has "medicalrecords" provided a certificate that ALSO matches "publicblog"?
+
+then the browser will not initiate a second discrete connection but
+instead reuse the existing connection and this is what we see in the
 screenshot. The connection ID is always 6180 irrespective of whether
 the request was to the "medicalrecords" URL or the "publicblog" URL.
 
@@ -199,7 +204,7 @@ If I re-run the setup without specifying
 "medicalrecords" and "publicblog" routes will get their own discrete
 certificate:
 
-	% ./hack/ocpbugs-12858-setup                                                  
+	% ./hack/ocpbugs-12858-setup
 	route.route.openshift.io "browser-test" deleted
 	route.route.openshift.io "medicalrecords" deleted
 	route.route.openshift.io "publicblog" deleted
@@ -251,11 +256,11 @@ If we re-run the browser test we can see that the answer to the
 questions about "same DNS" and "same certificate" no longer hold true;
 the DNS is still the same but each route now has its own certificate.
 As such, connections to the "publicblog" use connection ID 19206 and
-connections to "medicalrecords" use connection ID 19196; they are no
-longer shared.
+connections to "medicalrecords" use connection ID 19196--they are no
+longer shared, and connection coalescing has been averted.
 
-With discrete certificates haproxy is able to do ALPN
-negotiation for these two domains and this is reflected in the haproxy configuration:
+As we specify a certificate for each route we see that reflected in
+the haproxy configuration:
 
 	% oc rsh -n openshift-ingress router-default-7f55df7c8b-zqssw grep -r alpn . | grep cert_config.map
 	Defaulted container "router" out of: router, logs
@@ -265,11 +270,10 @@ negotiation for these two domains and this is reflected in the haproxy configura
 ![image](./screenshots/connection-no-coalescing.png)
 
 With regard to the question in this bug: "what happens when you only
-specify a destination CA certificate?"
+specify a destination CA certificate only?" then can re-run the setup
+to test this scenario:
 
-We can re-run the setup to test this scenario:
-
-	% ./hack/ocpbugs-12858-setup --set-destination-certificate-only 
+	% ./hack/ocpbugs-12858-setup --set-destination-certificate-only
 	route.route.openshift.io "browser-test" deleted
 	route.route.openshift.io "medicalrecords" deleted
 	route.route.openshift.io "publicblog" deleted
@@ -330,7 +334,6 @@ see:
 		  destinationCACertificate: |-
 			-----BEGIN CERTIFICATE-----
 			MIIDUTCCAjmgAwIBAgIIPmaeY/4Ow1cwDQYJKoZIhvcNAQELBQAwNjE0MDIGA1UE
-			wW0LpKFxHF4PI/CNjFgrOZ555IVqpsf7tb612gl5P+lMPYvE2w==
 			-----END CERTIFICATE-----
 		  insecureEdgeTerminationPolicy: Redirect
 		  termination: reencrypt
@@ -349,8 +352,6 @@ see:
 		tls:
 		  destinationCACertificate: |-
 			-----BEGIN CERTIFICATE-----
-			MIIDUTCCAjmgAwIBAgIIPmaeY/4Ow1cwDQYJKoZIhvcNAQELBQAwNjE0MDIGA1UE
-			JxkvWz8NmPdRn/rVIN3fjDGFItY4a39NnzywgSrzwfDpOUA5ZBVMMoEIyPBcuO3S
 			E8Eh00GiX4raCOuuLb6INrO/eN7TuoVVC/j1vEDG9yP+YZdd9VseNOX96FPVrQJ7
 			-----END CERTIFICATE-----
 		  insecureEdgeTerminationPolicy: Redirect
@@ -361,18 +362,19 @@ see:
 		  weight: 100
 		wildcardPolicy: None
 
-Note the absence of TLS key/certificate. Without specifying a
+Note the absence of a TLS key/certificate. Without specifying a
 certificate for a route the haproxy configuration would not be
-configured to allow ALPN negotiation; the generated haproxy
+configured to support ALPN negotiation; the generated haproxy
 configuration confirms that the cert_config.map no longer has ALPN
 entries for our two routes / domains:
 
 	% oc rsh -n openshift-ingress router-default-7f55df7c8b-zqssw grep -r alpn . | grep cert_config.map
 	Defaulted container "router" out of: router, logs
 
-Having a destinationCACertificate for a re-encrypt route focuses on
-establishing trust between haproxy and the backend server and doesn't
-influence the ALPN negotiation process between the client and haproxy.
+Note, having a destinationCACertificate for a re-encrypt route focuses
+on establishing trust between haproxy and the backend server and
+doesn't influence the ALPN negotiation process between the client and
+haproxy.
 
 Looking at the output from curl we see that with just the destination
 certificate we can only negotiate HTTP/1.1:
@@ -400,17 +402,17 @@ certificate we can only negotiate HTTP/1.1:
 	*  SSL certificate verify ok.
 	* using HTTP/1.x
 
-    ^^^^^^^^^^^^^^^^^^^^^
+	^^^^^^^^^^^^^^^^^^^^^
 
 	> GET /test HTTP/1.1
 	> Host: publicblog-ocpbugs12858.apps.ocp414.int.frobware.com
 	> User-Agent: curl/8.1.1
 	> Accept: */*
-	> 
+	>
 	* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
 	* TLSv1.3 (IN), TLS handshake, Newsession Ticket (4):
 	* old SSL session ID is stale, removing
-	< HTTP/1.1 200 
+	< HTTP/1.1 200
 	< access-control-allow-headers: Content-Type, Access-Control-Allow-Headers, Authorization, X-Requested-With
 	< access-control-allow-methods: GET,POST,OPTIONS,DELETE,PUT
 	< access-control-allow-origin: *
@@ -418,9 +420,7 @@ certificate we can only negotiate HTTP/1.1:
 	< content-length: 117
 	< date: Thu, 10 Aug 2023 10:41:41 GMT
 	< set-cookie: 98c58f861899cef2d1f1693476547973=b03bc606e20953f8caf3ae31b963c454; path=/; HttpOnly; Secure; SameSite=None
-	< 
+	<
 	Source port: 47546 | HTTP/2.0 10.129.2.1:47546 https://publicblog-ocpbugs12858.apps.ocp414.int.frobware.com:443/test
 
-As this is now HTTP/1.1 no connection coealsing can take place.
-
-
+As this is now HTTP/1.1 no connection coalescing can take place.
