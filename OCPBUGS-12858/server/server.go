@@ -1,12 +1,16 @@
 package main
 
 import (
+	"crypto/tls"
 	"embed"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
+
+	"golang.org/x/net/http2"
 )
 
 //go:embed *.html
@@ -96,9 +100,29 @@ func main() {
 		port := lookupEnv("HTTPS_PORT", defaultHTTPSPort)
 		log.Printf("Listening securely on port %v\n", port)
 
-		if err := http.ListenAndServeTLS(":"+port, crtFile, keyFile, nil); err != nil {
+		server := &http.Server{
+			Addr: ":" + port,
+			TLSConfig: &tls.Config{
+				GetConfigForClient: func(chi *tls.ClientHelloInfo) (*tls.Config, error) {
+					// Log the ALPN protocols the client supports
+					log.Printf("Client %v supports ALPN protocols: %v", chi.Conn.RemoteAddr(), chi.SupportedProtos)
+					return nil, nil
+				},
+			},
+			ConnState: func(conn net.Conn, state http.ConnState) {
+				if state == http.StateActive {
+					log.Printf("New connection from %v", conn.RemoteAddr())
+				}
+			},
+		}
+
+		// Enable HTTP/2 with our ConnState modifications.
+		http2.ConfigureServer(server, nil)
+
+		if err := server.ListenAndServeTLS(crtFile, keyFile); err != nil {
 			log.Fatal(err)
 		}
+
 	}()
 
 	go func() {
