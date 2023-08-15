@@ -1,0 +1,15 @@
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: r1
+  labels:
+    app: ocpbugs16707-test
+spec:
+  port:
+    targetPort: 8080
+  to:
+    kind: Service
+    name: ocpbugs16707-test
+    weight: 100
+  wildcardPolicy: None

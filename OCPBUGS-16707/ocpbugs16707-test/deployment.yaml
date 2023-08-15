@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ocpbugs16707-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ocpbugs16707-test
+  template:
+    metadata:
+      labels:
+        app: ocpbugs16707-test
+    spec:
+      containers:
+      - name: ocpbugs16707-test
+        image: registry.int.frobware.com/ocpbugs16707/server
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        env:
+        - name: XGODEBUG
+          value: http2debug=1
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+          name: "https"
+        - containerPort: 8080
+          protocol: TCP
+          name: "http"
+        volumeMounts:
+        - mountPath: /etc/serving-cert
+          name: cert
+        readinessProbe:
+          failureThreshold: 3
+          tcpSocket:
+            port: 4242
+          initialDelaySeconds: 1
+          periodSeconds: 1
+          successThreshold: 1
+        livenessProbe:
+          failureThreshold: 1
+          tcpSocket:
+            port: 4242
+          initialDelaySeconds: 1
+          periodSeconds: 1
+          successThreshold: 1
+      volumes:
+      - name: cert
+        secret:
+          secretName: serving-cert-ocpbugs16707-test

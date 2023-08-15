@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+set -eu
+
+this_script_dir=$(cd "$(dirname "$0")" && pwd)
+export PATH="$this_script_dir:$PATH"
+
+: "${ROUTER_CERT_NAME:=router-certs-default}"
+
+project="$(oc project -q)"
+
+if [[ "$project" != "ocpbugs16707" ]]; then
+    echo "Expecting current namespace to \"ocpbugs16707\"."
+    exit 1
+fi
+
+domain=$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)
+
+if [[ -z "$domain" ]]; then
+    echo "ingresscontroller/default has no domain set."
+    exit 1
+fi
+
+# Find the first router pod in the openshift-ingress namespace.
+pod=$(oc get pods -n openshift-ingress -l ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default -o jsonpath='{.items[0].metadata.name}')
+
+if [[ -z "$pod" ]]; then
+    echo "No router pod found in the openshift-ingress namespace."
+    exit 1
+fi
+
+oc delete --all routes
+oc delete --all services
+oc delete --all deployments
+
+make -C server
+
+pushd ocpbugs16707-test
+oc apply -f service.yaml
+oc apply -f deployment.yaml
+oc apply -f routes.yaml
+popd
+
+oc rollout status "deployment/${project}-test"
+oc get all
