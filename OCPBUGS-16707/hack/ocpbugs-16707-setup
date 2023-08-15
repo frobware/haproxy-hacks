@@ -29,17 +29,13 @@ if [[ -z "$pod" ]]; then
     exit 1
 fi
 
+# cleanup before (re-)deploying.
 oc delete --all routes
 oc delete --all services
 oc delete --all deployments
 
 make -C server
 
-pushd ocpbugs16707-test
-oc apply -f service.yaml
-oc apply -f deployment.yaml
-oc apply -f routes.yaml
-popd
-
-oc rollout status "deployment/${project}-test"
+oc apply -f deployment
+oc rollout status "deployment/${project}-deployment"
 oc get all

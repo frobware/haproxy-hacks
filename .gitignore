@@ -17,3 +17,4 @@ fullchain.pem
 key.pem
 tls.crt
 tls.key
+server
