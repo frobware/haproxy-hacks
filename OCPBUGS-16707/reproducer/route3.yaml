@@ -1,0 +1,14 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: route3
+  namespace: ocpbugs16707
+spec:
+  host: httpd-example-path-based-routes.apps.firstcluster.lab.upshift.rdu2.redhat.com
+  path: /api
+  to:
+    kind: Service
+    name: api-service
+    weight: 100
+  port:
+    targetPort: http
