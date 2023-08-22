@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: server
-        image: registry.int.frobware.com/ocpbugs16707/server
+        image: quay.io/amcdermo/openshift-router-ocpbugs16707-server
         imagePullPolicy: Always
         securityContext:
           allowPrivilegeEscalation: false

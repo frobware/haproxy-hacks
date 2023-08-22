@@ -34,7 +34,8 @@ oc delete --all routes
 oc delete --all services
 oc delete --all deployments
 
-make -C server
+# uncomment to rebuild the test image.
+# make -C server
 
 oc apply -f deployment
 oc rollout status "deployment/${project}-deployment"

@@ -9,6 +9,7 @@ benchmark-config:
 /destca/server/index.html
 /OCPBUGS-13966/server/server
 /OCPBUGS-12858/server/server
+/OCPBUGS-16707/server/server
 certs
 ca.cer
 ca.crt
