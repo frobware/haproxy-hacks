@@ -2,7 +2,7 @@
 
 oc delete --ignore-not-found -n ocpbugs16707 route route1 route2 route3
 
-for i in 1 2 3; do
+for i in 1 3 2; do
     oc create -f ./reproducer/route${i}.yaml
     sleep 2
 done
