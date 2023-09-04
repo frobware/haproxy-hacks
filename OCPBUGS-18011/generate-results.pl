@@ -6,21 +6,21 @@ use warnings;
 sub generate_table {
     my ($termination_type, $metric, $values) = @_;
 
-    print "Termination Type: $termination_type\n";
+    print "** $termination_type\n";
 
     print "| Release | $metric | % Diff from 4.13.9 |\n";
     print "|-|-|-|\n";
     foreach my $hash (@$values) {
 	foreach my $release (keys %$hash) {
 	    my $val = $hash->{$release};
-	    printf "| %s | %.02f| |\n", $release, $val;
+	    printf "| %s | %.02f | |\n", $release, $val;
 	}
     }
     print q!#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f!;
     print "\n";
 }
 
-print "--REQUEST/SEC----------------------------------------------------------------------\n\n";
+print "* Requests/s\n";
 
 {
     # data from row 201: (reverse '(74.8 73.72 75.06 72.07 76.84 70.74))
@@ -73,7 +73,7 @@ print "--REQUEST/SEC------------------------------------------------------------
     print "\n";
 }
 
-print "--LATENCY----------------------------------------------------------------------\n";
+print "* Latency\n";
 
 {
     # data from row 201: (reverse '(56.95 53.22 49.02 53.68 48.32 50.96))
