@@ -4,13 +4,13 @@ use strict;
 use warnings;
 
 sub generate_table {
-    my ($termination_type, $metric, $rps_values) = @_;
+    my ($termination_type, $metric, $values) = @_;
 
     print "Termination Type: $termination_type\n";
 
     print "| Release | $metric | % Diff from 4.13.9 |\n";
     print "|-|-|-|\n";
-    foreach my $hash (@$rps_values) {
+    foreach my $hash (@$values) {
 	foreach my $release (keys %$hash) {
 	    my $val = $hash->{$release};
 	    printf "| %s | %.02f| |\n", $release, $val;
