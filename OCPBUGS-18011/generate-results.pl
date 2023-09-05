@@ -13,7 +13,7 @@ sub generate_table {
     foreach my $hash (@$values) {
 	foreach my $release (keys %$hash) {
 	    my $val = $hash->{$release};
-	    printf "| %s | %.02f | |\n", $release, $val;
+	    printf "| %s | %.0f | |\n", $release, $val;
 	}
     }
     print q!#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f!;
@@ -63,13 +63,13 @@ print "* Requests/s\n";
 	{'0828-2.6.13'=> 72.19 },
 	);
 
-    generate_table("edge", "request/s", \@edge_rps);
+    generate_table("edge", "request/s (K)", \@edge_rps);
     print "\n";
-    generate_table("http", "request/s", \@http_rps);
+    generate_table("http", "request/s (K)", \@http_rps);
     print "\n";
-    generate_table("passthrough", "request/s", \@passthrough_rps);
+    generate_table("passthrough", "request/s (K)", \@passthrough_rps);
     print "\n";
-    generate_table("reencrypt", "reencrypt/s", \@reencrypt_rps);
+    generate_table("reencrypt", "reencrypt/s (K)", \@reencrypt_rps);
     print "\n";
 }
 
@@ -116,12 +116,12 @@ print "* Latency\n";
 	{'0828-2.6.13'=>  97.52 },
 	);
 
-    generate_table("edge", "latency(ms)", \@edge_latency);
+    generate_table("edge", "latency (ms)", \@edge_latency);
     print "\n";
-    generate_table("http", "latency(ms)", \@http_latency);
+    generate_table("http", "latency (ms)", \@http_latency);
     print "\n";
-    generate_table("passthrough", "latency(ms)", \@passthrough_latency);
+    generate_table("passthrough", "latency (ms)", \@passthrough_latency);
     print "\n";
-    generate_table("reencrypt", "latency(ms)", \@reencrypt_latency);
+    generate_table("reencrypt", "latency (ms)", \@reencrypt_latency);
     print "\n";
 }
