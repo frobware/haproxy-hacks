@@ -45,19 +45,22 @@
 	const percentageCell = cells[2];
 	const percentage = parseFloat(percentageCell.textContent.trim());
 
-	let color;
+	let baseColor, gradientColor;
 	if (isLatencyTable) {
-	  color = percentage >= 0 ? 'rgba(255, 0, 0, 0.6)' : 'rgba(0, 255, 0, 0.6)';
+	  baseColor = percentage >= 0 ? 'rgba(255, 200, 200, 0.6)' : 'rgba(200, 255, 200, 0.6)';
+	  gradientColor = percentage >= 0 ? 'rgba(255, 0, 0, 1)' : 'rgba(0, 255, 0, 1)';
 	} else {
-	  color = percentage >= 0 ? 'rgba(0, 255, 0, 0.6)' : 'rgba(255, 0, 0, 0.6)';
+	  baseColor = percentage >= 0 ? 'rgba(200, 255, 200, 0.6)' : 'rgba(255, 200, 200, 0.6)';
+	  gradientColor = percentage >= 0 ? 'rgba(0, 255, 0, 1)' : 'rgba(255, 0, 0, 1)';
 	}
 
 	const magnitude = Math.abs(percentage);
-	const gradient = `linear-gradient(to right, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0) ${100 - magnitude}%, ${color} ${100 - magnitude}%, ${color} 100%)`;
+	const gradient = `linear-gradient(to left, ${gradientColor} 0%, ${gradientColor} ${magnitude}%, ${baseColor} ${magnitude}%, ${baseColor} 100%)`;
 
 	percentageCell.style.background = gradient;
       });
     });
   });
 </script>
+
 #+END_EXPORT
