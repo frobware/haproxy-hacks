@@ -63,13 +63,13 @@ print "* Requests/s\n";
 	{'0828-2.6.13'=> 72.19 },
 	);
 
-    generate_table("edge", "request/s (K)", \@edge_rps);
+    generate_table("edge", "request/s (x1000)", \@edge_rps);
     print "\n";
-    generate_table("http", "request/s (K)", \@http_rps);
+    generate_table("http", "request/s (x1000)", \@http_rps);
     print "\n";
-    generate_table("passthrough", "request/s (K)", \@passthrough_rps);
+    generate_table("passthrough", "request/s (x1000)", \@passthrough_rps);
     print "\n";
-    generate_table("reencrypt", "reencrypt/s (K)", \@reencrypt_rps);
+    generate_table("reencrypt", "reencrypt/s (x1000)", \@reencrypt_rps);
     print "\n";
 }
 
