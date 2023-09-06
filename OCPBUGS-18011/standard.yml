@@ -12,6 +12,7 @@
   tuningPatch: '{"spec":{"nodePlacement": {"nodeSelector": {"matchLabels": {"node-role.kubernetes.io/infra": ""}}}, "replicas": 2}}'
   delay: 10s
   warmup: true
+  requestTimeout: 5s
 
 - termination: http
   connections: 200
