@@ -2,7 +2,7 @@ all: results.org results.html
 
 results.org:
 	cat ./javascript.js > $@
-	./generate-results.pl >> $@
+	./new-results.pl >> $@
 	emacs --batch --load eval-table.el
 
 results.html: results.org

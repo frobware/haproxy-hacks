@@ -1,0 +1,132 @@
+#+BEGIN_EXPORT html
+<style>
+  /* Existing CSS for alternating row colors */
+  tr:nth-child(even) {
+    background-color: #f2f2f2;
+  }
+
+  /* Right-align all table cells by default */
+  td {
+    text-align: right;
+  }
+
+  /* Left-align the first table cell */
+  td:first-child {
+    text-align: left !important;
+  }
+
+  /* Right-align all table headers by default */
+  th {
+    text-align: right;
+  }
+
+  /* Left-align the first table header */
+  th:first-child {
+    text-align: left !important;
+  }
+</style>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    const tables = document.querySelectorAll("table");
+
+    tables.forEach(table => {
+      const headerRow = table.querySelector("tr");
+      const columnHeader = headerRow ? headerRow.querySelectorAll("th")[1] : null;
+      const isLatencyTable = columnHeader && columnHeader.textContent.includes("latency");
+
+      const rows = table.querySelectorAll("tr");
+      rows.forEach((row, index) => {
+	if(index === 0) return;
+
+	const cells = row.querySelectorAll("td");
+	if(cells.length === 0) return;
+
+	const percentageCell = cells[2];
+	const percentage = parseFloat(percentageCell.textContent.trim());
+
+	let baseColor, gradientColor;
+	if (isLatencyTable) {
+	  baseColor = percentage >= 0 ? 'rgba(255, 200, 200, 0.6)' : 'rgba(200, 255, 200, 0.6)';
+	  gradientColor = percentage >= 0 ? 'rgba(255, 0, 0, 1)' : 'rgba(0, 255, 0, 1)';
+	} else {
+	  baseColor = percentage >= 0 ? 'rgba(200, 255, 200, 0.6)' : 'rgba(255, 200, 200, 0.6)';
+	  gradientColor = percentage >= 0 ? 'rgba(0, 255, 0, 1)' : 'rgba(255, 0, 0, 1)';
+	}
+
+	const magnitude = Math.abs(percentage);
+	const gradient = `linear-gradient(to left, ${gradientColor} 0%, ${gradientColor} ${magnitude}%, ${baseColor} ${magnitude}%, ${baseColor} 100%)`;
+
+	percentageCell.style.background = gradient;
+      });
+    });
+  });
+</script>
+
+#+END_EXPORT
+* Requests/s
+** edge
+| Release                                        | request/s (x1000) | % Diff from 4.13.9 |
+|------------------------------------------------+-------------------+--------------------|
+| 4.13.9                                         |                71 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6 |                57 |             -19.72 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2 |                58 |             -18.31 |
+#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f
+
+** http
+| Release                                        | request/s (x1000) | % Diff from 4.13.9 |
+|------------------------------------------------+-------------------+--------------------|
+| 4.13.9                                         |               117 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6 |                74 |             -36.75 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2 |                71 |             -39.32 |
+#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f
+
+** passthrough
+| Release                                        | request/s (x1000) | % Diff from 4.13.9 |
+|------------------------------------------------+-------------------+--------------------|
+| 4.13.9                                         |               201 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6 |                74 |             -63.18 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2 |                78 |             -61.19 |
+#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f
+
+** reencrypt
+| Release                                        | reencrypt/s (x1000) | % Diff from 4.13.9 |
+|------------------------------------------------+---------------------+--------------------|
+| 4.13.9                                         |                  73 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6 |                  60 |             -17.81 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2 |                  64 |             -12.33 |
+#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f
+
+* Latency
+** edge
+| Release                                        | latency (ms) | % Diff from 4.13.9 |
+|------------------------------------------------+--------------+--------------------|
+| 4.13.9                                         |           51 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6 |           60 |              17.65 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2 |           60 |              17.65 |
+#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f
+
+** http
+| Release                                        | latency (ms) | % Diff from 4.13.9 |
+|------------------------------------------------+--------------+--------------------|
+| 4.13.9                                         |           32 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6 |           46 |              43.75 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2 |           46 |              43.75 |
+#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f
+
+** passthrough
+| Release                                        | latency (ms) | % Diff from 4.13.9 |
+|------------------------------------------------+--------------+--------------------|
+| 4.13.9                                         |           18 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6 |            7 |             -61.11 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2 |            6 |             -66.67 |
+#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f
+
+** reencrypt
+| Release                                        | latency (ms) | % Diff from 4.13.9 |
+|------------------------------------------------+--------------+--------------------|
+| 4.13.9                                         |           50 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6 |           50 |               0.00 |
+| 4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2 |           34 |             -32.00 |
+#+TBLFM: $3=(($2 - @2$2) / @2$2) * 100;%.2f
+
