@@ -123,29 +123,29 @@ print "* Latency\n";
     my @http_latency = (
 	{'4.13.8'     => 43},
 	{'4.13.8 haproxy 2.6'     => 44},
-	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => },
-	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => },
+	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 50 },
+	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 47 },
 	);
 
     my @edge_latency = (
 	{'4.13.8'     => 60},
 	{'4.13.8 haproxy-2.6'     => 62},
-	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => },
-	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => },
+	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 63 },
+	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 62 },
 	);
 
     my @reencrypt_latency = (
 	{'4.13.8'     =>  54 },
 	{'4.13.8 haproxy-2.6'     => 84},
-	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        =>  },
-	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        =>  },
+	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        =>  75 },
+	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        =>  49 },
 	);
 
     my @passthrough_latency = (
 	{'4.13.8'     => 7 },
 	{'4.13.8 haproxy-2.6'     => 4 },
-	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => },
-	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => },
+	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 4 },
+	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 8 },
 	);
 
     generate_table("edge", "latency (ms)", \@edge_latency);
@@ -158,9 +158,8 @@ print "* Latency\n";
     print "\n";
 }
 
-print "
-** Cluster Sizing
-#+BEGIN_SRC text :exports code
+print q!* Cluster Sizing
+#+BEGIN_SRC text
 "masterNodesType": "m5.8xlarge",
 "workerNodesType": "m5.2xlarge",
 "masterNodesCount": 3,
@@ -171,5 +170,7 @@ print "
 "totalNodes": 30,
 "sdnType": "OVNKubernetes",
 #+END_SRC
-</blockquote>\n";
+!;
+
+print "\n";
 
