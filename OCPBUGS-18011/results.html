@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2023-09-06 Wed 10:56 -->
+<!-- 2023-09-06 Wed 11:15 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>&lrm;</title>
@@ -200,20 +200,20 @@
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents" role="doc-toc">
 <ul>
-<li><a href="#org1d5b840">1. Requests/s</a>
+<li><a href="#org86a9816">1. Requests/s</a>
 <ul>
-<li><a href="#org2483638">1.1. edge</a></li>
-<li><a href="#orgdd0950b">1.2. http</a></li>
-<li><a href="#org74b615c">1.3. passthrough</a></li>
-<li><a href="#org8534294">1.4. reencrypt</a></li>
+<li><a href="#orgda19695">1.1. edge</a></li>
+<li><a href="#org0cbeee0">1.2. http</a></li>
+<li><a href="#org5e1b144">1.3. passthrough</a></li>
+<li><a href="#org7863757">1.4. reencrypt</a></li>
 </ul>
 </li>
-<li><a href="#org4b8b4b6">2. Latency</a>
+<li><a href="#orgc119925">2. Latency</a>
 <ul>
-<li><a href="#orgc9d7f74">2.1. edge</a></li>
-<li><a href="#orga8852fc">2.2. http</a></li>
-<li><a href="#org9995a18">2.3. passthrough</a></li>
-<li><a href="#org0316e2f">2.4. reencrypt</a></li>
+<li><a href="#orgc982273">2.1. edge</a></li>
+<li><a href="#org86c3d4f">2.2. http</a></li>
+<li><a href="#org14315a7">2.3. passthrough</a></li>
+<li><a href="#orge678926">2.4. reencrypt</a></li>
 </ul>
 </li>
 </ul>
@@ -282,12 +282,12 @@
     });
   });
 </script>
-<div id="outline-container-org1d5b840" class="outline-2">
-<h2 id="org1d5b840"><span class="section-number-2">1.</span> Requests/s</h2>
+<div id="outline-container-org86a9816" class="outline-2">
+<h2 id="org86a9816"><span class="section-number-2">1.</span> Requests/s</h2>
 <div class="outline-text-2" id="text-1">
 </div>
-<div id="outline-container-org2483638" class="outline-3">
-<h3 id="org2483638"><span class="section-number-3">1.1.</span> edge</h3>
+<div id="outline-container-orgda19695" class="outline-3">
+<h3 id="orgda19695"><span class="section-number-3">1.1.</span> edge</h3>
 <div class="outline-text-3" id="text-1-1">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -314,23 +314,17 @@
 </tr>
 
 <tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6</td>
-<td class="org-right">57</td>
-<td class="org-right">-19.72</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2</td>
-<td class="org-right">58</td>
-<td class="org-right">-18.31</td>
+<td class="org-left">4.14.0-0.nightly-2023-09-02</td>
+<td class="org-right">69</td>
+<td class="org-right">-2.82</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 
-<div id="outline-container-orgdd0950b" class="outline-3">
-<h3 id="orgdd0950b"><span class="section-number-3">1.2.</span> http</h3>
+<div id="outline-container-org0cbeee0" class="outline-3">
+<h3 id="org0cbeee0"><span class="section-number-3">1.2.</span> http</h3>
 <div class="outline-text-3" id="text-1-2">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -357,23 +351,17 @@
 </tr>
 
 <tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6</td>
-<td class="org-right">74</td>
-<td class="org-right">-36.75</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2</td>
-<td class="org-right">71</td>
-<td class="org-right">-39.32</td>
+<td class="org-left">4.14.0-0.nightly-2023-09-02</td>
+<td class="org-right">106</td>
+<td class="org-right">-9.40</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 
-<div id="outline-container-org74b615c" class="outline-3">
-<h3 id="org74b615c"><span class="section-number-3">1.3.</span> passthrough</h3>
+<div id="outline-container-org5e1b144" class="outline-3">
+<h3 id="org5e1b144"><span class="section-number-3">1.3.</span> passthrough</h3>
 <div class="outline-text-3" id="text-1-3">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -400,23 +388,17 @@
 </tr>
 
 <tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6</td>
-<td class="org-right">74</td>
-<td class="org-right">-63.18</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2</td>
-<td class="org-right">78</td>
-<td class="org-right">-61.19</td>
+<td class="org-left">4.14.0-0.nightly-2023-09-02</td>
+<td class="org-right">184</td>
+<td class="org-right">-8.46</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 
-<div id="outline-container-org8534294" class="outline-3">
-<h3 id="org8534294"><span class="section-number-3">1.4.</span> reencrypt</h3>
+<div id="outline-container-org7863757" class="outline-3">
+<h3 id="org7863757"><span class="section-number-3">1.4.</span> reencrypt</h3>
 <div class="outline-text-3" id="text-1-4">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -443,15 +425,9 @@
 </tr>
 
 <tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6</td>
-<td class="org-right">60</td>
-<td class="org-right">-17.81</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2</td>
-<td class="org-right">64</td>
-<td class="org-right">-12.33</td>
+<td class="org-left">4.14.0-0.nightly-2023-09-02</td>
+<td class="org-right">66</td>
+<td class="org-right">-9.59</td>
 </tr>
 </tbody>
 </table>
@@ -459,12 +435,12 @@
 </div>
 </div>
 
-<div id="outline-container-org4b8b4b6" class="outline-2">
-<h2 id="org4b8b4b6"><span class="section-number-2">2.</span> Latency</h2>
+<div id="outline-container-orgc119925" class="outline-2">
+<h2 id="orgc119925"><span class="section-number-2">2.</span> Latency</h2>
 <div class="outline-text-2" id="text-2">
 </div>
-<div id="outline-container-orgc9d7f74" class="outline-3">
-<h3 id="orgc9d7f74"><span class="section-number-3">2.1.</span> edge</h3>
+<div id="outline-container-orgc982273" class="outline-3">
+<h3 id="orgc982273"><span class="section-number-3">2.1.</span> edge</h3>
 <div class="outline-text-3" id="text-2-1">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -491,23 +467,17 @@
 </tr>
 
 <tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6</td>
-<td class="org-right">60</td>
-<td class="org-right">17.65</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2</td>
-<td class="org-right">60</td>
-<td class="org-right">17.65</td>
+<td class="org-left">4.14.0-0.nightly-2023-09-02</td>
+<td class="org-right">56</td>
+<td class="org-right">9.80</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 
-<div id="outline-container-orga8852fc" class="outline-3">
-<h3 id="orga8852fc"><span class="section-number-3">2.2.</span> http</h3>
+<div id="outline-container-org86c3d4f" class="outline-3">
+<h3 id="org86c3d4f"><span class="section-number-3">2.2.</span> http</h3>
 <div class="outline-text-3" id="text-2-2">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -534,23 +504,17 @@
 </tr>
 
 <tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6</td>
-<td class="org-right">46</td>
-<td class="org-right">43.75</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2</td>
-<td class="org-right">46</td>
-<td class="org-right">43.75</td>
+<td class="org-left">4.14.0-0.nightly-2023-09-02</td>
+<td class="org-right">42</td>
+<td class="org-right">31.25</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 
-<div id="outline-container-org9995a18" class="outline-3">
-<h3 id="org9995a18"><span class="section-number-3">2.3.</span> passthrough</h3>
+<div id="outline-container-org14315a7" class="outline-3">
+<h3 id="org14315a7"><span class="section-number-3">2.3.</span> passthrough</h3>
 <div class="outline-text-3" id="text-2-3">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -577,23 +541,17 @@
 </tr>
 
 <tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6</td>
-<td class="org-right">7</td>
-<td class="org-right">-61.11</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2</td>
-<td class="org-right">6</td>
-<td class="org-right">-66.67</td>
+<td class="org-left">4.14.0-0.nightly-2023-09-02</td>
+<td class="org-right">20</td>
+<td class="org-right">11.11</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
 
-<div id="outline-container-org0316e2f" class="outline-3">
-<h3 id="org0316e2f"><span class="section-number-3">2.4.</span> reencrypt</h3>
+<div id="outline-container-orge678926" class="outline-3">
+<h3 id="orge678926"><span class="section-number-3">2.4.</span> reencrypt</h3>
 <div class="outline-text-3" id="text-2-4">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -620,15 +578,9 @@
 </tr>
 
 <tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.6</td>
-<td class="org-right">50</td>
-<td class="org-right">0.00</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02-132842 haproxy-2.2</td>
-<td class="org-right">34</td>
-<td class="org-right">-32.00</td>
+<td class="org-left">4.14.0-0.nightly-2023-09-02</td>
+<td class="org-right">59</td>
+<td class="org-right">18.00</td>
 </tr>
 </tbody>
 </table>
@@ -638,7 +590,7 @@
 </div>
 <div id="postamble" class="status">
 <p class="author">Author: Andrew McDermott</p>
-<p class="date">Created: 2023-09-06 Wed 10:56</p>
+<p class="date">Created: 2023-09-06 Wed 11:15</p>
 <p class="validation"><a href="https://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>
