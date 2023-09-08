@@ -54,34 +54,54 @@ sub generate_table {
 # time="2023-09-07T16:23:30+01:00" level=info msg="Overall for reencrypt samples=2 59777 requests/s avgLatency=49ms P99Latency=84ms sum(timeouts)=0 sum(httperrors)=0"
 # time="2023-09-07T16:33:44+01:00" level=info msg="Overall for passthrough samples=2 75127 requests/s avgLatency=8ms P99Latency=13ms sum(timeouts)=0 sum(httperrors)=0"
 
+# % ag Overall testrun-4.13.8-haproxy-2.6-revert-1914.txt
+# 1150:time="2023-09-07T17:13:05+01:00" level=info msg="Overall for http samples=2 73861 requests/s avgLatency=52ms P99Latency=82ms sum(timeouts)=3701 sum(httperrors)=0"
+# 1913:time="2023-09-07T17:23:19+01:00" level=info msg="Overall for edge samples=2 53046 requests/s avgLatency=69ms P99Latency=107ms sum(timeouts)=0 sum(httperrors)=0"
+# 2676:time="2023-09-07T17:25:32+01:00" level=info msg="Overall for reencrypt samples=2 52094 requests/s avgLatency=61ms P99Latency=201ms sum(timeouts)=0 sum(httperrors)=0"
+# 3439:time="2023-09-07T17:35:46+01:00" level=info msg="Overall for passthrough samples=2 79020 requests/s avgLatency=3ms P99Latency=8ms sum(timeouts)=0 sum(httperrors)=0"
+
+# % ag Overall testrun-4.14-haproxy-2.6-revert-1914.txt
+# 1150:time="2023-09-07T17:13:35+01:00" level=info msg="Overall for http samples=2 75079 requests/s avgLatency=52ms P99Latency=73ms sum(timeouts)=3795 sum(httperrors)=0"
+# 1913:time="2023-09-07T17:23:49+01:00" level=info msg="Overall for edge samples=2 53807 requests/s avgLatency=67ms P99Latency=92ms sum(timeouts)=0 sum(httperrors)=0"
+# 2676:time="2023-09-07T17:26:02+01:00" level=info msg="Overall for reencrypt samples=2 53889 requests/s avgLatency=58ms P99Latency=188ms sum(timeouts)=0 sum(httperrors)=0"
+# 3439:time="2023-09-07T17:36:17+01:00" level=info msg="Overall for passthrough samples=2 76325 requests/s avgLatency=6ms P99Latency=10ms sum(timeouts)=0 sum(httperrors)=0"
+
 print "* Requests/s\n";
 {
     my @http_rps = (
 	{'4.13.8'     => 82233},
 	{'4.13.8 haproxy-2.6'     => 82819},
+	# {'4.13.8 haproxy-2.6 revert 1914'     => 73861 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 71854},
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 72538},
+	# {'4.14.0-0.nightly-2023-09-02 haproxy-2.6 revert 1914'        => 75079 },
 	);
 
     my @edge_rps = (
 	{'4.13.8'     => 57876},
 	{'4.13.8 haproxy-2.6'     => 57860},
+	# {'4.13.8 haproxy-2.6 revert 1914'     => 53046},
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 58312},
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 57935},
+	# {'4.14.0-0.nightly-2023-09-02 haproxy-2.6 revert 1914'        => 53807 },
 	);
 
     my @reencrypt_rps = (
 	{'4.13.8'     => 60956 },
 	{'4.13.8 haproxy-2.6'     => 57007},
+	# {'4.13.8 haproxy-2.6 revert 1914'     => 52094},
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 58751 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 59777},
+	# {'4.14.0-0.nightly-2023-09-02 haproxy-2.6 revert 1914'        => 53889},
 	);
 
     my @passthrough_rps = (
 	{'4.13.8'     =>  76726 },
 	{'4.13.8 haproxy-2.6'     => 105219},
+	# {'4.13.8 haproxy-2.6 revert 1914'     => 79020},
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 76527 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 75127},
+	# {'4.14.0-0.nightly-2023-09-02 haproxy-2.6 revert 1914'        => 76325},
 	);
 
     generate_table("http", "request/s (x1000)", \@http_rps);
@@ -118,39 +138,53 @@ print "* Requests/s\n";
 # time="2023-09-07T16:23:30+01:00" level=info msg="Overall for reencrypt samples=2 59777 requests/s avgLatency=49ms P99Latency=84ms sum(timeouts)=0 sum(httperrors)=0"
 # time="2023-09-07T16:33:44+01:00" level=info msg="Overall for passthrough samples=2 75127 requests/s avgLatency=8ms P99Latency=13ms sum(timeouts)=0 sum(httperrors)=0"
 
+# % ag Overall testrun-4.13.8-haproxy-2.6-revert-1914.txt
+# 1150:time="2023-09-07T17:13:05+01:00" level=info msg="Overall for http samples=2 73861 requests/s avgLatency=52ms P99Latency=82ms sum(timeouts)=3701 sum(httperrors)=0"
+# 1913:time="2023-09-07T17:23:19+01:00" level=info msg="Overall for edge samples=2 53046 requests/s avgLatency=69ms P99Latency=107ms sum(timeouts)=0 sum(httperrors)=0"
+# 2676:time="2023-09-07T17:25:32+01:00" level=info msg="Overall for reencrypt samples=2 52094 requests/s avgLatency=61ms P99Latency=201ms sum(timeouts)=0 sum(httperrors)=0"
+# 3439:time="2023-09-07T17:35:46+01:00" level=info msg="Overall for passthrough samples=2 79020 requests/s avgLatency=3ms P99Latency=8ms sum(timeouts)=0 sum(httperrors)=0"
+
 print "* Latency\n";
 {
     my @http_latency = (
 	{'4.13.8'     => 43},
 	{'4.13.8 haproxy 2.6'     => 44},
+	# {'4.13.8 haproxy 2.6 revert 1914'     => 52},
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 50 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 47 },
+	# {'4.14.0-0.nightly-2023-09-02 haproxy-2.6 revert 1914'        => 52},
 	);
 
     my @edge_latency = (
 	{'4.13.8'     => 60},
 	{'4.13.8 haproxy-2.6'     => 62},
+	# {'4.13.8 haproxy 2.6 revert 1914'     => 69 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 63 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 62 },
+	# {'4.14.0-0.nightly-2023-09-02 haproxy-2.6 revert 1914'        => 69},
 	);
 
     my @reencrypt_latency = (
 	{'4.13.8'     =>  54 },
 	{'4.13.8 haproxy-2.6'     => 84},
+	# {'4.13.8 haproxy 2.6 revert 1914'     => 61 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        =>  75 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        =>  49 },
+	# {'4.14.0-0.nightly-2023-09-02 haproxy-2.6 revert 1914'        => 61},
 	);
 
     my @passthrough_latency = (
 	{'4.13.8'     => 7 },
 	{'4.13.8 haproxy-2.6'     => 4 },
+	# {'4.13.8 haproxy 2.6 revert 1914'     => 3 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.6'        => 4 },
 	{'4.14.0-0.nightly-2023-09-02 haproxy-2.2'        => 8 },
+	# {'4.14.0-0.nightly-2023-09-02 haproxy-2.6 revert 1914'        => 3},
 	);
 
-    generate_table("edge", "latency (ms)", \@edge_latency);
-    print "\n";
     generate_table("http", "latency (ms)", \@http_latency);
+    print "\n";
+    generate_table("edge", "latency (ms)", \@edge_latency);
     print "\n";
     generate_table("reencrypt", "latency (ms)", \@reencrypt_latency);
     print "\n";

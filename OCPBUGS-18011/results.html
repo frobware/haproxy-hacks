@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2023-09-07 Thu 16:42 -->
+<!-- 2023-09-07 Thu 18:42 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>&lrm;</title>
@@ -200,23 +200,23 @@
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents" role="doc-toc">
 <ul>
-<li><a href="#org66a3fc1">1. Requests/s</a>
+<li><a href="#org9a0d088">1. Requests/s</a>
 <ul>
-<li><a href="#orge15c180">1.1. http</a></li>
-<li><a href="#org6a326b8">1.2. edge</a></li>
-<li><a href="#orgdd43f28">1.3. reencrypt</a></li>
-<li><a href="#org517b0f9">1.4. passthrough</a></li>
+<li><a href="#orgc22f2c4">1.1. http</a></li>
+<li><a href="#orgfc3ddf5">1.2. edge</a></li>
+<li><a href="#org6111593">1.3. reencrypt</a></li>
+<li><a href="#orgfc82a86">1.4. passthrough</a></li>
 </ul>
 </li>
-<li><a href="#org0bb9689">2. Latency</a>
+<li><a href="#orgc3ae16c">2. Latency</a>
 <ul>
-<li><a href="#org5487147">2.1. edge</a></li>
-<li><a href="#orgd20eded">2.2. http</a></li>
-<li><a href="#orgc901e7d">2.3. reencrypt</a></li>
-<li><a href="#org0d31766">2.4. passthrough</a></li>
+<li><a href="#orgb82f86e">2.1. http</a></li>
+<li><a href="#org171529d">2.2. edge</a></li>
+<li><a href="#org7ca2552">2.3. reencrypt</a></li>
+<li><a href="#orgfe6e3f0">2.4. passthrough</a></li>
 </ul>
 </li>
-<li><a href="#orgd487787">3. Cluster Sizing</a></li>
+<li><a href="#orgdfca3ed">3. Cluster Sizing</a></li>
 </ul>
 </div>
 </div>
@@ -283,12 +283,12 @@
     });
   });
 </script>
-<div id="outline-container-org66a3fc1" class="outline-2">
-<h2 id="org66a3fc1"><span class="section-number-2">1.</span> Requests/s</h2>
+<div id="outline-container-org9a0d088" class="outline-2">
+<h2 id="org9a0d088"><span class="section-number-2">1.</span> Requests/s</h2>
 <div class="outline-text-2" id="text-1">
 </div>
-<div id="outline-container-orge15c180" class="outline-3">
-<h3 id="orge15c180"><span class="section-number-3">1.1.</span> http</h3>
+<div id="outline-container-orgc22f2c4" class="outline-3">
+<h3 id="orgc22f2c4"><span class="section-number-3">1.1.</span> http</h3>
 <div class="outline-text-3" id="text-1-1">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -336,8 +336,8 @@
 </div>
 </div>
 
-<div id="outline-container-org6a326b8" class="outline-3">
-<h3 id="org6a326b8"><span class="section-number-3">1.2.</span> edge</h3>
+<div id="outline-container-orgfc3ddf5" class="outline-3">
+<h3 id="orgfc3ddf5"><span class="section-number-3">1.2.</span> edge</h3>
 <div class="outline-text-3" id="text-1-2">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -385,8 +385,8 @@
 </div>
 </div>
 
-<div id="outline-container-orgdd43f28" class="outline-3">
-<h3 id="orgdd43f28"><span class="section-number-3">1.3.</span> reencrypt</h3>
+<div id="outline-container-org6111593" class="outline-3">
+<h3 id="org6111593"><span class="section-number-3">1.3.</span> reencrypt</h3>
 <div class="outline-text-3" id="text-1-3">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -434,8 +434,8 @@
 </div>
 </div>
 
-<div id="outline-container-org517b0f9" class="outline-3">
-<h3 id="org517b0f9"><span class="section-number-3">1.4.</span> passthrough</h3>
+<div id="outline-container-orgfc82a86" class="outline-3">
+<h3 id="orgfc82a86"><span class="section-number-3">1.4.</span> passthrough</h3>
 <div class="outline-text-3" id="text-1-4">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -484,62 +484,13 @@
 </div>
 </div>
 
-<div id="outline-container-org0bb9689" class="outline-2">
-<h2 id="org0bb9689"><span class="section-number-2">2.</span> Latency</h2>
+<div id="outline-container-orgc3ae16c" class="outline-2">
+<h2 id="orgc3ae16c"><span class="section-number-2">2.</span> Latency</h2>
 <div class="outline-text-2" id="text-2">
 </div>
-<div id="outline-container-org5487147" class="outline-3">
-<h3 id="org5487147"><span class="section-number-3">2.1.</span> edge</h3>
+<div id="outline-container-orgb82f86e" class="outline-3">
+<h3 id="orgb82f86e"><span class="section-number-3">2.1.</span> http</h3>
 <div class="outline-text-3" id="text-2-1">
-<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
-
-
-<colgroup>
-<col  class="org-left" />
-
-<col  class="org-right" />
-
-<col  class="org-right" />
-</colgroup>
-<thead>
-<tr>
-<th scope="col" class="org-left">Release</th>
-<th scope="col" class="org-right">latency (ms)</th>
-<th scope="col" class="org-right">% Diff from 4.13.8</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td class="org-left">4.13.8</td>
-<td class="org-right">60</td>
-<td class="org-right">0.00</td>
-</tr>
-
-<tr>
-<td class="org-left">4.13.8 haproxy-2.6</td>
-<td class="org-right">62</td>
-<td class="org-right">3.33</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02 haproxy-2.6</td>
-<td class="org-right">63</td>
-<td class="org-right">5.00</td>
-</tr>
-
-<tr>
-<td class="org-left">4.14.0-0.nightly-2023-09-02 haproxy-2.2</td>
-<td class="org-right">62</td>
-<td class="org-right">3.33</td>
-</tr>
-</tbody>
-</table>
-</div>
-</div>
-
-<div id="outline-container-orgd20eded" class="outline-3">
-<h3 id="orgd20eded"><span class="section-number-3">2.2.</span> http</h3>
-<div class="outline-text-3" id="text-2-2">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
 
@@ -586,8 +537,57 @@
 </div>
 </div>
 
-<div id="outline-container-orgc901e7d" class="outline-3">
-<h3 id="orgc901e7d"><span class="section-number-3">2.3.</span> reencrypt</h3>
+<div id="outline-container-org171529d" class="outline-3">
+<h3 id="org171529d"><span class="section-number-3">2.2.</span> edge</h3>
+<div class="outline-text-3" id="text-2-2">
+<table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
+
+
+<colgroup>
+<col  class="org-left" />
+
+<col  class="org-right" />
+
+<col  class="org-right" />
+</colgroup>
+<thead>
+<tr>
+<th scope="col" class="org-left">Release</th>
+<th scope="col" class="org-right">latency (ms)</th>
+<th scope="col" class="org-right">% Diff from 4.13.8</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="org-left">4.13.8</td>
+<td class="org-right">60</td>
+<td class="org-right">0.00</td>
+</tr>
+
+<tr>
+<td class="org-left">4.13.8 haproxy-2.6</td>
+<td class="org-right">62</td>
+<td class="org-right">3.33</td>
+</tr>
+
+<tr>
+<td class="org-left">4.14.0-0.nightly-2023-09-02 haproxy-2.6</td>
+<td class="org-right">63</td>
+<td class="org-right">5.00</td>
+</tr>
+
+<tr>
+<td class="org-left">4.14.0-0.nightly-2023-09-02 haproxy-2.2</td>
+<td class="org-right">62</td>
+<td class="org-right">3.33</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div id="outline-container-org7ca2552" class="outline-3">
+<h3 id="org7ca2552"><span class="section-number-3">2.3.</span> reencrypt</h3>
 <div class="outline-text-3" id="text-2-3">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -635,8 +635,8 @@
 </div>
 </div>
 
-<div id="outline-container-org0d31766" class="outline-3">
-<h3 id="org0d31766"><span class="section-number-3">2.4.</span> passthrough</h3>
+<div id="outline-container-orgfe6e3f0" class="outline-3">
+<h3 id="orgfe6e3f0"><span class="section-number-3">2.4.</span> passthrough</h3>
 <div class="outline-text-3" id="text-2-4">
 <table border="2" cellspacing="0" cellpadding="6" rules="groups" frame="hsides">
 
@@ -685,8 +685,8 @@
 </div>
 </div>
 
-<div id="outline-container-orgd487787" class="outline-2">
-<h2 id="orgd487787"><span class="section-number-2">3.</span> Cluster Sizing</h2>
+<div id="outline-container-orgdfca3ed" class="outline-2">
+<h2 id="orgdfca3ed"><span class="section-number-2">3.</span> Cluster Sizing</h2>
 <div class="outline-text-2" id="text-3">
 <div class="org-src-container">
 <pre class="src src-text">"masterNodesType": "m5.8xlarge",
@@ -705,7 +705,7 @@
 </div>
 <div id="postamble" class="status">
 <p class="author">Author: Andrew McDermott</p>
-<p class="date">Created: 2023-09-07 Thu 16:42</p>
+<p class="date">Created: 2023-09-07 Thu 18:42</p>
 <p class="validation"><a href="https://validator.w3.org/check?uri=referer">Validate</a></p>
 </div>
 </body>
