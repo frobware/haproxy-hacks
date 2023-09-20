@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ocpbugs14914-test
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: serving-cert-ocpbugs14014-test
+spec:
+  selector:
+    app: ocpbugs14914-test
+  ports:
+  - name: https
+    protocol: TCP
+    port: 8443
+    targetPort: 8443

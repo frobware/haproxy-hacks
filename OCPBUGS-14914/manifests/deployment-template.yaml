@@ -1,0 +1,47 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: ocpbugs14914-deployment-template
+objects:
+- apiVersion: apps/v1
+  kind: Deployment
+  metadata:
+    name: ocpbugs14914-test
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: ocpbugs14914-test
+    template:
+      metadata:
+        labels:
+          app: ocpbugs14914-test
+      spec:
+        containers:
+        - name: ocpbugs14914-test
+          command: ["ingress-operator", "serve-http2-test-server"]
+          image: ${IMAGE}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+              - ALL
+            seccompProfile:
+              type: RuntimeDefault
+          env:
+          ports:
+          - containerPort: 8443
+            protocol: TCP
+            name: "https"
+          volumeMounts:
+          - mountPath: /etc/serving-cert
+            name: cert
+        volumes:
+        - name: cert
+          secret:
+            secretName: serving-cert-ocpbugs14014-test
+parameters:
+- name: IMAGE
+  description: The image to use for the ocpbugs14914-test container.
