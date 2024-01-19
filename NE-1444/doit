@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+set -eu
+
+if [[ "$(oc project -q)" != "ne1444" ]]; then
+    echo "Expecting current namespace to \"ne1444\"."
+    exit 1
+fi
+
+domain=$(oc get -n openshift-ingress-operator ingresscontroller/default -o yaml | yq .status.domain)
+
+tls_key="$(cat /home/aim/.acme.sh/*.${domain}/*.${domain}.key)"
+tls_crt="$(cat /home/aim/.acme.sh/*.${domain}/*.${domain}.cer)"
+tls_cacrt="$(cat /home/aim/.acme.sh/*.${domain}/ca.cer)"
+
+# Find the first router pod in the openshift-ingress namespace.
+pod=$(oc get pods -n openshift-ingress -l ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default -o jsonpath='{.items[0].metadata.name}')
+
+if [[ -z "$pod" ]]; then
+    echo "No router pod found in the openshift-ingress namespace."
+    exit 1
+fi
+
+dest_cacrt="$(oc exec -n openshift-ingress -c router "$pod" -- cat /var/run/secrets/kubernetes.io/serviceaccount/service-ca.crt)"
+
+oc delete --all routes
+oc delete --all services
+oc delete --all deployments
+
+pushd server
+make
+popd
+
+pushd browser-test
+oc apply -f deployment.yaml
+oc apply -f service.yaml
+oc apply -f routes.yaml
+popd
+
+pushd destca-test
+oc apply -f service.yaml
+oc apply -f deployment.yaml
+
+# ../destca-test/process-routes.sh ../certs/\*.${domain} payroll-route.yaml
+# ../destca-test/process-routes.sh ../certs/\*.${domain} catpictures-route.yaml
+
+../destca-test/process-routes-use-default-cert.sh catpictures-default-cert-route.yaml
+../destca-test/process-routes-use-default-cert.sh payroll-default-cert-route.yaml
+
+../destca-test/process-routes.sh ../certs/\*.${domain} payroll-route.yaml
+../destca-test/process-routes.sh ../certs/\*.${domain} catpictures-route.yaml
+
+# ../destca-test/process-routes.sh ../certs/payroll-ne1444.${domain} payroll-route.yaml
+# ../destca-test/process-routes.sh ../certs/catpictures-ne1444.${domain} catpictures-route.yaml
+
+oc create -f ./passthrough-route.yaml
+popd
+
+oc get all

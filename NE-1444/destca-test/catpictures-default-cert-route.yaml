@@ -1,0 +1,20 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+objects:
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: catpictures-default-cert-edge
+    labels:
+      app: ne1444-test
+  spec:
+    port:
+      targetPort: 8080
+    tls:
+      termination: edge
+      insecureEdgeTerminationPolicy: Redirect
+    to:
+      kind: Service
+      name: ne1444-test
+      weight: 100
+    wildcardPolicy: None

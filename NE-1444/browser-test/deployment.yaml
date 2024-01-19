@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: browser-test
+spec:
+  selector:
+    matchLabels:
+      app: browser-test
+  template:
+    metadata:
+      labels:
+        app: browser-test
+    spec:
+      replicas: 2
+      containers:
+      - name: browser-test
+        image: quay.io/amcdermo/ne1444/server
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        env:
+        - name: GODEBUG
+          value: http2debug=2
+        ports:
+        - containerPort: 8443
+          protocol: TCP
+          name: "https"
+        - containerPort: 8080
+          protocol: TCP
+          name: "http"
+        volumeMounts:
+        - mountPath: /etc/serving-cert
+          name: cert
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 5
+          successThreshold: 1
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthy
+            port: 8080
+          initialDelaySeconds: 1
+          periodSeconds: 1
+          successThreshold: 1
+      volumes:
+      - name: cert
+        secret:
+          secretName: serving-cert-browser-test

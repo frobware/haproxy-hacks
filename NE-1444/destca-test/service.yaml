@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ne1444-test
+  annotations:
+    service.beta.openshift.io/serving-cert-secret-name: serving-cert-ne1444-test
+spec:
+  selector:
+    app: ne1444-test
+  ports:
+  - name: https
+    protocol: TCP
+    port: 8443
+    targetPort: 8443
+  - name: http
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
