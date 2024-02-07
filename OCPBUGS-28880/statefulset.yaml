@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: normaldeployment1
+  labels:
+    app: normal1
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: normal1
+  template:
+    metadata:
+      labels:
+        app: normal1
+    spec:
+      containers:
+      - name: google
+        image: gcr.io/google-samples/kubernetes-bootcamp:v1
+        ports:
+        - containerPort: 8080
