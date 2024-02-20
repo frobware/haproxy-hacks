@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ne1398
+  labels:
+    app: ne1398
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ne1398
+  template:
+    metadata:
+      labels:
+        app: ne1398
+    spec:
+      containers:
+      - name: hello-openshift
+        image: openshift/hello-openshift
+        ports:
+        - containerPort: 8080

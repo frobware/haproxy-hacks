@@ -1,0 +1,21 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ne1398
+spec:
+  host: app.ne1398.apps.amcdermo-2024-02-19-1259.devcluster.openshift.com
+  to:
+    kind: Service
+    name: ne1398
+    weight: 100
+  port:
+    targetPort: http
+  wildcardPolicy: None
+
+75.101.221.221 - eipalloc-091f80ffb4c5104df
+3.233.25.172  - eipalloc-0fc14831e5b1952da
+54.205.189.38 - eipalloc-06ef99be701703025
+54.83.237.38  - eipalloc-0255d3c5f3332bf3d
+44.205.185.25 - eipalloc-0dd225898d6e3631b
+# eipalloc-091f80ffb4c5104df,eipalloc-0fc14831e5b1952da,eipalloc-06ef99be701703025,eipalloc-0255d3c5f3332bf3d,eipalloc-0dd225898d6e3631b
+# # service.beta.kubernetes.io/aws-load-balancer-eip-allocations

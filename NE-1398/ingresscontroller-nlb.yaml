@@ -1,0 +1,26 @@
+---
+kind: Template
+apiVersion: template.openshift.io/v1
+metadata:
+  name: nlb
+parameters:
+- name: DOMAIN
+  required: true
+- name: NAME
+  required: true
+objects:
+- kind: IngressController
+  apiVersion: operator.openshift.io/v1
+  metadata:
+    name: ${NAME}
+    namespace: openshift-ingress-operator
+  spec:
+    domain: ${NAME}.${DOMAIN}
+    endpointPublishingStrategy:
+      type: LoadBalancerService
+      loadBalancer:
+        scope: External
+        providerParameters:
+          type: AWS
+          aws:
+            type: NLB
