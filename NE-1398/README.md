@@ -51,7 +51,7 @@ EIP allocated successfully. Allocation ID: eipalloc-<redacted>
 
 When using the AWS console to inspect each of these new EIP IDs,
 you'll observe that they are not associated with any Elastic Network
-Interface (ENI). The are "unassociated".
+Interface (ENI). Hence the "unassociated".
 
 To facilitate a future step, let's store the list of EIP allocation
 IDs in a shell variable:
@@ -76,8 +76,8 @@ Elastic IPs (EIPs) can be assigned to a Service with the type
 `service.beta.kubernetes.io/aws-load-balancer-eip-allocations:
 <COMMA-SEPARATED_EIP-ALLOCATIONS>`.
 
-My branch/hack, named `ne1398-enable-eip-allocations`, introduces
-functionality to add the EIP allocation annotation if a corresponding
+My branch/hack, named `ne1398-enable-eip-allocations`, introduces a
+hack to add the EIP allocation annotation if a corresponding
 environment variable is set. For instance, if I create an ingress
 controller named "ne1398", I would then run a local instance of the
 ingress-operator like this:
@@ -113,7 +113,8 @@ The ingress-operator logs will show:
 
 If, after a bit of "settling time", you revisit the AWS console and
 look at each EIP allocation you'll now see that they are attached to a
-Elastic Network Interface (i.e., which is ultimately the router).
+Elastic Network Interface (i.e., the nodes where the ne1398 router
+pods are running).
 
 ## CLEANING UP
 
