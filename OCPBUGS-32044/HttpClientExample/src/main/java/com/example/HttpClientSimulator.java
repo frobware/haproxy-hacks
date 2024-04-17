@@ -23,7 +23,7 @@ public class HttpClientSimulator {
                 PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
 
                 // Set max total connections
-                cm.setMaxTotal(200);
+                cm.setMaxTotal(100);
 
                 // Set max connections per route
                 cm.setDefaultMaxPerRoute(100);
@@ -46,7 +46,7 @@ public class HttpClientSimulator {
                         while (!Thread.currentThread().isInterrupted()) {
                                 try (CloseableHttpResponse response = httpClient.execute(new HttpGet(url))) {
                                         System.out.println("Response: \"" + response.getStatusLine() + "\" Status: " + response.getStatusLine().getStatusCode());
-                                        TimeUnit.MILLISECONDS.sleep(1);
+                                        TimeUnit.MILLISECONDS.sleep(100);
                                 } catch (NoHttpResponseException e) {
                                         System.err.println("NO RESPONSE EXCEPTION FROM SERVER, LIKELY DUE TO CONNECTION RESET: " + e.getMessage());
                                 } catch (Exception e) {
