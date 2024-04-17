@@ -19,3 +19,4 @@ key.pem
 tls.crt
 tls.key
 server
+/OCPBUGS-32044/.direnv/
