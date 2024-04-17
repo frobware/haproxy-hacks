@@ -48,9 +48,9 @@ public class HttpClientSimulator {
                                         System.out.println("Response: \"" + response.getStatusLine() + "\" Status: " + response.getStatusLine().getStatusCode());
                                         TimeUnit.MILLISECONDS.sleep(1);
                                 } catch (NoHttpResponseException e) {
-                                        System.out.println("NO RESPONSE EXCEPTION FROM SERVER, LIKELY DUE TO CONNECTION RESET: " + e.getMessage());
+                                        System.err.println("NO RESPONSE EXCEPTION FROM SERVER, LIKELY DUE TO CONNECTION RESET: " + e.getMessage());
                                 } catch (Exception e) {
-                                        System.out.println("Error during request: " + e.getClass().getSimpleName());
+                                        System.err.println("Error during request: " + e.getClass().getSimpleName());
                                         e.printStackTrace();
                                 }
                         }
@@ -65,7 +65,7 @@ public class HttpClientSimulator {
                                         try {
                                                 httpClient.close();
                                         } catch (Exception e) {
-                                                System.out.println("Error closing client: " + e.getMessage());
+                                                System.err.println("Error closing client: " + e.getMessage());
                                         }
                 }));
 
