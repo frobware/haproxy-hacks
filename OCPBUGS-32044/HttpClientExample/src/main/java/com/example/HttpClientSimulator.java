@@ -7,6 +7,8 @@ import org.apache.http.NoHttpResponseException;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 
@@ -26,9 +28,16 @@ public class HttpClientSimulator {
                 // Set max connections per route
                 cm.setDefaultMaxPerRoute(100);
 
-                CloseableHttpClient httpClient = HttpClients.custom()
-                        .setConnectionManager(cm)
-                        .build();
+                HttpClientBuilder builder = HttpClients.custom();
+
+                // Set connection manager.
+                builder.setConnectionManager(cm);
+
+                // Set retry handler.
+                builder.setRetryHandler(new DefaultHttpRequestRetryHandler(2, false));
+
+                // Build CloseableHttpClient.
+                CloseableHttpClient httpClient = builder.build();
 
                 ExecutorService executor = Executors.newFixedThreadPool(100);
 
@@ -39,7 +48,7 @@ public class HttpClientSimulator {
                                         System.out.println("Response: \"" + response.getStatusLine() + "\" Status: " + response.getStatusLine().getStatusCode());
                                         TimeUnit.MILLISECONDS.sleep(1);
                                 } catch (NoHttpResponseException e) {
-                                        System.out.println("NO RESPONSE FROM SERVER, LIKELY DUE TO CONNECTION RESET: " + e.getMessage());
+                                        System.out.println("NO RESPONSE EXCEPTION FROM SERVER, LIKELY DUE TO CONNECTION RESET: " + e.getMessage());
                                 } catch (Exception e) {
                                         System.out.println("Error during request: " + e.getClass().getSimpleName());
                                         e.printStackTrace();
