@@ -24,10 +24,13 @@ EOF
 
 echo "# [NE-1690 -Analyse Memory Impact of Pre-Allocated Server Slots for Different Numbers of Routes](https://issues.redhat.com/browse/NE-1690)"
 
+a=`ocp-haproxy-2.8.5 -v | head -1 | sed 's/^/## /'`
+echo "$a";
+
 # Generate pivot table for each combination of algorithm, weight
 for algorithm in $(sqlite3 $db "select distinct(balance_algorithm) from results"); do
     for weight in $(sqlite3 $db "select distinct(weight) from results"); do
-        echo "## Algorithm=$algorithm, Weight=$weight maxconn=50000 (T=#Threads B=#Backends)"
+        echo "### Algorithm=$algorithm, Weight=$weight maxconn=50000 (T=#Threads B=#Backends)"
         printf "\`\`\`\n";
         sqlite3 $db <<EOF
 .headers on

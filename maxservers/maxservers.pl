@@ -5,7 +5,7 @@ $| = 1;
 use strict;
 use Data::Dumper;
 
-my $haproxy = "ocp-haproxy-2.6.13";
+my $haproxy = "ocp-haproxy-2.8.5";
 
 sub gen_config {
     my ($maxconn, $nbthread, $backends, $balance_algorithm, $weight, $nservers, $fh) = @_;
