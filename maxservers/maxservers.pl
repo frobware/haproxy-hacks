@@ -56,12 +56,11 @@ frontend alive-${i}
     for my $i (1..$backends) {
         print $fh "
 backend backend-$i
-    balance $balance_algorithm
-";
-        for my $j (1..$nservers) {
-            print $fh "    server server_$j 127.0.0.1:80 weight $weight\n";
-        }
-        print $fh "\n";
+    balance $balance_algorithm";
+        print $fh "
+    server-template _dynamic-pod- 1-$nservers 172.4.0.4:8765 check disabled
+"
+            if $nservers > 0;
     }
 
     print $fh "\n";
@@ -71,14 +70,30 @@ backend backend-$i
 sub run_command_and_wait {
     my ($cmd) = @_;
     my $pid = fork();
+
     if ($pid == 0) {
+        # This is the child process.
         exec($cmd);
-        # unreachable if exec succeeds
-        die;
+        # If exec fails, exit with a non-zero status.
+        exit(1);
     } elsif ($pid > 0) {
+        # This is the parent process.
         # Wait for the child process to terminate.
         waitpid($pid, 0);
+        # Check the exit status of the child process.
+        if ($? == -1) {
+            print "Failed to execute: $!\n";
+            return -1;
+        } elsif ($? & 127) {
+            printf "Child died with signal %d, %s coredump\n",
+                ($? & 127),  ($? & 128) ? 'with' : 'without';
+            return -1;
+        } else {
+            my $exit_code = $? >> 8;
+            return $exit_code;
+        }
     } else {
+        # Fork failed.
         die "Failed to fork: $!";
     }
 }
@@ -101,7 +116,12 @@ sub launch_haproxy {
     }
 
     my $filename = shift;
-    my $haproxy_pid = run_command_and_wait("$haproxy -f $filename");
+    my $haproxy_cmd = "$haproxy -f $filename";
+    my $exit_status = run_command_and_wait($haproxy_cmd);
+    if ($exit_status != 0) {
+        print "HAProxy failed to start. Exit status: $exit_status\n";
+        exit($exit_status);
+    }
 
     # Wait for HAProxy to be ready.
     my $socket_ready = 0;
@@ -177,7 +197,7 @@ for my $weight (@weights) {
                         close($fh) or die "Could not close file $filename: $!";
                         my ($kb, $mb) = launch_haproxy($filename);
                         print "$weight $balance_algorithm $backends $nservers $nbthread $kb $mb\n";
-                        #my $pause_for_interative_poking = <>;
+                        # my $pause_for_interative_poking = <>;
                     }
                 }
             }
