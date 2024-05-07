@@ -158,7 +158,7 @@ sub launch_haproxy {
 my @weights = qw(1);
 my @balance_algorithms = qw(leastconn random roundrobin);
 my @backends = qw(100 1000 10000);
-my @nservers = qw(1 5 10 100 200 300);
+my @nservers = qw(0 1 2 5 10 100 200 300);
 my @nbthreads = qw(4 64);
 my @max_connections = qw(50000);
 
