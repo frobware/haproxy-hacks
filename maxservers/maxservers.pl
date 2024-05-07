@@ -56,8 +56,11 @@ frontend alive-${i}
     for my $i (1..$backends) {
         print $fh "
 backend backend-$i
-    balance $balance_algorithm
-    server-template _dynamic-pod- 0-$nservers 172.4.0.4:8765 check disabled"
+    balance $balance_algorithm";
+        print $fh "
+    server-template _dynamic-pod- 1-$nservers 172.4.0.4:8765 check disabled
+"
+            if $nservers > 0;
     }
 
     print $fh "\n";
@@ -143,30 +146,67 @@ sub launch_haproxy {
     my $haproxy_process_pid = haproxy_config_loaded();
     my $consecutive_same_memory = 0;
     my $previous_memory = -1;
+    my $total_attempts = 0;
+    my $max_retries = 5;        # Maximum retries of 5 attempts each
+    my $attempt_limit = 5;      # 5 consecutive checks per retry
 
-    # This is a bit of paranoia. Let's ensure haproxy isn't growing
-    # memory (i.e., has it actually finished parsing?).
-    for (my $attempt = 1; $attempt <= 5; $attempt++) {
-        my @output = `pmap -x -p $haproxy_process_pid`;
+    # Monitor HAProxy memory usage with strict conditions.
+    while ($total_attempts < $max_retries * $attempt_limit) {
         my $current_memory = -1;
+        my @output = `pmap -x -p $haproxy_process_pid`;
+
         foreach my $line (@output) {
             if ($line =~ /total kB\s+\d+\s+(\d+)\s+\d+/) {
-                my $rss_kb = $1;  # This captures the RSS memory in kB
+                my $rss_kb = $1;
                 $current_memory = $rss_kb;
-                if ($rss_kb == $previous_memory) {
-                    $consecutive_same_memory++;
-                } else {
-                    $consecutive_same_memory = 0;
-                }
-                $previous_memory = $rss_kb;
+                last;
             }
         }
-        last if $consecutive_same_memory == 5;
-        sleep 0.5;
+
+        # Update the consecutive same memory count or reset if
+        # changed.
+        if (defined $previous_memory && $current_memory == $previous_memory) {
+            $consecutive_same_memory++;
+        } else {
+            # Reset to 1 because we have 1 occurrence of this new
+            # memory amount.
+            $consecutive_same_memory = 1;
+        }
+
+        # Update previous memory.
+        $previous_memory = $current_memory;
+
+        # Increment the total attempts after each check.
+        $total_attempts++;
+        print STDERR "Attempt $total_attempts: $consecutive_same_memory consecutive readings of $current_memory kB\n";
+
+        # Check if consecutive readings meet the required count to
+        # conclude stability.
+        if ($consecutive_same_memory >= 5) {
+            print STDERR "Memory usage is stable.\n";
+            # Exit the while loop early if memory is stable.
+            last;
+        }
+
+        # Sleep between pmap attempts to allow for possible changes in
+        # memory usage.
+        sleep(int($total_attempts / 5) + 1);
+
+        # Reset and continue if a set of 5 attempts completes without
+        # 5 consecutive same readings.
+        if ($total_attempts % 5 == 0 && $consecutive_same_memory < 5) {
+            print STDERR "Retrying for another set of 5 attempts.\n";
+            # Explicit reset here is not necessary but is kept for
+            # clarity.
+            $consecutive_same_memory = 0;
+        }
     }
 
-    die "Didn't find consistent memory usage info ($consecutive_same_memory)"
-        if $consecutive_same_memory < 4;
+    # Handle cases where memory did not stabilize after maximum
+    # retries.
+    if ($consecutive_same_memory < 5) {
+        die "Memory usage did not stabilize after $max_retries sets of attempts.\n";
+    }
 
     my $rss_mb = int($previous_memory / 1024);
     return ($previous_memory, $rss_mb);
@@ -195,6 +235,8 @@ for my $weight (@weights) {
                         my ($kb, $mb) = launch_haproxy($filename);
                         print "$weight $balance_algorithm $backends $nservers $nbthread $kb $mb\n";
                         # my $pause_for_interative_poking = <>;
+                        run_command_and_wait("pkill -f $haproxy");
+                        run_command_and_wait("pkill -f $haproxy");
                     }
                 }
             }
