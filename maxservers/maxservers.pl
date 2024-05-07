@@ -56,11 +56,8 @@ frontend alive-${i}
     for my $i (1..$backends) {
         print $fh "
 backend backend-$i
-    balance $balance_algorithm";
-        print $fh "
-    server-template _dynamic-pod- 1-$nservers 172.4.0.4:8765 check disabled
-"
-            if $nservers > 0;
+    balance $balance_algorithm
+    server-template _dynamic-pod- 0-$nservers 172.4.0.4:8765 check disabled"
     }
 
     print $fh "\n";

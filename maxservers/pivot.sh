@@ -35,8 +35,8 @@ for algorithm in $(sqlite3 $db "select distinct(balance_algorithm) from results"
         sqlite3 $db <<EOF
 .headers on
 .mode column
-.width -20 -16 -17 -18 -17 -18 -19
-SELECT servers as "#Servers per Backend",
+.width -27 -16 -17 -18 -17 -18 -19
+SELECT servers as "server-template range: 0..N",
        max(case when threads = 4 and backends = 100 then process_size_in_mb end) as "T4 B100 RSS (MB)",
        max(case when threads = 4 and backends = 1000 then process_size_in_mb end) as "T4 B1000 RSS (MB)",
        max(case when threads = 4 and backends = 10000 then process_size_in_mb end) as "T4 B10000 RSS (MB)",
