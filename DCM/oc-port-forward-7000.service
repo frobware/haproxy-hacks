@@ -1,0 +1,19 @@
+[Unit]
+Description=Persistent oc port-forward service for port 7000 (SSH)
+
+[Service]
+Restart=always
+ExecStart=/etc/profiles/per-user/aim/bin/oc --kubeconfig /home/aim/src/github.com/frobware/infra/ocp416/ocp/auth/kubeconfig port-forward -n openshift-ingress deployment/router-default --address 127.0.0.1 7000:7000
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+
+# Enable
+# systemctl --user daemon-reload; systemctl --user enable --now oc-port-forward-7000.service
+
+# Disable
+# systemctl --user daemon-reload; systemctl --user stop oc-port-forward-7000.service
+# systemctl --user daemon-reload; systemctl --user disable oc-port-forward-7000.service
+
