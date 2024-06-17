@@ -30,8 +30,24 @@ echo "$a"
 echo
 echo "Column headers:"
 echo "- ST=<0|1> (server-template disabled=0, enabled=1)"
-echo '- Tn (Number of Threads)'
+echo "- Tn (Number of Threads)"
 echo "- RSS (Memory usage in MB)"
+
+echo "
+I have been collecting memory usage data for HAProxy's server-template
+feature, where the range is 0..N - this is the ST=1 column.
+Additionally, I've collected data where server lines are explicitly
+expanded into the haproxy.config for 0..N - this is the ST=0 column.
+
+The memory usage is broadly similar in both cases. However, if you
+don't use the server-template, you avoid incurring the memory cost
+upfront. When every slot in the server-template is used, it equates to
+using the same number of server lines in a backend.
+
+The runtime API provides the ability to add and delete servers
+dynamically. Given this API capability, there is no compelling reason
+to use the server-template feature.
+"
 
 generate_pivot_table() {
     local algorithm=$1
@@ -59,8 +75,8 @@ SELECT
   servers as "#servers",
   "ST=0 T4 RSS",
   "ST=1 T4 RSS",
-  "ST=0 T64 RSS"
-  "ST=1 T64 RSS",
+  "ST=0 T64 RSS",
+  "ST=1 T64 RSS"
 FROM ranked_results
 ORDER BY backends, servers;
 EOF
