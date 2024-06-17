@@ -14,7 +14,7 @@ my $use_server_template = 1; # Default to using server-template
 
 GetOptions(
     'use-server-template!' => \$use_server_template,
-    ) or die "Error in command line arguments\n";
+) or die "Error in command line arguments\n";
 
 sub gen_config {
     my ($maxconn, $nbthread, $backends, $balance_algorithm, $weight, $nservers, $use_server_template, $fh) = @_;
@@ -117,7 +117,11 @@ sub haproxy_config_loaded {
 }
 
 sub kill_haproxy {
-    run_command_and_wait("pkill -f $haproxy");
+    my $haproxy_pid = haproxy_config_loaded();
+    if ($haproxy_pid) {
+        run_command_and_wait("pkill -TERM -P $haproxy_pid");
+        run_command_and_wait("pkill -TERM $haproxy_pid");
+    }
     run_command_and_wait("pkill -f $haproxy");
 }
 
@@ -167,13 +171,11 @@ sub launch_haproxy {
             }
         }
 
-        # Update the consecutive same memory count or reset if
-        # changed.
+        # Update the consecutive same memory count or reset if changed.
         if (defined $previous_memory && $current_memory == $previous_memory) {
             $consecutive_same_memory++;
         } else {
-            # Reset to 1 because we have 1 occurrence of this new
-            # memory amount.
+            # Reset to 1 because we have 1 occurrence of this new memory amount.
             $consecutive_same_memory = 1;
         }
 
@@ -184,30 +186,25 @@ sub launch_haproxy {
         $total_attempts++;
         print STDERR "Attempt $total_attempts: $consecutive_same_memory consecutive readings of $current_memory kB\n";
 
-        # Check if consecutive readings meet the required count to
-        # conclude stability.
+        # Check if consecutive readings meet the required count to conclude stability.
         if ($consecutive_same_memory >= 5) {
             print STDERR "Memory usage is stable.\n";
             # Exit the while loop early if memory is stable.
             last;
         }
 
-        # Sleep between pmap attempts to allow for possible changes in
-        # memory usage.
-        sleep(int($total_attempts / 5) + 2);
+        # Sleep between pmap attempts to allow for possible changes in memory usage.
+        # sleep(int($total_attempts / 5) + 2);
 
-        # Reset and continue if a set of 5 attempts completes without
-        # 5 consecutive same readings.
+        # Reset and continue if a set of 5 attempts completes without 5 consecutive same readings.
         if ($total_attempts % 5 == 0 && $consecutive_same_memory < 5) {
             print STDERR "Retrying for another set of 5 attempts.\n";
-            # Explicit reset here is not necessary but is kept for
-            # clarity.
+            # Explicit reset here is not necessary but is kept for clarity.
             $consecutive_same_memory = 0;
         }
     }
 
-    # Handle cases where memory did not stabilize after maximum
-    # retries.
+    # Handle cases where memory did not stabilise after maximum retries.
     die "Memory usage did not stabilise after $max_retries sets of attempts.\n" if $consecutive_same_memory < 5;
 
     my $rss_mb = int($previous_memory / 1024);
