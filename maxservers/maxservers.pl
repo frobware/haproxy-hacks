@@ -1,26 +1,33 @@
 #!/usr/bin/env perl
 
+use strict;
+use warnings;
+use Data::Dumper;
+use Getopt::Long;
+
 $| = 1;
 
-use strict;
-use Data::Dumper;
-
 my $haproxy = "ocp-haproxy-2.8.5";
+my $config_file = "/tmp/haproxy.config";
+my $stats_socket = '/tmp/haproxy.sock';
+my $use_server_template = 1; # Default to using server-template
+
+GetOptions(
+    'use-server-template!' => \$use_server_template,
+    ) or die "Error in command line arguments\n";
 
 sub gen_config {
-    my ($maxconn, $nbthread, $backends, $balance_algorithm, $weight, $nservers, $fh) = @_;
-
+    my ($maxconn, $nbthread, $backends, $balance_algorithm, $weight, $nservers, $use_server_template, $fh) = @_;
     $fh->autoflush(1);
 
     print $fh "
 global
   daemon
-  stats socket /tmp/haproxy.sock mode 600 level admin
+  stats socket $stats_socket mode 600 level admin
   stats timeout 2m
 ";
 
-    undef $maxconn if $maxconn eq "auto";
-    print $fh "  maxconn $maxconn\n" if $maxconn > 0;
+    print $fh "  maxconn $maxconn\n" if $maxconn ne 'auto' && $maxconn > 0;
     print $fh "  nbthread $nbthread\n" if $nbthread > 0;
 
     print $fh "
@@ -50,17 +57,25 @@ listen stats
 frontend alive-${i}
   bind unix@/tmp/haproxy-frontend-${i}.sock
 \n";
-
     }
 
     for my $i (1..$backends) {
         print $fh "
 backend backend-$i
-    balance $balance_algorithm";
-        print $fh "
-    server-template _dynamic-pod- 1-$nservers 172.4.0.4:8765 check disabled
-"
-            if $nservers > 0;
+  balance $balance_algorithm";
+
+        if ($use_server_template) {
+            print $fh "
+  server-template _dynamic-pod- 1-$nservers 172.4.0.4:8765 check disabled
+" if $nservers > 0;
+        } else {
+            for my $j (1..$nservers) {
+                my $ip = sprintf("172.4.%d.%d", int(($j - 1) / 255), ($j - 1) % 255 + 1);
+                print $fh "
+  server server-$j $ip:8765 check disabled";
+            }
+            print $fh "\n";
+        }
     }
 
     print $fh "\n";
@@ -72,15 +87,10 @@ sub run_command_and_wait {
     my $pid = fork();
 
     if ($pid == 0) {
-        # This is the child process.
         exec($cmd);
-        # If exec fails, exit with a non-zero status.
         exit(1);
     } elsif ($pid > 0) {
-        # This is the parent process.
-        # Wait for the child process to terminate.
         waitpid($pid, 0);
-        # Check the exit status of the child process.
         if ($? == -1) {
             print "Failed to execute: $!\n";
             return -1;
@@ -89,53 +99,48 @@ sub run_command_and_wait {
                 ($? & 127),  ($? & 128) ? 'with' : 'without';
             return -1;
         } else {
-            my $exit_code = $? >> 8;
-            return $exit_code;
+            return $? >> 8;
         }
     } else {
-        # Fork failed.
         die "Failed to fork: $!";
     }
 }
 
 sub haproxy_config_loaded {
-    my $stats_socket = '/tmp/haproxy.sock';
     my $cmd = 'show info';
     my $output = `echo "$cmd" | socat $stats_socket stdio 2>/dev/null`;
     if ($output =~ /Pid:\s*(\d+)/) {
-        return $1;              # Return the PID if found
+        return $1;
     } else {
-        return 0;               # Return false if PID not found
+        return 0;
     }
 }
 
+sub kill_haproxy {
+    run_command_and_wait("pkill -f $haproxy");
+    run_command_and_wait("pkill -f $haproxy");
+}
+
 sub launch_haproxy {
-    if (-e '/tmp/haproxy.sock') {
-        unlink '/tmp/haproxy.sock'
-            or die "Failed to delete socket: $!";
-    }
+    unlink $stats_socket if -e $stats_socket;
 
     my $filename = shift;
     my $haproxy_cmd = "$haproxy -f $filename";
     my $exit_status = run_command_and_wait($haproxy_cmd);
     if ($exit_status != 0) {
-        print "HAProxy failed to start. Exit status: $exit_status\n";
-        exit($exit_status);
+        die "HAProxy failed to start. Exit status: $exit_status\n";
     }
 
     # Wait for HAProxy to be ready.
-    my $socket_ready = 0;
     for (my $i = 0; $i < 60; $i++) {
-        if (-e '/tmp/haproxy.sock') {
-            $socket_ready = 1;
+        if (-e $stats_socket) {
             last;
         }
         sleep 1;
     }
 
-    die "HAProxy management socket not available" unless $socket_ready;
+    die "HAProxy management socket not available" unless -e $stats_socket;
 
-    # Wait for HAProxy to load the configuration.
     for (my $i = 0; $i < 60; $i++) {
         last if haproxy_config_loaded();
         sleep 1;
@@ -157,8 +162,7 @@ sub launch_haproxy {
 
         foreach my $line (@output) {
             if ($line =~ /total kB\s+\d+\s+(\d+)\s+\d+/) {
-                my $rss_kb = $1;
-                $current_memory = $rss_kb;
+                $current_memory = $1;
                 last;
             }
         }
@@ -190,7 +194,7 @@ sub launch_haproxy {
 
         # Sleep between pmap attempts to allow for possible changes in
         # memory usage.
-        sleep(int($total_attempts / 5) + 1);
+        sleep(int($total_attempts / 5) + 2);
 
         # Reset and continue if a set of 5 attempts completes without
         # 5 consecutive same readings.
@@ -204,9 +208,7 @@ sub launch_haproxy {
 
     # Handle cases where memory did not stabilize after maximum
     # retries.
-    if ($consecutive_same_memory < 5) {
-        die "Memory usage did not stabilize after $max_retries sets of attempts.\n";
-    }
+    die "Memory usage did not stabilise after $max_retries sets of attempts.\n" if $consecutive_same_memory < 5;
 
     my $rss_mb = int($previous_memory / 1024);
     return ($previous_memory, $rss_mb);
@@ -225,18 +227,14 @@ for my $weight (@weights) {
             for my $nservers (@nservers) {
                 for my $nbthread (@nbthreads) {
                     for my $maxconn (@max_connections) {
-                        my $filename = "/tmp/haproxy.config";
-                        # Kill any old process.
-                        run_command_and_wait("pkill -f $haproxy");
-                        run_command_and_wait("pkill -f $haproxy");
-                        open(my $fh, '>', $filename) or die "Could not open file $filename: $!";
-                        gen_config($maxconn, $nbthread, $backends, $balance_algorithm, $weight, $nservers, $fh);
-                        close($fh) or die "Could not close file $filename: $!";
-                        my ($kb, $mb) = launch_haproxy($filename);
-                        print "$weight $balance_algorithm $backends $nservers $nbthread $kb $mb\n";
-                        # my $pause_for_interative_poking = <>;
-                        run_command_and_wait("pkill -f $haproxy");
-                        run_command_and_wait("pkill -f $haproxy");
+                        print STDERR "Testing: weight=$weight, algorithm=$balance_algorithm, backends=$backends, servers=$nservers, threads=$nbthread, maxconn=$maxconn, use_server_template=$use_server_template\n";
+                        kill_haproxy();
+                        open(my $fh, '>', $config_file) or die "Could not open file $config_file: $!";
+                        gen_config($maxconn, $nbthread, $backends, $balance_algorithm, $weight, $nservers, $use_server_template, $fh);
+                        close($fh) or die "Could not close file $config_file: $!";
+                        my ($kb, $mb) = launch_haproxy($config_file);
+                        print "$weight $balance_algorithm $backends $nservers $nbthread $kb $mb $use_server_template\n";
+                        kill_haproxy();
                     }
                 }
             }

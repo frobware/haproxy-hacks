@@ -1,0 +1,18 @@
+# Apply with: $ sudo ansible-playbook pam-limits.yaml -i localhost, --connection=local
+---
+- name: update nofile limit
+  hosts: all
+  tasks:
+    - name: Add or modify nofile soft limit for all users
+      community.general.pam_limits:
+        domain: '*'
+        limit_type: soft
+        limit_item: nofile
+        value: 3145728
+    - name: Add or modify nofile hard limit for all users
+      community.general.pam_limits:
+        domain: '*'
+        limit_type: hard
+        limit_item: nofile
+        value: 3145728
+        use_max: true
