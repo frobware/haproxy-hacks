@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+./maxservers.pl --use-server-template > results-use-server-template
+./maxservers.pl --no-use-server-template > results-no-use-server-template
+
+cat results-use-server-template results-no-use-server-template > results
