@@ -1,0 +1,57 @@
+From 5a45f2ffa5d3624a910f15de32eb7feee7c9a253 Mon Sep 17 00:00:00 2001
+From: Andrew McDermott <amcdermo@redhat.com>
+Date: Thu, 27 Jun 2024 13:22:11 +0100
+Subject: haproxy.spec: Optionally enable debug builds
+
+Add a new build type variable to switch between 'debug' and 'release'
+builds. The default build type is 'release'. In 'debug' mode, adjust the
+compilation flags to create a binary suitable for debugging with gdb.
+This allows inspection of variables and function parameters.
+
+Usage:
+$ rpmbuild --define '_build_type debug' -ba haproxy.spec
+
+Modify %optflags and %__global_ldflags in 'debug' mode to include
+debugging information and disable optimisations.
+---
+ haproxy.spec | 17 +++++++++++++++++
+ 1 file changed, 17 insertions(+)
+
+diff --git a/haproxy.spec b/haproxy.spec
+index 320877f..2e754f2 100644
+--- a/haproxy.spec
++++ b/haproxy.spec
+@@ -6,6 +6,18 @@
+ 
+ %global _hardened_build 1
+ 
++# The variable _build_type allows switching between 'debug' and
++# 'release' builds. The default is 'release'.
++#
++# In 'debug' mode, the compilation flags are adjusted to create a
++# binary suitable for debugging with gdb. 'debug' mode ensures
++# variables and function parameters can be inspected.
++#
++# Usage:
++#
++# $ rpmbuild --define '_build_type debug' -ba haproxy.spec
++%global build_type %{?_build_type}%{!?_build_type:release}
++
+ %define real_name haproxy28
+ 
+ Name:           haproxy
+@@ -62,6 +74,11 @@ regparm_opts=
+ regparm_opts="USE_REGPARM=1"
+ %endif
+ 
++%if "%{build_type}" == "debug"
++%define optflags -g -ggdb3 -fno-inline -fno-omit-frame-pointer -O0
++%define __global_ldflags -g -ggdb3
++%endif
++
+ %{__make} %{?_smp_mflags} CPU="generic" TARGET="linux-glibc" USE_OPENSSL=1 USE_PCRE=1 USE_ZLIB=1 USE_CRYPT_H=1 USE_LINUX_TPROXY=1 USE_GETADDRINFO=1 ${regparm_opts} ADDINC="%{optflags}" ADDLIB="%{__global_ldflags}"
+ 
+ %install
+-- 
+2.43.5
+
