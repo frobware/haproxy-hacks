@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ocpbugs40850-edge
+  labels:
+    app: ocpbugs40850-test
+spec:
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: ocpbugs40850-test
+    weight: 100
+  wildcardPolicy: None

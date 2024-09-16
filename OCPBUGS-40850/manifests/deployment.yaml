@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ocpbugs40850-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ocpbugs40850-test
+  template:
+    metadata:
+      labels:
+        app: ocpbugs40850-test
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+      - name: ocpbugs40850-test
+        image: quay.io/amcdermo/ocpbugs40850-server:latest
+        imagePullPolicy: Always
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+          name: "http"
+        volumeMounts:
+        - mountPath: /etc/serving-cert
+          name: cert
+      volumes:
+      - name: cert
+        secret:
+          secretName: serving-cert-ocpbugs40850-test
