@@ -1,0 +1,6 @@
+FROM registry.access.redhat.com/ubi9/ubi-minimal
+RUN microdnf update -y && microdnf install -y procps-ng
+COPY server /server
+# 65532 is numeric for nonroot
+USER 65532:65532
+ENTRYPOINT ["/server"]

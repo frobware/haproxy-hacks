@@ -25,14 +25,32 @@ spec:
             - ALL
           seccompProfile:
             type: RuntimeDefault
+        env:
+        - name: HEALTH_PORT
+          value: "1050"
+        - name: SINGLE_TE_PORT
+          value: "1030"
+        - name: DUPLICATE_TE_PORT
+          value: "1040"
         ports:
-        - containerPort: 8080
+        - containerPort: 1030
           protocol: TCP
-          name: "http"
-        volumeMounts:
-        - mountPath: /etc/serving-cert
-          name: cert
-      volumes:
-      - name: cert
-        secret:
-          secretName: serving-cert-ocpbugs40850-test
+          name: "single-te"
+        - containerPort: 1040
+          protocol: TCP
+          name: "duplicate-te"
+        - containerPort: 1050
+          protocol: TCP
+          name: "health-port"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 1050
+          initialDelaySeconds: 1
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 1050
+          initialDelaySeconds: 1
+          periodSeconds: 10
