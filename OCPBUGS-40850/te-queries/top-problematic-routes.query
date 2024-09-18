@@ -1,0 +1,4 @@
+# This query finds the top 5 routes by namespace with the highest
+# number of duplicate Transfer-Encoding headers detected in the
+# specified duration.
+topk(5, sum by (namespace, route) (increase(haproxy_backend_te_duplicate_detected[{{DURATION}}]))) > 0

@@ -35,3 +35,61 @@ spec:
     name: ocpbugs40850-test
     weight: 100
   wildcardPolicy: None
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ocpbugs40850-duplicate-te2
+  labels:
+    app: ocpbugs40850-test
+spec:
+  port:
+    targetPort: duplicate-te
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: ocpbugs40850-test
+    weight: 100
+  wildcardPolicy: None
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ocpbugs40850-duplicate-te3
+  labels:
+    app: ocpbugs40850-test
+spec:
+  port:
+    targetPort: duplicate-te
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: ocpbugs40850-test
+    weight: 100
+  wildcardPolicy: None
+
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: ocpbugs40850-duplicate-te4
+  labels:
+    app: ocpbugs40850-test
+spec:
+  port:
+    targetPort: duplicate-te
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  to:
+    kind: Service
+    name: ocpbugs40850-test
+    weight: 100
+  wildcardPolicy: None
+

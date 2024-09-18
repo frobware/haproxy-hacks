@@ -18,5 +18,6 @@ fullchain.pem
 key.pem
 tls.crt
 tls.key
-server
 /OCPBUGS-32044/.direnv/
+/OCPBUGS-40850/server/server
+/NE-1444/server/

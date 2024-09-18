@@ -1,0 +1,5 @@
+# This query shows the actual increase in duplicate Transfer-Encoding
+# headers detected for each route by namespace over the specified
+# duration, only returning routes where the increase is greater than
+# 0.
+sum by (namespace, route) (increase(haproxy_backend_te_duplicate_detected[{{DURATION}}])) > 0
