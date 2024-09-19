@@ -8,11 +8,10 @@
 
 set -eu
 
-# Placeholder for duration in the query file.
 duration_placeholder="{{DURATION}}"
 
 usage() {
-    echo "Usage: $0 [options] <query-file> [duration]"
+    echo "Usage: ${0##*/} [options] <query-file> [duration]"
     echo ""
     echo "Options:"
     echo "  -r, --raw    Output raw Prometheus query result (skip jq post-processing)"
@@ -22,30 +21,24 @@ usage() {
     echo "  [duration]    Optional duration to replace in the query (default: '1h')."
     echo ""
     echo "Examples:"
-    echo "  $0 /path/to/query-file.query 1d"
-    echo "  $0 --raw /path/to/query-file.query"
+    echo "  ${0##*/} /path/to/query-file.query 5m"
+    echo "  ${0##*/} --raw /path/to/query-file.query"
 }
 
-# Function to run a Prometheus query with optional duration substitution.
 query_prometheus() {
     local query_file=$1
     local duration=$2
 
-    # Read the query from the file, remove comments, and replace the
-    # placeholder with the actual duration.
     local query
     query=$(grep -v '^#' "$query_file" | tr '\n' ' ')
     query="${query//$duration_placeholder/$duration}"
 
-    # Perform the Prometheus query.
     curl -s -G 'http://localhost:9090/api/v1/query' --data-urlencode "query=$query"
 }
 
-# Main script starts here.
 jq_post_process=true
 duration="1h"
 
-# Parse options and arguments.
 while [[ $# -gt 0 ]]; do
     case $1 in
         -r|--raw)
@@ -64,7 +57,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Check if the query file exists.
 if [[ -z ${query_file:-} ]]; then
     usage
     exit 1
