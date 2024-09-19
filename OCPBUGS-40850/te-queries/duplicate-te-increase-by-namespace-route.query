@@ -2,4 +2,4 @@
 # headers detected for each route by namespace over the specified
 # duration, only returning routes where the increase is greater than
 # 0.
-sum by (namespace, route) (increase(haproxy_backend_te_duplicate_total[{{DURATION}}])) > 0
+sum by (namespace, route) (increase(haproxy_backend_duplicate_te_header_total[{{DURATION}}])) > 0
