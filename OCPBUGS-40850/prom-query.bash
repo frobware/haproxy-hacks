@@ -64,32 +64,26 @@ query_prometheus() {
     http_status=$(curl -s -w "%{http_code}" -G 'http://localhost:9090/api/v1/query' --data-urlencode "query=$query" -o /tmp/prom_response)
     curl_status=$?
 
-    # Check if curl command failed
     if [[ $curl_status -ne 0 ]]; then
         translate_curl_error $curl_status
         return 1
     fi
 
-    # Check if HTTP status code is not 200 (OK)
     if [[ $http_status -ne 200 ]]; then
         echo "HTTP request failed with status code: $http_status" >&2
         return 1
     fi
 
-    # Read the actual response content from temporary file
     local response
     response=$(cat /tmp/prom_response)
 
-    # Check if the response is valid JSON
     if ! echo "$response" | jq empty >/dev/null 2>&1; then
         echo "Invalid JSON response from Prometheus." >&2
         return 1
     fi
 
-    # Clean up temporary file
     rm -f /tmp/prom_response
 
-    # Return the valid JSON response
     echo "$response"
 }
 

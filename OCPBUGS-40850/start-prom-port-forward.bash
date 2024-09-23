@@ -6,7 +6,6 @@ prometheus_namespace="openshift-monitoring"
 pid_file="/tmp/prometheus_port_forward_pid"
 foreground=false  # By default, run in detached mode (background)
 
-# Check for -f flag
 while getopts "f" opt; do
     case $opt in
         f)
@@ -51,10 +50,8 @@ fi
 echo "Setting up port-forward to Prometheus pod: $prometheus_pod"
 
 if $foreground; then
-    # Run in the foreground
     oc port-forward -n "$prometheus_namespace" "$prometheus_pod" 9090:9090
 else
-    # Run in detached mode (background), logging both stdout and stderr to a temporary file
     log_file=$(mktemp /tmp/prometheus_port_forward_XXXXXX.log)
     echo "Logging output to $log_file"
 
@@ -64,7 +61,6 @@ else
     echo "Port forwarding pid: $port_forward_pid"
     echo $port_forward_pid > "$pid_file"
 
-    # Set up progress checking loop
     max_attempts=10
     attempt=0
     check_interval=2
@@ -76,7 +72,6 @@ else
             exit 1
         fi
 
-        # Check the Prometheus readiness endpoint
         http_status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9090/-/ready)
 
         if [ "$http_status" -eq 200 ]; then
