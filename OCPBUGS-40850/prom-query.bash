@@ -25,15 +25,72 @@ usage() {
     echo "  ${0##*/} --raw /path/to/query-file.query"
 }
 
+translate_curl_error() {
+    local curl_error=$1
+    case $curl_error in
+        6)  echo "Curl error: Could not resolve host." >&2 ;;
+        7)  echo "Curl error: Failed to connect to host." >&2 ;;
+        28) echo "Curl error: Operation timed out." >&2 ;;
+        35) echo "Curl error: SSL handshake failed." >&2 ;;
+        52) echo "Curl error: Empty response from server." >&2 ;;
+        56) echo "Curl error: Failure in receiving network data." >&2 ;;
+        *)  echo "Curl error: Unknown error (code: $curl_error)." >&2 ;;
+    esac
+}
+
 query_prometheus() {
     local query_file=$1
     local duration=$2
 
+    if [[ ! -f $query_file ]]; then
+        echo "Query file not found: $query_file" >&2
+        return 1
+    fi
+
     local query
     query=$(grep -v '^#' "$query_file" | tr '\n' ' ')
+
+    if [[ -z $query ]]; then
+        echo "Query is empty after processing: $query_file" >&2
+        return 1
+    fi
+
+    # Replace placeholder in the query
     query="${query//$duration_placeholder/$duration}"
 
-    curl -s -G 'http://localhost:9090/api/v1/query' --data-urlencode "query=$query"
+    # Execute curl and capture both status code and response
+    local http_status
+    local curl_status
+    http_status=$(curl -s -w "%{http_code}" -G 'http://localhost:9090/api/v1/query' --data-urlencode "query=$query" -o /tmp/prom_response)
+    curl_status=$?
+
+    # Check if curl command failed
+    if [[ $curl_status -ne 0 ]]; then
+        translate_curl_error $curl_status
+        return 1
+    fi
+
+    # Check if HTTP status code is not 200 (OK)
+    if [[ $http_status -ne 200 ]]; then
+        echo "HTTP request failed with status code: $http_status" >&2
+        return 1
+    fi
+
+    # Read the actual response content from temporary file
+    local response
+    response=$(cat /tmp/prom_response)
+
+    # Check if the response is valid JSON
+    if ! echo "$response" | jq empty >/dev/null 2>&1; then
+        echo "Invalid JSON response from Prometheus." >&2
+        return 1
+    fi
+
+    # Clean up temporary file
+    rm -f /tmp/prom_response
+
+    # Return the valid JSON response
+    echo "$response"
 }
 
 jq_post_process=true
