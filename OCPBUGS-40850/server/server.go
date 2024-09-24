@@ -11,6 +11,8 @@ import (
 )
 
 func handleConnection(conn net.Conn, duplicateTE bool) {
+	defer conn.Close()
+
 	fmt.Printf("%v: Connection from %s\n", conn.LocalAddr(), conn.RemoteAddr())
 
 	writer := bufio.NewWriter(conn)
@@ -20,6 +22,7 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 		response = fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
 			"Date: %s\r\n"+
 			"Content-Type: text/plain; charset=utf-8\r\n"+
+			"Connection: close\r\n"+ // Disable keep-alive
 			"Foo: Bar\r\n"+
 			"Foo: Baz\r\n"+
 			"Transfer-Encoding: chunked\r\n"+
@@ -32,6 +35,7 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 		response = fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
 			"Date: %s\r\n"+
 			"Content-Type: text/plain; charset=utf-8\r\n"+
+			"Connection: close\r\n"+ // Disable keep-alive
 			"Foo: Bar\r\n"+
 			"Foo: Baz\r\n"+
 			"Transfer-Encoding: chunked\r\n"+
@@ -64,15 +68,9 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 
 	// Make sure everything is written to the connection before
 	// closing.
-	err = writer.Flush()
-	if err != nil {
+	if err := writer.Flush(); err != nil {
 		fmt.Printf("%v: Error flushing data to connection: %v\n", conn.LocalAddr(), err)
 		return
-	}
-
-	// Explicitly close the connection and check for errors
-	if err := conn.Close(); err != nil {
-		fmt.Printf("%v: Error explicitly closing connection: %v\n", conn.LocalAddr(), err)
 	}
 }
 
