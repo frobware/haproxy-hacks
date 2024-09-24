@@ -1,6 +1,8 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-# Number of routes to create for each type (default is 3)
+set -eu
+
+# Number of routes to create for each type (default is 3).
 N=${1:-3}
 
 # Arrays for termination types and corresponding targetPorts.
@@ -8,15 +10,10 @@ termination_types=("edge" "reencrypt" "passthrough")
 target_ports_single_te=("single-te" "single-te-tls" "single-te-tls")
 target_ports_duplicate_te=("dup-te" "dup-te-tls" "dup-te-tls")
 
-# Loop for the number of routes (N) per type
 for i in $(seq 1 $N); do
-
-    # Loop through all termination types for single-te
     for j in ${!termination_types[@]}; do
         termination=${termination_types[$j]}
         targetPort=${target_ports_single_te[$j]}
-
-        # Generate routes for single-te
         cat <<-EOF
 ---
 apiVersion: route.openshift.io/v1
@@ -38,13 +35,9 @@ spec:
   wildcardPolicy: None
 EOF
     done
-
-    # Loop through all termination types for dup-te
     for j in ${!termination_types[@]}; do
         termination=${termination_types[$j]}
         targetPort=${target_ports_duplicate_te[$j]}
-
-        # Generate routes for dup-te
         cat <<-EOF
 ---
 apiVersion: route.openshift.io/v1
@@ -66,5 +59,4 @@ spec:
   wildcardPolicy: None
 EOF
     done
-
 done
