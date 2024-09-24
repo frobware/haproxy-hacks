@@ -4,16 +4,29 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
 	"time"
 )
 
+// handleConnection processes an incoming network connection, sending
+// an HTTP response that either includes or excludes duplicate
+// "Transfer-Encoding" headers, based on the duplicateTE flag. This
+// function simulates an HTTP response, manually writing headers and
+// chunked body data using a bufio.Writer.
+//
+// The reason we do not use http.ResponseWriter is that the Go HTTP
+// stack automatically sanitises headers, preventing the inclusion of
+// duplicate headers. For testing scenarios where we need to simulate
+// multiple "Transfer-Encoding" headers, we manually write the
+// response directly to the connection, giving us full control over
+// the headers.
 func handleConnection(conn net.Conn, duplicateTE bool) {
 	defer conn.Close()
 
-	fmt.Printf("%v: Connection from %s\n", conn.LocalAddr(), conn.RemoteAddr())
+	log.Printf("%v: Connection from %s\n", conn.LocalAddr(), conn.RemoteAddr())
 
 	writer := bufio.NewWriter(conn)
 
@@ -33,9 +46,8 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 		"Foo: Bar\r\n" +
 		"Set-Cookie: testcookie=value; path=/\r\n\r\n"
 
-	_, err := writer.WriteString(response)
-	if err != nil {
-		fmt.Printf("Error writing response headers: %v\n", err)
+	if _, err := writer.WriteString(response); err != nil {
+		log.Printf("%v: Error writing response headers: %v\n", conn.LocalAddr(), err)
 		return
 	}
 
@@ -43,19 +55,19 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 		"4\r\nTest\r\n",
 		"A\r\nHelloWorld\r\n",
 		"1\r\n\n\r\n",
-		"0\r\n\r\n", // Final chunk
+		"0\r\n\r\n",
 	}
 
 	for i := range chunks {
 		_, err := writer.WriteString(chunks[i])
 		if err != nil {
-			fmt.Printf("Error writing chunk: %v\n", err)
-			return
+			log.Printf("%v: Error writing chunk: %v\n", conn.LocalAddr(), err)
+			break
 		}
 	}
 
 	if err := writer.Flush(); err != nil {
-		fmt.Printf("%v: Error flushing data to connection: %v\n", conn.LocalAddr(), err)
+		log.Printf("%v: Error flushing data to connection: %v\n", conn.LocalAddr(), err)
 	}
 }
 
@@ -66,8 +78,7 @@ func startServer(port string, duplicateTE bool, useTLS bool) {
 	if useTLS {
 		cert, err := tls.LoadX509KeyPair("/etc/serving-cert/tls.crt", "/etc/serving-cert/tls.key")
 		if err != nil {
-			fmt.Printf("Error loading TLS certificate: %v\n", err)
-			os.Exit(1)
+			log.Fatalf("Error loading TLS certificate: %v\n", err)
 		}
 
 		config := &tls.Config{
@@ -80,64 +91,62 @@ func startServer(port string, duplicateTE bool, useTLS bool) {
 	}
 
 	if err != nil {
-		fmt.Printf("Error starting server on port %s: %v\n", port, err)
-		return
+		log.Fatalf("Error starting server on port %s: %v\n", port, err)
 	}
 
 	defer listener.Close()
 
-	fmt.Printf("Server is listening on :%s (useTLS=%v)\n", port, useTLS)
+	log.Printf("Server is listening on port %v (useTLS=%v)\n", port, useTLS)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Println("Error accepting connection:", err)
+			log.Printf("%v: Error accepting connection: %v\n", port, err)
 			continue
 		}
 		go handleConnection(conn, duplicateTE)
 	}
 }
 
-func healthCheckHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "OK")
-}
-
 func startHealthCheckServer(port string) {
-	http.HandleFunc("/healthz", healthCheckHandler)
-	fmt.Printf("Health check server is listening on :%s\n", port)
-	err := http.ListenAndServe(":"+port, nil)
-	if err != nil {
-		fmt.Printf("Error starting health check server: %v\n", err)
+	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "OK")
+	})
+
+	log.Printf("Health check server is listening on port %v\n", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		log.Fatalf("Error starting health check server: %v\n", err)
 	}
 }
 
 func main() {
-	port1 := os.Getenv("SINGLE_TE_PORT")
-	port2 := os.Getenv("DUPLICATE_TE_PORT")
-	tlsPort1 := os.Getenv("SINGLE_TE_TLS_PORT")
-	tlsPort2 := os.Getenv("DUPLICATE_TE_TLS_PORT")
+	singleTEPort := os.Getenv("SINGLE_TE_PORT")
+	duplicateTEPort := os.Getenv("DUPLICATE_TE_PORT")
+	singleTETLSPort := os.Getenv("SINGLE_TE_TLS_PORT")
+	duplicateTETLSPort := os.Getenv("DUPLICATE_TE_TLS_PORT")
 	healthCheckPort := os.Getenv("HEALTH_PORT")
 
-	if port1 == "" || port2 == "" || tlsPort1 == "" || tlsPort2 == "" || healthCheckPort == "" {
-		fmt.Println("Environment variables SINGLE_TE_PORT, DUPLICATE_TE_PORT, SINGLE_TE_TLS_PORT, DUPLICATE_TE_TLS_PORT, and HEALTH_PORT must be set")
+	if singleTEPort == "" || duplicateTEPort == "" || singleTETLSPort == "" || duplicateTETLSPort == "" || healthCheckPort == "" {
+		log.Fatalf("Environment variables SINGLE_TE_PORT, DUPLICATE_TE_PORT, SINGLE_TE_TLS_PORT, DUPLICATE_TE_TLS_PORT, and HEALTH_PORT must be set\n")
 		os.Exit(1)
 	}
 
-	// Start the first server (normal Transfer-Encoding, no TLS).
-	go startServer(port1, false, false)
+	// Start non-TLS server with single Transfer-Encoding.
+	go startServer(singleTEPort, false, false)
 
-	// Start the second server (duplicate Transfer-Encoding, no TLS).
-	go startServer(port2, true, false)
+	// Start non-TLS server with duplicate Transfer-Encoding.
+	go startServer(duplicateTEPort, true, false)
 
-	// Start the first TLS server (normal Transfer-Encoding, with TLS).
-	go startServer(tlsPort1, false, true)
+	// Start TLS server with single Transfer-Encoding.
+	go startServer(singleTETLSPort, false, true)
 
-	// Start the second TLS server (duplicate Transfer-Encoding, with TLS).
-	go startServer(tlsPort2, true, true)
+	// Start TLS server with duplicate Transfer-Encoding.
+	go startServer(duplicateTETLSPort, true, true)
 
 	// Start the health check server.
 	go startHealthCheckServer(healthCheckPort)
 
+	// Block forever (needed to keep the servers running).
 	select {}
 }
