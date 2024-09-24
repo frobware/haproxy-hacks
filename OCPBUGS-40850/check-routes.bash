@@ -20,7 +20,7 @@ oc get routes --no-headers -o custom-columns=HOST:.spec.host | while read -r hos
 
         read -r http_code <<< "$output"
 
-        if [ $http_code -ne 200 ]; then
+        if [ $http_code -eq 200 ]; then
             echo "$http_code $host"
         else
             echo "$http_code: **** $host check FAILED ****" >&2
