@@ -10,8 +10,8 @@ termination_types=("edge" "reencrypt" "passthrough")
 target_ports_single_te=("single-te" "single-te-tls" "single-te-tls")
 target_ports_duplicate_te=("dup-te" "dup-te-tls" "dup-te-tls")
 
-for i in $(seq 1 $N); do
-    for j in ${!termination_types[@]}; do
+for i in $(seq 1 "$N"); do
+    for j in "${!termination_types[@]}"; do
         termination=${termination_types[$j]}
         targetPort=${target_ports_single_te[$j]}
         cat <<-EOF
@@ -35,7 +35,7 @@ spec:
   wildcardPolicy: None
 EOF
     done
-    for j in ${!termination_types[@]}; do
+    for j in "${!termination_types[@]}"; do
         termination=${termination_types[$j]}
         targetPort=${target_ports_duplicate_te[$j]}
         cat <<-EOF
