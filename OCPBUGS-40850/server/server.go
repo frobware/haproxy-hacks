@@ -17,33 +17,21 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 
 	writer := bufio.NewWriter(conn)
 
-	var response string
+	response := fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
+		"Date: %s\r\n"+
+		"Content-Type: text/plain; charset=utf-8\r\n"+
+		"Connection: close\r\n"+
+		"Foo: Bar\r\n"+
+		"Foo: Baz\r\n"+
+		"Transfer-Encoding: chunked\r\n", time.Now().UTC().Format(time.RFC1123))
+
 	if duplicateTE {
-		response = fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
-			"Date: %s\r\n"+
-			"Content-Type: text/plain; charset=utf-8\r\n"+
-			"Connection: close\r\n"+ // Disable keep-alive
-			"Foo: Bar\r\n"+
-			"Foo: Baz\r\n"+
-			"Transfer-Encoding: chunked\r\n"+
-			"Transfer-Encoding: chunked\r\n"+ // Deliberate duplicate Transfer-Encoding header
-			"Foo: Baz\r\n"+
-			"Foo: Bar\r\n"+
-			"Set-Cookie: testcookie=value; path=/\r\n"+
-			"\r\n", time.Now().UTC().Format(time.RFC1123))
-	} else {
-		response = fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
-			"Date: %s\r\n"+
-			"Content-Type: text/plain; charset=utf-8\r\n"+
-			"Connection: close\r\n"+ // Disable keep-alive
-			"Foo: Bar\r\n"+
-			"Foo: Baz\r\n"+
-			"Transfer-Encoding: chunked\r\n"+
-			"Foo: Baz\r\n"+
-			"Foo: Bar\r\n"+
-			"Set-Cookie: testcookie=value; path=/\r\n"+
-			"\r\n", time.Now().UTC().Format(time.RFC1123))
+		response += "Transfer-Encoding: chunked\r\n"
 	}
+
+	response += "Foo: Baz\r\n" +
+		"Foo: Bar\r\n" +
+		"Set-Cookie: testcookie=value; path=/\r\n\r\n"
 
 	_, err := writer.WriteString(response)
 	if err != nil {
@@ -58,19 +46,16 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 		"0\r\n\r\n", // Final chunk
 	}
 
-	for _, chunk := range chunks {
-		_, err := writer.WriteString(chunk)
+	for i := range chunks {
+		_, err := writer.WriteString(chunks[i])
 		if err != nil {
 			fmt.Printf("Error writing chunk: %v\n", err)
 			return
 		}
 	}
 
-	// Make sure everything is written to the connection before
-	// closing.
 	if err := writer.Flush(); err != nil {
 		fmt.Printf("%v: Error flushing data to connection: %v\n", conn.LocalAddr(), err)
-		return
 	}
 }
 
