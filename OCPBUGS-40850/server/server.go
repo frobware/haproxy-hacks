@@ -59,8 +59,7 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 	}
 
 	for i := range chunks {
-		_, err := writer.WriteString(chunks[i])
-		if err != nil {
+		if _, err := writer.WriteString(chunks[i]); err != nil {
 			log.Printf("%v: Error writing chunk: %v\n", conn.LocalAddr(), err)
 			break
 		}
