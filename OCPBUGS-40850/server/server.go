@@ -71,40 +71,39 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 	}
 }
 
-func startServer(port string, duplicateTE bool, useTLS bool) {
-	var listener net.Listener
-	var err error
-
+func createListener(port string, useTLS bool) (net.Listener, error) {
 	if useTLS {
 		cert, err := tls.LoadX509KeyPair("/etc/serving-cert/tls.crt", "/etc/serving-cert/tls.key")
 		if err != nil {
-			log.Fatalf("Error loading TLS certificate: %v\n", err)
+			return nil, fmt.Errorf("error loading TLS certificate: %w", err)
 		}
 
 		config := &tls.Config{
 			Certificates: []tls.Certificate{cert},
 		}
-
-		listener, err = tls.Listen("tcp", ":"+port, config)
-	} else {
-		listener, err = net.Listen("tcp", ":"+port)
+		return tls.Listen("tcp", ":"+port, config)
 	}
 
+	return net.Listen("tcp", ":"+port)
+}
+
+func startServer(port string, servceDuplicateTransferEncodingHeader bool, useTLS bool) {
+	listener, err := createListener(port, useTLS)
 	if err != nil {
 		log.Fatalf("Error starting server on port %s: %v\n", port, err)
 	}
 
 	defer listener.Close()
 
-	log.Printf("Server is listening on port %v (useTLS=%v)\n", port, useTLS)
+	fmt.Printf("Server is listening on port %v (useTLS=%v)\n", port, useTLS)
 
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			log.Printf("%v: Error accepting connection: %v\n", port, err)
+			fmt.Println("Error accepting connection:", err)
 			continue
 		}
-		go handleConnection(conn, duplicateTE)
+		go handleConnection(conn, servceDuplicateTransferEncodingHeader)
 	}
 }
 
