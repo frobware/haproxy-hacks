@@ -12,7 +12,7 @@ spec:
     protocol: TCP
     port: 1030
     targetPort: 1030
-  - name: duplicate-te
+  - name: dup-te
     protocol: TCP
     port: 1040
     targetPort: 1040
@@ -20,3 +20,11 @@ spec:
     protocol: TCP
     port: 1050
     targetPort: 1050
+  - name: single-te-tls
+    protocol: TCP
+    port: 1060
+    targetPort: 1060
+  - name: dup-te-tls
+    protocol: TCP
+    port: 1070
+    targetPort: 1070

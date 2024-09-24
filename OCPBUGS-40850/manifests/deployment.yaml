@@ -32,25 +32,42 @@ spec:
           value: "1030"
         - name: DUPLICATE_TE_PORT
           value: "1040"
+        - name: SINGLE_TE_TLS_PORT
+          value: "1060"
+        - name: DUPLICATE_TE_TLS_PORT
+          value: "1070"
         ports:
         - containerPort: 1030
           protocol: TCP
           name: "single-te"
         - containerPort: 1040
           protocol: TCP
-          name: "duplicate-te"
+          name: "dup-te"
         - containerPort: 1050
           protocol: TCP
-          name: "health-port"
+          name: "health"
+        - containerPort: 1060
+          protocol: TCP
+          name: "single-te-tls"
+        - containerPort: 1070
+          protocol: TCP
+          name: "dup-te-tls"
         readinessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 1050
           initialDelaySeconds: 1
           periodSeconds: 10
         livenessProbe:
           httpGet:
-            path: /
+            path: /healthz
             port: 1050
           initialDelaySeconds: 1
           periodSeconds: 10
+        volumeMounts:
+        - mountPath: /etc/serving-cert
+          name: cert
+      volumes:
+      - name: cert
+        secret:
+          secretName: serving-cert-ocpbugs40850-test
