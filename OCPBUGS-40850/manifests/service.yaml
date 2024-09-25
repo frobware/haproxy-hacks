@@ -8,23 +8,11 @@ spec:
   selector:
     app: ocpbugs40850-test
   ports:
-  - name: single-te
+  - name: http
     protocol: TCP
-    port: 1030
-    targetPort: 1030
-  - name: dup-te
+    port: 80
+    targetPort: 8080
+  - name: https
     protocol: TCP
-    port: 1040
-    targetPort: 1040
-  - name: health-port
-    protocol: TCP
-    port: 1050
-    targetPort: 1050
-  - name: single-te-tls
-    protocol: TCP
-    port: 1060
-    targetPort: 1060
-  - name: dup-te-tls
-    protocol: TCP
-    port: 1070
-    targetPort: 1070
+    port: 443
+    targetPort: 8443

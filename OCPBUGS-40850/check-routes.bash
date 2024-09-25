@@ -13,7 +13,7 @@ oc get routes --no-headers -o custom-columns=HOST:.spec.host | while read -r hos
         # curl version 8.5.0 and earlier allowed duplicate
         # Transfer-Encoding headers. Later versions started rejecting
         # these headers.
-        output=$(${CURL:-curl-8.5.0} --no-keepalive -L -I -sS -o /dev/null -w "%{http_code}" -k "https://${host}")
+        output=$(${CURL:-curl-8.5.0} --no-keepalive -L -I -sS -o /dev/null -w "%{http_code}" -k "https://${host}/healthz")
         if [ $? -ne 0 ]; then
             exit $?
         fi

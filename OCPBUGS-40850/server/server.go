@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"time"
 )
@@ -23,38 +22,92 @@ import (
 // multiple "Transfer-Encoding" headers, we manually write the
 // response directly to the connection, giving us full control over
 // the headers.
-func handleConnection(conn net.Conn, duplicateTE bool) {
+func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
 	log.Printf("%v: Connection from %s\n", conn.LocalAddr(), conn.RemoteAddr())
 
+	reader := bufio.NewReader(conn)
 	writer := bufio.NewWriter(conn)
 
+	// Read the request line (e.g., "GET /duplicate-te HTTP/1.1").
+	requestLine, err := reader.ReadString('\n')
+	if err != nil {
+		log.Printf("%v: Error reading request line: %v\n", conn.LocalAddr(), err)
+		return
+	}
+
+	log.Printf("%v: Received request: %s", conn.LocalAddr(), requestLine)
+
+	// Split the request line to get the method, path, and protocol.
+	var method, path, protocol string
+	_, err = fmt.Sscanf(requestLine, "%s %s %s", &method, &path, &protocol)
+	if err != nil {
+		log.Printf("%v: Error parsing request line: %v\n", conn.LocalAddr(), err)
+		return
+	}
+
+	switch path {
+	case "/healthz":
+		healthResponse := "HTTP/1.1 200 OK\r\n" +
+			"Content-Type: text/plain\r\n" +
+			"Connection: close\r\n\r\n" +
+			"OK\r\n"
+		if _, err := writer.WriteString(healthResponse); err != nil {
+			log.Printf("%v: Error writing /healthz response: %v\n", conn.LocalAddr(), err)
+		}
+		writer.Flush()
+		return
+
+	case "/single-te":
+		handleSingleTE(conn, writer)
+
+	case "/duplicate-te":
+		handleDuplicateTE(conn, writer)
+
+	default:
+		notFoundResponse := "HTTP/1.1 404 Not Found\r\n" +
+			"Content-Type: text/plain\r\n" +
+			"Connection: close\r\n\r\n" +
+			"404 page not found\r\n"
+		if _, err := writer.WriteString(notFoundResponse); err != nil {
+			log.Printf("%v: Error writing 404 response: %v\n", conn.LocalAddr(), err)
+		}
+		writer.Flush()
+		return
+	}
+
+	if err := writer.Flush(); err != nil {
+		log.Printf("%v: Error flushing data to connection: %v\n", conn.LocalAddr(), err)
+	}
+}
+
+// handleSingleTE handles the response for the /single-te path.
+func handleSingleTE(conn net.Conn, writer *bufio.Writer) {
 	response := fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
 		"Date: %s\r\n"+
 		"Content-Type: text/plain; charset=utf-8\r\n"+
 		"Connection: close\r\n"+
-		"Foo: Bar\r\n"+
-		"Foo: Baz\r\n"+
-		"Transfer-Encoding: chunked\r\n", time.Now().UTC().Format(time.RFC1123))
-
-	if duplicateTE {
-		response += "Transfer-Encoding: chunked\r\n"
-	}
-
-	response += "Foo: Baz\r\n" +
-		"Foo: Bar\r\n" +
-		"Set-Cookie: testcookie=value; path=/\r\n\r\n"
+		"Transfer-Encoding: chunked\r\n\r\n", time.Now().UTC().Format(time.RFC1123))
 
 	if _, err := writer.WriteString(response); err != nil {
-		log.Printf("%v: Error writing response headers: %v\n", conn.LocalAddr(), err)
+		log.Printf("%v: Error writing single-te response headers: %v\n", conn.LocalAddr(), err)
 		return
 	}
 
+	// Form the chunked response
 	chunks := []string{
-		"4\r\nTest\r\n",
-		"A\r\nHelloWorld\r\n",
-		"1\r\n\n\r\n",
+		// First chunk:
+		// - 'A' is the hexadecimal representation of 10 (the length of "single-te\n").
+		// - \r\n separates the chunk size from the chunk data.
+		// - "single-te\n" is the chunk data (the \n is included in the chunk data).
+		// - \r\n terminates the chunk.
+		"A\r\nsingle-te\n\r\n",
+
+		// Final chunk:
+		// - '0' indicates a chunk of zero length, signaling the end of the chunked message.
+		// - The first \r\n separates the chunk size (0) from what would be the chunk data.
+		// - The second \r\n terminates the zero-length chunk and the entire chunked message.
 		"0\r\n\r\n",
 	}
 
@@ -64,9 +117,42 @@ func handleConnection(conn net.Conn, duplicateTE bool) {
 			break
 		}
 	}
+}
 
-	if err := writer.Flush(); err != nil {
-		log.Printf("%v: Error flushing data to connection: %v\n", conn.LocalAddr(), err)
+// handleDuplicateTE handles the response for the /duplicate-te path.
+func handleDuplicateTE(conn net.Conn, writer *bufio.Writer) {
+	response := fmt.Sprintf("HTTP/1.1 200 OK\r\n"+
+		"Date: %s\r\n"+
+		"Content-Type: text/plain; charset=utf-8\r\n"+
+		"Connection: close\r\n"+
+		"Transfer-Encoding: chunked\r\n"+
+		"Transfer-Encoding: chunked\r\n\r\n", time.Now().UTC().Format(time.RFC1123))
+
+	if _, err := writer.WriteString(response); err != nil {
+		log.Printf("%v: Error writing duplicate-te response headers: %v\n", conn.LocalAddr(), err)
+		return
+	}
+
+	chunks := []string{
+		// First chunk:
+		// - 'D' is the hexadecimal representation of 13 (the length of "duplicate-te\n").
+		// - \r\n separates the chunk size from the chunk data.
+		// - "duplicate-te\n" is the chunk data (note the \n is part of the data).
+		// - \r\n terminates the chunk.
+		"D\r\nduplicate-te\n\r\n",
+
+		// Final chunk:
+		// - '0' indicates a chunk of zero length, signaling the end of the chunked message.
+		// - The first \r\n separates the chunk size (0) from what would be the chunk data.
+		// - The second \r\n terminates the zero-length chunk and the entire chunked message.
+		"0\r\n\r\n",
+	}
+
+	for i := range chunks {
+		if _, err := writer.WriteString(chunks[i]); err != nil {
+			log.Printf("%v: Error writing chunk: %v\n", conn.LocalAddr(), err)
+			break
+		}
 	}
 }
 
@@ -86,7 +172,7 @@ func createListener(port string, useTLS bool) (net.Listener, error) {
 	return net.Listen("tcp", ":"+port)
 }
 
-func startServer(port string, servceDuplicateTransferEncodingHeader bool, useTLS bool) {
+func startServer(port string, useTLS bool) {
 	listener, err := createListener(port, useTLS)
 	if err != nil {
 		log.Fatalf("Error starting server on port %s: %v\n", port, err)
@@ -102,48 +188,24 @@ func startServer(port string, servceDuplicateTransferEncodingHeader bool, useTLS
 			fmt.Println("Error accepting connection:", err)
 			continue
 		}
-		go handleConnection(conn, servceDuplicateTransferEncodingHeader)
-	}
-}
-
-func startHealthCheckServer(port string) {
-	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintln(w, "OK")
-	})
-
-	log.Printf("Health check server is listening on port %v\n", port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatalf("Error starting health check server: %v\n", err)
+		go handleConnection(conn)
 	}
 }
 
 func main() {
-	singleTEPort := os.Getenv("SINGLE_TE_PORT")
-	duplicateTEPort := os.Getenv("DUPLICATE_TE_PORT")
-	singleTETLSPort := os.Getenv("SINGLE_TE_TLS_PORT")
-	duplicateTETLSPort := os.Getenv("DUPLICATE_TE_TLS_PORT")
-	healthCheckPort := os.Getenv("HEALTH_PORT")
+	httpPort := os.Getenv("HTTP_PORT")
+	httpsPort := os.Getenv("HTTPS_PORT")
 
-	if singleTEPort == "" || duplicateTEPort == "" || singleTETLSPort == "" || duplicateTETLSPort == "" || healthCheckPort == "" {
-		log.Fatalf("Environment variables SINGLE_TE_PORT, DUPLICATE_TE_PORT, SINGLE_TE_TLS_PORT, DUPLICATE_TE_TLS_PORT, and HEALTH_PORT must be set\n")
+	if httpPort == "" || httpsPort == "" {
+		log.Fatalf("Environment variables HTTP_PORT and HTTPS_PORT must be set\n")
 		os.Exit(1)
 	}
 
-	// Start non-TLS server with single Transfer-Encoding.
-	go startServer(singleTEPort, false, false)
+	// Start non-TLS server handling all paths, including /healthz
+	go startServer(httpPort, false)
 
-	// Start non-TLS server with duplicate Transfer-Encoding.
-	go startServer(duplicateTEPort, true, false)
-
-	// Start TLS server with single Transfer-Encoding.
-	go startServer(singleTETLSPort, false, true)
-
-	// Start TLS server with duplicate Transfer-Encoding.
-	go startServer(duplicateTETLSPort, true, true)
-
-	// Start the health check server.
-	go startHealthCheckServer(healthCheckPort)
+	// Start TLS server handling all paths, including /healthz
+	go startServer(httpsPort, true)
 
 	// Block forever (needed to keep the servers running).
 	select {}

@@ -26,42 +26,27 @@ spec:
           seccompProfile:
             type: RuntimeDefault
         env:
-        - name: HEALTH_PORT
-          value: "1050"
-        - name: SINGLE_TE_PORT
-          value: "1030"
-        - name: DUPLICATE_TE_PORT
-          value: "1040"
-        - name: SINGLE_TE_TLS_PORT
-          value: "1060"
-        - name: DUPLICATE_TE_TLS_PORT
-          value: "1070"
+        - name: HTTP_PORT
+          value: "8080"
+        - name: HTTPS_PORT
+          value: "8443"
         ports:
-        - containerPort: 1030
+        - containerPort: 8080
           protocol: TCP
-          name: "single-te"
-        - containerPort: 1040
+          name: "http"
+        - containerPort: 8443
           protocol: TCP
-          name: "dup-te"
-        - containerPort: 1050
-          protocol: TCP
-          name: "health"
-        - containerPort: 1060
-          protocol: TCP
-          name: "single-te-tls"
-        - containerPort: 1070
-          protocol: TCP
-          name: "dup-te-tls"
+          name: "https"
         readinessProbe:
           httpGet:
             path: /healthz
-            port: 1050
+            port: 8080
           initialDelaySeconds: 1
           periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 1050
+            port: 8080
           initialDelaySeconds: 1
           periodSeconds: 10
         volumeMounts:
