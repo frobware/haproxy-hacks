@@ -265,17 +265,15 @@ func healthzHandler(w *connResponseWriter, method string) {
 	}
 }
 
-// handleSingleTE sends a response with a single Transfer-Encoding header using Header().
+// handleSingleTE sends a response with a single Transfer-Encoding header.
 func handleSingleTE(w *connResponseWriter) {
 	w.Header().Set("Date", time.Now().UTC().Format(time.RFC1123))
 	w.Header().Set("Content-Type", "text/plain")
 	w.Header().Set("Connection", "close")
 	w.Header().Set("Transfer-Encoding", "chunked")
 
-	// Write the headers and status code
 	w.WriteHeader(http.StatusOK)
 
-	// Write chunks using helper functions
 	writeChunks(w, []string{
 		// First chunk:
 		// - 'A' is the hexadecimal representation of 10 (the length of "single-te\n").
@@ -293,7 +291,7 @@ func handleSingleTE(w *connResponseWriter) {
 }
 
 // handleDuplicateTE sends a response with duplicate Transfer-Encoding
-// headers using Header().
+// headers.
 func handleDuplicateTE(w *connResponseWriter) {
 	w.Header().Set("Date", time.Now().UTC().Format(time.RFC1123))
 	w.Header().Set("Content-Type", "text/plain")
