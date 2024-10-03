@@ -105,12 +105,6 @@ func (w *connResponseWriter) logResponseData(data string) {
 	log.Printf(prefix + "Body: " + strings.TrimSpace(data))
 }
 
-// replaceNewlines replaces all newlines in a string with their
-// literal "\n" representation for clearer logging.
-func replaceNewlines(data string) string {
-	return fmt.Sprintf("%q", data)
-}
-
 // formatStackTrace converts a slice of runtime.Frame into a slice of
 // formatted strings. Each string represents a stack frame with the
 // function name, file name, and line number.
