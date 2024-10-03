@@ -27,13 +27,13 @@ import (
 	"time"
 )
 
-// connResponseWriter is a custom writer that handles HTTP response
+// responseWriter is a custom writer that handles HTTP response
 // writing directly over a net.Conn. It provides methods to write
 // headers and body to the connection, and it tracks any errors that
 // occur during writing. This allows fine-grained control over the
 // response, enabling scenarios that bypass Go's standard HTTP
 // sanitisation mechanisms.
-type connResponseWriter struct {
+type responseWriter struct {
 	bodySize   int64
 	conn       net.Conn
 	httpHeader http.Header
@@ -75,7 +75,7 @@ func getStackFrames(skip int) []runtime.Frame {
 // - Logs non-chunked body content
 //
 // - Logs empty responses
-func (w *connResponseWriter) logResponseData(data string) {
+func (w *responseWriter) logResponseData(data string) {
 	maxContentLength := 200
 
 	// Truncate the content if it's too long.
@@ -143,7 +143,7 @@ func formatStackTrace(frames []runtime.Frame) []string {
 }
 
 // header returns the HTTP headers.
-func (w *connResponseWriter) header() http.Header {
+func (w *responseWriter) header() http.Header {
 	if w.httpHeader == nil {
 		w.httpHeader = make(http.Header)
 	}
@@ -155,7 +155,7 @@ func (w *connResponseWriter) header() http.Header {
 // truncates the logged content if it exceeds 200 characters, and logs
 // the connection address, bytes written, truncated content, the
 // error, and the caller's stack frames.
-func (w *connResponseWriter) logWriteError(err error, bytesWritten int, content string) {
+func (w *responseWriter) logWriteError(err error, bytesWritten int, content string) {
 	w.writeErr = err
 	frames := getStackFrames(3)
 
@@ -177,7 +177,7 @@ func (w *connResponseWriter) logWriteError(err error, bytesWritten int, content 
 // encountered during writing. If a previous write error exists,
 // fprintf returns immediately without writing. It returns the number
 // of bytes written and any error encountered.
-func (w *connResponseWriter) fprintf(format string, a ...interface{}) (int, error) {
+func (w *responseWriter) fprintf(format string, a ...interface{}) (int, error) {
 	if w.writeErr != nil {
 		return 0, w.writeErr
 	}
@@ -198,7 +198,7 @@ func (w *connResponseWriter) fprintf(format string, a ...interface{}) (int, erro
 // previous write error is recorded (writeErr is non-nil), print will
 // skip writing and return the existing error immediately. It returns
 // the number of bytes written and any error encountered.
-func (w *connResponseWriter) print(a ...interface{}) (int, error) {
+func (w *responseWriter) print(a ...interface{}) (int, error) {
 	if w.writeErr != nil {
 		return 0, w.writeErr
 	}
@@ -219,7 +219,7 @@ func (w *connResponseWriter) print(a ...interface{}) (int, error) {
 // exists, write returns immediately without writing. It returns the
 // number of bytes written and any error encountered during the write
 // operation.
-func (w *connResponseWriter) write(b []byte) (int, error) {
+func (w *responseWriter) write(b []byte) (int, error) {
 	if w.writeErr != nil {
 		return 0, w.writeErr
 	}
@@ -246,7 +246,7 @@ func (w *connResponseWriter) write(b []byte) (int, error) {
 // "<key>: <value>\r\n". If any write operation encounters an error,
 // it stops further writes and returns immediately. If a previous
 // write error exists, writeHeader does nothing.
-func (w *connResponseWriter) writeHeader(statusCode int) {
+func (w *responseWriter) writeHeader(statusCode int) {
 	if w.writeErr != nil {
 		return
 	}
@@ -285,7 +285,7 @@ func (w *connResponseWriter) writeHeader(statusCode int) {
 // terminating chunk ("0\r\n\r\n") to signal the end of the chunked
 // transfer. It returns the number of bytes written and any error
 // encountered during the write operation.
-func (w *connResponseWriter) writeChunk(data string) (int, error) {
+func (w *responseWriter) writeChunk(data string) (int, error) {
 	if data == "" {
 		return w.print("0\r\n\r\n")
 	}
@@ -299,13 +299,13 @@ func (w *connResponseWriter) writeChunk(data string) (int, error) {
 // (i.e., no deadline). If setting the deadline fails, it returns an
 // error. The returned function logs any error that occurs when
 // clearing the deadline.
-func setConnTimeout(conn net.Conn, timeout time.Duration) (clearTimeout func(), err error) {
-	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+func (w *responseWriter) setConnTimeout(timeout time.Duration) (clearTimeout func(), err error) {
+	if err := w.conn.SetDeadline(time.Now().Add(timeout)); err != nil {
 		return nil, fmt.Errorf("error setting connection deadline: %w", err)
 	}
 
 	return func() {
-		if err := conn.SetDeadline(time.Time{}); err != nil {
+		if err := w.conn.SetDeadline(time.Time{}); err != nil {
 			log.Printf("Error clearing connection deadline: %v", err)
 		}
 	}, nil
@@ -322,15 +322,15 @@ func handleConnection(conn net.Conn) {
 	log.Printf("----------------------------------------")
 	log.Printf("%v: Connection from %v", conn.LocalAddr(), conn.RemoteAddr())
 
-	clearTimeout, err := setConnTimeout(conn, 30*time.Second)
+	writer := responseWriter{
+		conn: conn,
+	}
+
+	clearTimeout, err := writer.setConnTimeout(30 * time.Second)
 	if err != nil {
 		log.Printf("set connection timeout failed: %v", err)
 		conn.Close()
 		return
-	}
-
-	writer := connResponseWriter{
-		conn: conn,
 	}
 
 	closeConn := func() {
@@ -376,7 +376,7 @@ func handleConnection(conn net.Conn) {
 //   - GET: Sends the full response with headers and body.
 //   - HEAD: Sends only the headers that would be sent for a GET request.
 //   - Other methods: Responds based on the provided status code and body.
-func handleHTTPRequest(w *connResponseWriter, method string, statusCode int, body string, useChunkedEncoding bool, additionalTEHeaders int) {
+func handleHTTPRequest(w *responseWriter, method string, statusCode int, body string, useChunkedEncoding bool, additionalTEHeaders int) {
 	w.header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	w.header().Set("Content-Type", "text/plain")
 
@@ -412,19 +412,19 @@ func handleHTTPRequest(w *connResponseWriter, method string, statusCode int, bod
 	}
 }
 
-func healthzHandler(w *connResponseWriter, method string) {
+func healthzHandler(w *responseWriter, method string) {
 	handleHTTPRequest(w, method, http.StatusOK, "OK\n", false, 0)
 }
 
-func handleSingleTransferEncodingRequest(w *connResponseWriter, method string) {
+func handleSingleTransferEncodingRequest(w *responseWriter, method string) {
 	handleHTTPRequest(w, method, http.StatusOK, "single-te\n", true, 0)
 }
 
-func handleDuplicateTransferEncodingRequest(w *connResponseWriter, method string) {
+func handleDuplicateTransferEncodingRequest(w *responseWriter, method string) {
 	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te\n", true, 1)
 }
 
-func notFoundHandler(w *connResponseWriter, method string) {
+func notFoundHandler(w *responseWriter, method string) {
 	handleHTTPRequest(w, method, http.StatusNotFound, "404 Not Found\n", false, 0)
 }
 
