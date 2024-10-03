@@ -341,124 +341,73 @@ func handleConnection(conn net.Conn) {
 	case "/healthz":
 		healthzHandler(&writer, method)
 	case "/single-te":
-		handleSingleTE(&writer, method)
+		handleSingleTransferEncodingRequest(&writer, method)
 	case "/duplicate-te":
-		handleDuplicateTE(&writer, method)
+		handleDuplicateTransferEncodingRequest(&writer, method)
 	default:
 		notFoundHandler(&writer, method)
 	}
 }
 
-// healthzHandler handles both GET and HEAD requests for the /healthz
-// endpoint. For GET requests, it responds with an HTTP 200 OK status
-// and writes "OK" to the response body. For HEAD requests, it
-// responds with an HTTP 200 OK status without a body. If the request
-// method is neither GET nor HEAD, it responds with an HTTP 405 Method
-// Not Allowed status.
-func healthzHandler(w *connResponseWriter, method string) {
-	switch method {
-	case http.MethodGet, http.MethodHead:
-		okBody := "OK\n"
-		w.Header().Set("Content-Type", "text/plain")
-		w.Header().Set("Content-Length", strconv.Itoa(len(okBody)))
-		w.WriteHeader(http.StatusOK)
-		if method == http.MethodGet {
-			w.Print(okBody)
-		}
-	default:
-		notAllowedBody := "405 Method Not Allowed\n"
-		w.Header().Set("Content-Type", "text/plain")
-		w.Header().Set("Content-Length", strconv.Itoa(len(notAllowedBody)))
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		if method != http.MethodHead {
-			w.Print(notAllowedBody)
-		}
-	}
-}
+// handleHTTPRequest is a comprehensive handler for various HTTP
+// endpoints. It supports different status codes, chunked and
+// non-chunked responses, and handles GET, HEAD, and other HTTP
+// methods consistently.
+//
+// Behavior:
+//   - GET: Sends the full response with headers and body.
+//   - HEAD: Sends only the headers that would be sent for a GET request.
+//   - Other methods: Responds based on the provided status code and body.
+func handleHTTPRequest(w *connResponseWriter, method string, statusCode int, body string, useChunkedEncoding bool, additionalTEHeaders int) {
+	w.Header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
+	w.Header().Set("Content-Type", "text/plain")
 
-// handleSingleTE sends a response with a single Transfer-Encoding
-// header. It sets the Date, Content-Type, Connection, and
-// Transfer-Encoding headers, then writes an HTTP 200 OK status. The
-// response body is sent in chunked encoding, with a single chunk
-// containing "single-te\n" followed by the final chunk signaling the
-// end of the response.
-func handleSingleTE(w *connResponseWriter, method string) {
 	switch method {
 	case http.MethodGet, http.MethodHead:
-		body := "single-te\n"
-		w.Header().Set("Content-Type", "text/plain")
 		if method == http.MethodHead {
-			// For HEAD requests, we set Content-Length.
+			// For HEAD requests, always set Content-Length and never use chunked encoding
 			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
-		} else {
-			// For GET requests, we use chunked encoding.
+		} else if useChunkedEncoding {
 			w.Header().Set("Transfer-Encoding", "chunked")
+			for i := 0; i < additionalTEHeaders; i++ {
+				w.Header().Add("Transfer-Encoding", "chunked")
+			}
 			w.isChunked = true
-		}
-		w.WriteHeader(http.StatusOK)
-		if method == http.MethodGet {
-			w.writeChunk(body)
-			w.writeChunk("")
-		}
-	default:
-		notAllowedBody := "405 Method Not Allowed\n"
-		w.Header().Set("Content-Type", "text/plain")
-		w.Header().Set("Content-Length", strconv.Itoa(len(notAllowedBody)))
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		if method != http.MethodHead {
-			w.Print(notAllowedBody)
-		}
-	}
-}
-
-// handleDuplicateTE sends a response with duplicate Transfer-Encoding
-// headers. It sets the Date, Content-Type, and Connection headers,
-// and adds two "Transfer-Encoding: chunked" headers. The response
-// status is set to HTTP 200 OK. The response body is sent in chunked
-// encoding, with a single chunk containing "duplicate-te\n" followed
-// by the final chunk signaling the end of the response.
-func handleDuplicateTE(w *connResponseWriter, method string) {
-	switch method {
-	case http.MethodGet, http.MethodHead:
-		body := "duplicate-te\n"
-		w.Header().Set("Content-Type", "text/plain")
-		w.Header().Set("Date", time.Now().UTC().Format(time.RFC1123))
-		w.Header().Set("Connection", "close")
-		if method == http.MethodHead {
-			// For HEAD requests, we set Content-Length.
-			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 		} else {
-			// For GET requests, we use chunked encoding
-			// with duplicate headers.
-			w.Header().Add("Transfer-Encoding", "chunked")
-			w.Header().Add("Transfer-Encoding", "chunked")
-			w.isChunked = true
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 		}
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(statusCode)
 		if method == http.MethodGet {
-			w.writeChunk(body)
-			w.writeChunk("")
+			if w.isChunked {
+				w.writeChunk(body)
+				w.writeChunk("")
+			} else {
+				w.Print(body)
+			}
 		}
 	default:
+		// For methods other than GET and HEAD.
 		notAllowedBody := "405 Method Not Allowed\n"
-		w.Header().Set("Content-Type", "text/plain")
 		w.Header().Set("Content-Length", strconv.Itoa(len(notAllowedBody)))
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		if method != http.MethodHead {
-			w.Print(notAllowedBody)
-		}
+		w.Print(notAllowedBody)
 	}
 }
 
-// notFoundHandler responds with a 404 Not Found status and message.
-// It sets the HTTP status to 404 and writes the body containing "404
-// Not Found" in plain text.
-func notFoundHandler(w *connResponseWriter, method string) {
-	w.WriteHeader(http.StatusNotFound)
+func healthzHandler(w *connResponseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusOK, "OK\n", false, 0)
+}
 
-	if method == http.MethodGet {
-		w.Print("404 Not Found\n")
-	}
+func handleSingleTransferEncodingRequest(w *connResponseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusOK, "single-te\n", true, 0)
+}
+
+func handleDuplicateTransferEncodingRequest(w *connResponseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te\n", true, 1)
+}
+
+func notFoundHandler(w *connResponseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusNotFound, "404 Not Found\n", false, 0)
 }
 
 // createListener creates a TCP listener on the specified port. If
