@@ -37,7 +37,6 @@ type responseWriter struct {
 	bodySize   int64
 	conn       net.Conn
 	httpHeader http.Header
-	isChunked  bool
 	writeErr   error // Tracks if an error occurred during writing
 }
 
@@ -226,12 +225,6 @@ func (w *responseWriter) write(b []byte) (int, error) {
 
 	w.logResponseData(string(b))
 
-	// Only set Content-Length if it's not already set and we're
-	// not using chunked encoding.
-	if !w.isChunked && w.header().Get("Content-Length") == "" && w.bodySize > 0 {
-		w.header().Set("Content-Length", strconv.FormatInt(w.bodySize, 10))
-	}
-
 	n, err := w.conn.Write(b)
 	if err != nil {
 		w.logWriteError(err, n, string(b))
@@ -249,10 +242,6 @@ func (w *responseWriter) write(b []byte) (int, error) {
 func (w *responseWriter) writeHeader(statusCode int) {
 	if w.writeErr != nil {
 		return
-	}
-
-	if !w.isChunked && w.header().Get("Content-Length") == "" {
-		w.header().Set("Content-Length", strconv.FormatInt(w.bodySize, 10))
 	}
 
 	if _, err := w.fprintf("HTTP/1.1 %d %s\r\n", statusCode, http.StatusText(statusCode)); err != nil {
@@ -383,20 +372,21 @@ func handleHTTPRequest(w *responseWriter, method string, statusCode int, body st
 	switch method {
 	case http.MethodGet, http.MethodHead:
 		if method == http.MethodHead {
-			// For HEAD requests, always set Content-Length and never use chunked encoding
+			// For HEAD requests, always set
+			// Content-Length and never use chunked
+			// encoding.
 			w.header().Set("Content-Length", strconv.Itoa(len(body)))
 		} else if useChunkedEncoding {
 			w.header().Set("Transfer-Encoding", "chunked")
 			for i := 0; i < additionalTEHeaders; i++ {
 				w.header().Add("Transfer-Encoding", "chunked")
 			}
-			w.isChunked = true
 		} else {
 			w.header().Set("Content-Length", strconv.Itoa(len(body)))
 		}
 		w.writeHeader(statusCode)
 		if method == http.MethodGet {
-			if w.isChunked {
+			if useChunkedEncoding {
 				w.writeChunk(body)
 				w.writeChunk("")
 			} else {
