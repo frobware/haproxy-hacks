@@ -85,8 +85,8 @@ func (rc *readCloser) Close() error {
 // Ensure readCloser implements io.ReadCloser.
 var _ io.ReadCloser = (*readCloser)(nil)
 
-// GetWithoutSanitisation performs an HTTP GET request and returns the
-// response without sanitising headers or body. This allows for
+// httpGetWithoutSanitisation performs an HTTP GET request and returns
+// the response without sanitising headers or body. This allows for
 // handling of non-standard or non-compliant HTTP responses.
 //
 // Unlike the standard Go HTTP client, this function does not sanitise
