@@ -17,6 +17,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -27,9 +30,11 @@ import (
 // response, enabling scenarios that bypass Go's standard HTTP
 // sanitisation mechanisms.
 type connResponseWriter struct {
-	conn     net.Conn
-	header   http.Header
-	writeErr error // Tracks if an error occurred during writing
+	bodySize  int64
+	conn      net.Conn
+	header    http.Header
+	isChunked bool
+	writeErr  error // Tracks if an error occurred during writing
 }
 
 // getStackFrames returns a slice of runtime.Frame, skipping the
@@ -50,6 +55,60 @@ func getStackFrames(skip int) []runtime.Frame {
 	}
 
 	return stackFrames
+}
+
+func (w *connResponseWriter) logResponseData(data string) {
+	maxContentLength := 200
+
+	// Truncate the content if it's too long.
+	if len(data) > maxContentLength {
+		data = data[:maxContentLength] + "... (truncated)"
+	}
+
+	prefix := fmt.Sprintf("%v: Writing to %v: ", w.conn.LocalAddr(), w.conn.RemoteAddr())
+
+	// Handle headers.
+	if strings.HasPrefix(data, "HTTP/") || strings.Contains(data, ": ") {
+		log.Printf(prefix + data)
+		return
+	}
+
+	// Handle chunked data.
+	if strings.HasSuffix(data, "\r\n") {
+		parts := strings.SplitN(data, "\r\n", 2)
+		if len(parts) == 2 {
+			chunkSize := parts[0]
+			chunkData := strings.TrimSuffix(parts[1], "\r\n")
+
+			if chunkSize != "" {
+				log.Printf(prefix + "Chunk-Size: 0x" + chunkSize)
+			}
+
+			if chunkData != "" {
+				log.Printf(prefix + "Chunk-Data: " + chunkData)
+			}
+
+			if chunkSize == "0" {
+				log.Printf(prefix + "End-Of-Chunked-Transfer")
+			}
+
+			return
+		}
+	}
+
+	if data == "" {
+		log.Printf(prefix + "Empty-Response")
+		return
+	}
+
+	// Handle any other data (non-chunked body content).
+	log.Printf(prefix + "Body: " + strings.TrimSpace(data))
+}
+
+// replaceNewlines replaces all newlines in a string with their
+// literal "\n" representation for clearer logging.
+func replaceNewlines(data string) string {
+	return fmt.Sprintf("%q", data)
 }
 
 // formatStackTrace converts a slice of runtime.Frame into a slice of
@@ -110,7 +169,10 @@ func (w *connResponseWriter) Fprintf(format string, a ...interface{}) (int, erro
 	if w.writeErr != nil {
 		return 0, w.writeErr
 	}
+
 	s := fmt.Sprintf(format, a...)
+	w.logResponseData(s)
+
 	n, err := io.WriteString(w.conn, s)
 	if err != nil {
 		w.logWriteError(err, n, s)
@@ -128,11 +190,41 @@ func (w *connResponseWriter) Print(a ...interface{}) (int, error) {
 	if w.writeErr != nil {
 		return 0, w.writeErr
 	}
+
 	s := fmt.Sprint(a...)
+	w.logResponseData(s)
+
 	n, err := io.WriteString(w.conn, s)
 	if err != nil {
 		w.logWriteError(err, n, s)
 	}
+	return n, err
+}
+
+// Write writes the byte slice 'b' directly to the underlying
+// net.Conn. If an error occurs during writing, it logs the error and
+// updates the internal writeErr state. If a previous write error
+// exists, Write returns immediately without writing. It returns the
+// number of bytes written and any error encountered during the write
+// operation.
+func (w *connResponseWriter) Write(b []byte) (int, error) {
+	if w.writeErr != nil {
+		return 0, w.writeErr
+	}
+
+	w.logResponseData(string(b))
+
+	// Only set Content-Length if it's not already set and we're
+	// not using chunked encoding.
+	if !w.isChunked && w.Header().Get("Content-Length") == "" && w.bodySize > 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(w.bodySize, 10))
+	}
+
+	n, err := w.conn.Write(b)
+	if err != nil {
+		w.logWriteError(err, n, string(b))
+	}
+
 	return n, err
 }
 
@@ -147,13 +239,24 @@ func (w *connResponseWriter) WriteHeader(statusCode int) {
 		return
 	}
 
+	if !w.isChunked && w.Header().Get("Content-Length") == "" {
+		w.Header().Set("Content-Length", strconv.FormatInt(w.bodySize, 10))
+	}
+
 	if _, err := w.Fprintf("HTTP/1.1 %d %s\r\n", statusCode, http.StatusText(statusCode)); err != nil {
 		return
 	}
 
-	for k, v := range w.Header() {
-		for _, value := range v {
-			if _, err := w.Fprintf("%s: %s\r\n", k, value); err != nil {
+	var keys []string
+	for k := range w.Header() {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		for _, v := range w.Header()[k] {
+			if _, err := w.Fprintf("%s: %s\r\n", k, v); err != nil {
 				return
 			}
 		}
@@ -162,25 +265,6 @@ func (w *connResponseWriter) WriteHeader(statusCode int) {
 	if _, err := w.Print("\r\n"); err != nil {
 		return
 	}
-}
-
-// Write writes the byte slice 'b' directly to the underlying
-// net.Conn. If an error occurs during writing, it logs the error and
-// updates the internal writeErr state. If a previous write error
-// exists, Write returns immediately without writing. It returns the
-// number of bytes written and any error encountered during the write
-// operation.
-func (w *connResponseWriter) Write(b []byte) (int, error) {
-	if w.writeErr != nil {
-		return 0, w.writeErr
-	}
-
-	n, err := w.conn.Write(b)
-	if err != nil {
-		w.logWriteError(err, n, string(b))
-	}
-
-	return n, err
 }
 
 // writeChunk writes a single chunk to the connection. If 'data' is
@@ -223,6 +307,7 @@ func setConnTimeout(conn net.Conn, timeout time.Duration) (clearTimeout func(), 
 // The request is parsed for method, path, and protocol, and the
 // request is routed based on the path.
 func handleConnection(conn net.Conn) {
+	log.Printf("----------------------------------------")
 	log.Printf("%v: Connection from %v", conn.LocalAddr(), conn.RemoteAddr())
 
 	clearTimeout, err := setConnTimeout(conn, 30*time.Second)
@@ -236,12 +321,12 @@ func handleConnection(conn net.Conn) {
 		conn: conn,
 	}
 
-	defer func() {
-		peer := conn.RemoteAddr()
+	closeConn := func() {
 		clearTimeout()
 		conn.Close()
-		log.Printf("%v: Closed connection for %v", conn.LocalAddr(), peer)
-	}()
+		log.Printf("%v: Closed connection for %v", conn.LocalAddr(), conn.RemoteAddr())
+	}
+	defer closeConn()
 
 	reader := bufio.NewReader(conn)
 	requestLine, _, err := reader.ReadLine()
@@ -252,7 +337,6 @@ func handleConnection(conn net.Conn) {
 
 	log.Printf("%v: Received request: %s", conn.LocalAddr(), requestLine)
 
-	// Parse the request line (method, path, protocol).
 	var method, path, protocol string
 	if _, err = fmt.Sscanf(string(requestLine), "%s %s %s", &method, &path, &protocol); err != nil {
 		log.Printf("%v: Error parsing request line: %v\n", conn.LocalAddr(), err)
@@ -263,11 +347,11 @@ func handleConnection(conn net.Conn) {
 	case "/healthz":
 		healthzHandler(&writer, method)
 	case "/single-te":
-		handleSingleTE(&writer)
+		handleSingleTE(&writer, method)
 	case "/duplicate-te":
-		handleDuplicateTE(&writer)
+		handleDuplicateTE(&writer, method)
 	default:
-		notFoundHandler(&writer)
+		notFoundHandler(&writer, method)
 	}
 }
 
@@ -279,16 +363,22 @@ func handleConnection(conn net.Conn) {
 // Not Allowed status.
 func healthzHandler(w *connResponseWriter, method string) {
 	switch method {
-	case "GET":
+	case http.MethodGet, http.MethodHead:
+		okBody := "OK\n"
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Length", strconv.Itoa(len(okBody)))
 		w.WriteHeader(http.StatusOK)
-		w.Print("OK\n")
-	case "HEAD":
-		// Only write headers for HEAD requests.
-		w.WriteHeader(http.StatusOK)
+		if method == http.MethodGet {
+			w.Print(okBody)
+		}
 	default:
-		// Method not allowed.
+		notAllowedBody := "405 Method Not Allowed\n"
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Length", strconv.Itoa(len(notAllowedBody)))
 		w.WriteHeader(http.StatusMethodNotAllowed)
-		w.Print(w, "405 Method Not Allowed\n")
+		if method != http.MethodHead {
+			w.Print(notAllowedBody)
+		}
 	}
 }
 
@@ -298,16 +388,33 @@ func healthzHandler(w *connResponseWriter, method string) {
 // response body is sent in chunked encoding, with a single chunk
 // containing "single-te\n" followed by the final chunk signaling the
 // end of the response.
-func handleSingleTE(w *connResponseWriter) {
-	w.Header().Set("Date", time.Now().UTC().Format(time.RFC1123))
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Connection", "close")
-	w.Header().Set("Transfer-Encoding", "chunked")
-
-	w.WriteHeader(http.StatusOK)
-
-	w.writeChunk("single-te\n")
-	w.writeChunk("")
+func handleSingleTE(w *connResponseWriter, method string) {
+	switch method {
+	case http.MethodGet, http.MethodHead:
+		body := "single-te\n"
+		w.Header().Set("Content-Type", "text/plain")
+		if method == http.MethodHead {
+			// For HEAD requests, we set Content-Length.
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		} else {
+			// For GET requests, we use chunked encoding.
+			w.Header().Set("Transfer-Encoding", "chunked")
+			w.isChunked = true
+		}
+		w.WriteHeader(http.StatusOK)
+		if method == http.MethodGet {
+			w.writeChunk(body)
+			w.writeChunk("")
+		}
+	default:
+		notAllowedBody := "405 Method Not Allowed\n"
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Length", strconv.Itoa(len(notAllowedBody)))
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		if method != http.MethodHead {
+			w.Print(notAllowedBody)
+		}
+	}
 }
 
 // handleDuplicateTE sends a response with duplicate Transfer-Encoding
@@ -316,25 +423,48 @@ func handleSingleTE(w *connResponseWriter) {
 // status is set to HTTP 200 OK. The response body is sent in chunked
 // encoding, with a single chunk containing "duplicate-te\n" followed
 // by the final chunk signaling the end of the response.
-func handleDuplicateTE(w *connResponseWriter) {
-	w.Header().Set("Date", time.Now().UTC().Format(time.RFC1123))
-	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set("Connection", "close")
-	w.Header().Add("Transfer-Encoding", "chunked")
-	w.Header().Add("Transfer-Encoding", "chunked")
-
-	w.WriteHeader(http.StatusOK)
-
-	w.writeChunk("duplicate-te\n")
-	w.writeChunk("")
+func handleDuplicateTE(w *connResponseWriter, method string) {
+	switch method {
+	case http.MethodGet, http.MethodHead:
+		body := "duplicate-te\n"
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Date", time.Now().UTC().Format(time.RFC1123))
+		w.Header().Set("Connection", "close")
+		if method == http.MethodHead {
+			// For HEAD requests, we set Content-Length.
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		} else {
+			// For GET requests, we use chunked encoding
+			// with duplicate headers.
+			w.Header().Add("Transfer-Encoding", "chunked")
+			w.Header().Add("Transfer-Encoding", "chunked")
+			w.isChunked = true
+		}
+		w.WriteHeader(http.StatusOK)
+		if method == http.MethodGet {
+			w.writeChunk(body)
+			w.writeChunk("")
+		}
+	default:
+		notAllowedBody := "405 Method Not Allowed\n"
+		w.Header().Set("Content-Type", "text/plain")
+		w.Header().Set("Content-Length", strconv.Itoa(len(notAllowedBody)))
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		if method != http.MethodHead {
+			w.Print(notAllowedBody)
+		}
+	}
 }
 
 // notFoundHandler responds with a 404 Not Found status and message.
 // It sets the HTTP status to 404 and writes the body containing "404
 // Not Found" in plain text.
-func notFoundHandler(w *connResponseWriter) {
+func notFoundHandler(w *connResponseWriter, method string) {
 	w.WriteHeader(http.StatusNotFound)
-	w.Print("404 Not Found\n")
+
+	if method == http.MethodGet {
+		w.Print("404 Not Found\n")
+	}
 }
 
 // createListener creates a TCP listener on the specified port. If
