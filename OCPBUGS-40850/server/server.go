@@ -13,6 +13,7 @@ package main
 import (
 	"bufio"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -24,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -34,10 +36,184 @@ import (
 // response, enabling scenarios that bypass Go's standard HTTP
 // sanitisation mechanisms.
 type responseWriter struct {
-	bodySize   int64
-	conn       net.Conn
-	httpHeader http.Header
-	writeErr   error // Tracks if an error occurred during writing
+	conn         net.Conn
+	connWriteErr error
+	httpHeader   http.Header
+	logger       *ResponseLogger
+}
+
+type ConnectionLog struct {
+	ConnError   string    `json:"conn_error,omitempty"`
+	Entries     []string  `json:"entries"`
+	LocalAddr   string    `json:"local_addr"`
+	PeerAddr    string    `json:"peer_addr"`
+	RequestLine string    `json:"request_line"`
+	Timestamp   time.Time `json:"timestamp"`
+}
+
+type ResponseLogger struct {
+	index int
+}
+
+const (
+	LogIndexSkip = -1
+)
+
+var (
+	responseLogs   []ConnectionLog
+	responseLogsMu sync.Mutex
+)
+
+func NewResponseLogger(conn net.Conn) *ResponseLogger {
+	responseLogsMu.Lock()
+	defer responseLogsMu.Unlock()
+
+	var peerAddr, localAddr string
+
+	if conn.RemoteAddr() != nil {
+		peerAddr = conn.RemoteAddr().String()
+	} else {
+		peerAddr = "unknown"
+	}
+
+	if conn.LocalAddr() != nil {
+		localAddr = conn.LocalAddr().String()
+	} else {
+		localAddr = "unknown"
+	}
+
+	index := len(responseLogs)
+
+	responseLogs = append(responseLogs, ConnectionLog{
+		PeerAddr:  peerAddr,
+		LocalAddr: localAddr,
+		Timestamp: time.Now(),
+	})
+
+	return &ResponseLogger{index: index}
+}
+
+func (rl *ResponseLogger) setRequestLine(requestLine string) {
+	responseLogsMu.Lock()
+	defer responseLogsMu.Unlock()
+
+	responseLogs[rl.index].RequestLine = requestLine
+
+	log.Printf("%v >>> %v Received request: %s",
+		responseLogs[rl.index].LocalAddr,
+		responseLogs[rl.index].PeerAddr,
+		responseLogs[rl.index].RequestLine)
+}
+
+func (rl *ResponseLogger) LogResponse(data string) {
+	if rl.index == LogIndexSkip {
+		return
+	}
+
+	for _, msg := range rl.formatResponseData(data) {
+		rl.record(msg)
+	}
+}
+
+func (rl *ResponseLogger) LogError(err error, bytesWritten int, content string) {
+	if rl.index == LogIndexSkip {
+		return
+	}
+
+	if err != nil {
+		responseLogsMu.Lock()
+		if responseLogs[rl.index].ConnError != "" {
+			responseLogs[rl.index].ConnError = err.Error()
+		}
+		responseLogsMu.Unlock()
+	}
+
+	for _, msg := range rl.formatWriteError(err, bytesWritten, content) {
+		rl.record(msg)
+	}
+}
+
+func (rl *ResponseLogger) formatResponseData(data string) []string {
+	var result []string
+	maxContentLength := 200
+
+	// Truncate the content if it's too long.
+	if len(data) > maxContentLength {
+		data = data[:maxContentLength] + "... (truncated)"
+	}
+
+	if strings.HasPrefix(data, "HTTP/") || strings.Contains(data, ": ") {
+		result = append(result, data)
+		return result
+	}
+
+	// Handle chunked data.
+	if strings.HasSuffix(data, "\r\n") {
+		parts := strings.SplitN(data, "\r\n", 2)
+		if len(parts) == 2 {
+			chunkSize := parts[0]
+			chunkData := strings.TrimSuffix(parts[1], "\r\n")
+
+			if chunkSize != "" {
+				result = append(result, "Chunk-Size: 0x"+chunkSize)
+			}
+
+			if chunkData != "" {
+				result = append(result, "Chunk-Data: "+chunkData)
+			}
+
+			if chunkSize == "0" {
+				result = append(result, "End-Of-Chunked-Transfer")
+			}
+
+			return result
+		}
+	}
+
+	// Handle empty data.
+	if data == "" {
+		result = append(result, "Empty-Response")
+		return result
+	}
+
+	// Handle any other data (non-chunked body content).
+	result = append(result, "Body: "+strings.TrimSpace(data))
+	return result
+}
+
+func (rl *ResponseLogger) formatWriteError(err error, bytesWritten int, content string) []string {
+	maxContentLength := 200
+	if len(content) > maxContentLength {
+		content = content[:maxContentLength] + "... (truncated)"
+	}
+
+	var result = []string{
+		fmt.Sprintf("error writing %q after %d bytes: %v", content, bytesWritten, err),
+	}
+
+	return append(result, formatStackTrace(getStackFrames(6))...)
+}
+
+func (rl *ResponseLogger) record(format string, args ...interface{}) {
+	if rl.index == LogIndexSkip {
+		return
+	}
+
+	responseLogsMu.Lock()
+	defer responseLogsMu.Unlock()
+
+	msg := fmt.Sprintf(format, args...)
+	responseLogs[rl.index].Entries = append(responseLogs[rl.index].Entries, msg)
+
+	log.Printf("%v <<< %v %s",
+		responseLogs[rl.index].LocalAddr,
+		responseLogs[rl.index].PeerAddr,
+		msg)
+
+}
+
+func (rl *ResponseLogger) SetSkipLogging() {
+	rl.index = LogIndexSkip
 }
 
 // getStackFrames returns a slice of runtime.Frame, skipping the
@@ -60,66 +236,12 @@ func getStackFrames(skip int) []runtime.Frame {
 	return stackFrames
 }
 
-// logResponseData logs the response data with the following behavior:
-//
-// - Truncates content longer than 200 characters
-//
-// - Logs headers as-is
-//
-// - For chunked data:
-//   - Logs chunk size (if present)
-//   - Logs chunk data (if present)
-//   - Logs end of chunked transfer
-//
-// - Logs non-chunked body content
-//
-// - Logs empty responses
 func (w *responseWriter) logResponseData(data string) {
-	maxContentLength := 200
+	w.logger.LogResponse(data)
+}
 
-	// Truncate the content if it's too long.
-	if len(data) > maxContentLength {
-		data = data[:maxContentLength] + "... (truncated)"
-	}
-
-	prefix := fmt.Sprintf("%v: Writing to %v: ", w.conn.LocalAddr(), w.conn.RemoteAddr())
-
-	// Handle headers.
-	if strings.HasPrefix(data, "HTTP/") || strings.Contains(data, ": ") {
-		log.Printf(prefix + data)
-		return
-	}
-
-	// Handle chunked data.
-	if strings.HasSuffix(data, "\r\n") {
-		parts := strings.SplitN(data, "\r\n", 2)
-		if len(parts) == 2 {
-			chunkSize := parts[0]
-			chunkData := strings.TrimSuffix(parts[1], "\r\n")
-
-			if chunkSize != "" {
-				log.Printf(prefix + "Chunk-Size: 0x" + chunkSize)
-			}
-
-			if chunkData != "" {
-				log.Printf(prefix + "Chunk-Data: " + chunkData)
-			}
-
-			if chunkSize == "0" {
-				log.Printf(prefix + "End-Of-Chunked-Transfer")
-			}
-
-			return
-		}
-	}
-
-	if data == "" {
-		log.Printf(prefix + "Empty-Response")
-		return
-	}
-
-	// Handle any other data (non-chunked body content).
-	log.Printf(prefix + "Body: " + strings.TrimSpace(data))
+func (w *responseWriter) logWriteError(err error, bytesWritten int, content string) {
+	w.logger.LogError(err, bytesWritten, content)
 }
 
 // formatStackTrace converts a slice of runtime.Frame into a slice of
@@ -127,15 +249,10 @@ func (w *responseWriter) logResponseData(data string) {
 // function name, file name, and line number.
 func formatStackTrace(frames []runtime.Frame) []string {
 	var stackElements []string
+
 	for _, frame := range frames {
 		file := filepath.Base(frame.File)
-		functionName := frame.Function
-		element := fmt.Sprintf("%s (%s:%d)", functionName, file, frame.Line)
-		stackElements = append(stackElements, element)
-	}
-
-	if len(stackElements) == 0 {
-		return nil
+		stackElements = append(stackElements, fmt.Sprintf("%s (%s:%d)", frame.Function, file, frame.Line))
 	}
 
 	return stackElements
@@ -149,45 +266,18 @@ func (w *responseWriter) header() http.Header {
 	return w.httpHeader
 }
 
-// logWriteError records and logs an error that occurred while writing
-// the response. It sets the writeErr field, captures the stack trace,
-// truncates the logged content if it exceeds 200 characters, and logs
-// the connection address, bytes written, truncated content, the
-// error, and the caller's stack frames.
-func (w *responseWriter) logWriteError(err error, bytesWritten int, content string) {
-	w.writeErr = err
-	frames := getStackFrames(3)
-
-	maxContentLength := 200
-	if len(content) > maxContentLength {
-		content = content[:maxContentLength] + "... (truncated)"
+func (w *responseWriter) writeToConnection(data string) (int, error) {
+	if w.connWriteErr != nil {
+		return 0, w.connWriteErr
 	}
 
-	log.Printf("%v: error writing response after %d bytes. Content: %q, Error: %v. Caller:",
-		w.conn.LocalAddr(), bytesWritten, content, err)
+	w.logResponseData(data)
 
-	for _, frame := range formatStackTrace(frames) {
-		log.Printf("\t%s", frame)
-	}
-}
-
-// fprintf formats according to a format specifier and writes the
-// resulting string to the connection. It logs and records any errors
-// encountered during writing. If a previous write error exists,
-// fprintf returns immediately without writing. It returns the number
-// of bytes written and any error encountered.
-func (w *responseWriter) fprintf(format string, a ...interface{}) (int, error) {
-	if w.writeErr != nil {
-		return 0, w.writeErr
-	}
-
-	s := fmt.Sprintf(format, a...)
-	w.logResponseData(s)
-
-	n, err := io.WriteString(w.conn, s)
+	n, err := io.WriteString(w.conn, data)
 	if err != nil {
-		w.logWriteError(err, n, s)
+		w.logWriteError(err, n, data)
 	}
+
 	return n, err
 }
 
@@ -198,18 +288,7 @@ func (w *responseWriter) fprintf(format string, a ...interface{}) (int, error) {
 // skip writing and return the existing error immediately. It returns
 // the number of bytes written and any error encountered.
 func (w *responseWriter) print(a ...interface{}) (int, error) {
-	if w.writeErr != nil {
-		return 0, w.writeErr
-	}
-
-	s := fmt.Sprint(a...)
-	w.logResponseData(s)
-
-	n, err := io.WriteString(w.conn, s)
-	if err != nil {
-		w.logWriteError(err, n, s)
-	}
-	return n, err
+	return w.write([]byte(fmt.Sprint(a...)))
 }
 
 // write writes the byte slice 'b' directly to the underlying
@@ -219,18 +298,7 @@ func (w *responseWriter) print(a ...interface{}) (int, error) {
 // number of bytes written and any error encountered during the write
 // operation.
 func (w *responseWriter) write(b []byte) (int, error) {
-	if w.writeErr != nil {
-		return 0, w.writeErr
-	}
-
-	w.logResponseData(string(b))
-
-	n, err := w.conn.Write(b)
-	if err != nil {
-		w.logWriteError(err, n, string(b))
-	}
-
-	return n, err
+	return w.writeToConnection(string(b))
 }
 
 // writeHeader writes the HTTP status code and headers to the
@@ -240,32 +308,27 @@ func (w *responseWriter) write(b []byte) (int, error) {
 // it stops further writes and returns immediately. If a previous
 // write error exists, writeHeader does nothing.
 func (w *responseWriter) writeHeader(statusCode int) {
-	if w.writeErr != nil {
+	if w.connWriteErr != nil {
 		return
 	}
 
-	if _, err := w.fprintf("HTTP/1.1 %d %s\r\n", statusCode, http.StatusText(statusCode)); err != nil {
-		return
-	}
+	// Write the status line through writeToConnection
+	w.writeToConnection(fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, http.StatusText(statusCode)))
 
+	// Write all headers through writeToConnection
 	var keys []string
 	for k := range w.header() {
 		keys = append(keys, k)
 	}
-
 	sort.Strings(keys)
-
 	for _, k := range keys {
 		for _, v := range w.header()[k] {
-			if _, err := w.fprintf("%s: %s\r\n", k, v); err != nil {
-				return
-			}
+			w.writeToConnection(fmt.Sprintf("%s: %s\r\n", k, v))
 		}
 	}
 
-	if _, err := w.print("\r\n"); err != nil {
-		return
-	}
+	// End headers with a blank line
+	w.writeToConnection("\r\n")
 }
 
 // writeChunk writes a single chunk to the connection. If 'data' is
@@ -276,10 +339,10 @@ func (w *responseWriter) writeHeader(statusCode int) {
 // encountered during the write operation.
 func (w *responseWriter) writeChunk(data string) (int, error) {
 	if data == "" {
-		return w.print("0\r\n\r\n")
+		return w.writeToConnection("0\r\n\r\n")
 	}
 
-	return w.print(fmt.Sprintf("%X\r\n%s\r\n", len(data), data))
+	return w.writeToConnection(fmt.Sprintf("%X\r\n%s\r\n", len(data), data))
 }
 
 // setConnTimeout sets a deadline on the connection by adding the
@@ -300,6 +363,17 @@ func (w *responseWriter) setConnTimeout(timeout time.Duration) (clearTimeout fun
 	}, nil
 }
 
+// Error replies to the request with the specified error message and
+// HTTP code. It does not otherwise end the request; the caller should
+// ensure no further writes are done to w. The error message should be
+// plain text.
+func (w *responseWriter) httpError(error string, code int) {
+	w.header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.header().Set("X-Content-Type-Options", "nosniff")
+	w.writeHeader(code)
+	w.print(error)
+}
+
 // handleConnection processes an incoming connection by setting a
 // timeout, reading the request line, and routing it to the
 // appropriate handler. It sets a connection timeout using
@@ -308,26 +382,25 @@ func (w *responseWriter) setConnTimeout(timeout time.Duration) (clearTimeout fun
 // The request is parsed for method, path, and protocol, and the
 // request is routed based on the path.
 func handleConnection(conn net.Conn) {
-	log.Printf("----------------------------------------")
-	log.Printf("%v: Connection from %v", conn.LocalAddr(), conn.RemoteAddr())
+	logger := NewResponseLogger(conn)
 
 	writer := responseWriter{
-		conn: conn,
+		conn:   conn,
+		logger: logger,
 	}
 
 	clearTimeout, err := writer.setConnTimeout(30 * time.Second)
 	if err != nil {
-		log.Printf("set connection timeout failed: %v", err)
+		//log.Printf("set connection timeout failed: %v", err)
 		conn.Close()
 		return
 	}
 
-	closeConn := func() {
+	defer func() {
+		logger.record("Connection closed")
 		clearTimeout()
 		conn.Close()
-		log.Printf("%v: Closed connection for %v", conn.LocalAddr(), conn.RemoteAddr())
-	}
-	defer closeConn()
+	}()
 
 	reader := bufio.NewReader(conn)
 	requestLine, _, err := reader.ReadLine()
@@ -336,7 +409,7 @@ func handleConnection(conn net.Conn) {
 		return
 	}
 
-	log.Printf("%v: Received request: %s", conn.LocalAddr(), requestLine)
+	logger.setRequestLine(string(requestLine))
 
 	var method, path, protocol string
 	if _, err = fmt.Sscanf(string(requestLine), "%s %s %s", &method, &path, &protocol); err != nil {
@@ -351,6 +424,8 @@ func handleConnection(conn net.Conn) {
 		handleSingleTransferEncodingRequest(&writer, method)
 	case "/duplicate-te":
 		handleDuplicateTransferEncodingRequest(&writer, method)
+	case "/access-logs":
+		accessLogsHandler(&writer, method)
 	default:
 		notFoundHandler(&writer, method)
 	}
@@ -416,6 +491,25 @@ func handleDuplicateTransferEncodingRequest(w *responseWriter, method string) {
 
 func notFoundHandler(w *responseWriter, method string) {
 	handleHTTPRequest(w, method, http.StatusNotFound, "404 Not Found\n", false, 0)
+}
+
+func accessLogsHandler(w *responseWriter, method string) {
+	// Skip logging for this request to avoid recursive logging.
+	w.logger.SetSkipLogging()
+
+	responseLogsMu.Lock()
+	logs := make([]ConnectionLog, len(responseLogs))
+	copy(logs, responseLogs)
+	responseLogsMu.Unlock()
+
+	// Marshal the logs to JSON
+	logsJSON, err := json.Marshal(logs)
+	if err != nil {
+		w.httpError("Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	handleHTTPRequest(w, method, http.StatusOK, string(logsJSON), false, 0)
 }
 
 // createListener creates a TCP listener on the specified port. If
