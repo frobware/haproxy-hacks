@@ -1,17 +1,28 @@
-// Package main implements an HTTP server with fine-grained control
-// over response headers, bypassing Go's HTTP sanitisation for testing
-// scenarios with multiple "Transfer-Encoding" headers.
+// Package main implements a customizable HTTP/HTTPS server with
+// comprehensive logging capabilities, designed for testing and
+// debugging HTTP interactions around duplicate Transfer-Encoding
+// headers.
 //
-// It introduces connResponseWriter, a custom response writer that:
-// - Centralises logging of headers, body content, and write errors
-// - Maintains internal error state to prevent cascading failures
+// Key features:
+// - HTTP and HTTPS servers
+// - Detailed request and response logging:
+//   - All client interactions are logged to stdout in real-time
+//   - Logs are also stored in an in-memory replay buffer
 //
-// This enables focused response logic in handlers without nil checks,
-// while providing detailed debugging information.
+// Additional endpoints:
+// - /healthz: Responds with "OK" for basic health checks
+// - /single-te: Sends a response with a single "Transfer-Encoding: chunked" header
+// - /duplicate-te: Sends a response with multiple "Transfer-Encoding: chunked" headers
+// - /access-logs: Provides JSON-formatted logs of all historical connections
+//
+// Note: This server is intended for testing and debugging purposes
+// only due to its ability to generate non-standard HTTP responses and
+// its in-memory log storage.
 package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -20,14 +31,18 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
+
+var responseLogs sync.Map
 
 // responseWriter is a custom writer that handles HTTP response
 // writing directly over a net.Conn. It provides methods to write
@@ -52,80 +67,90 @@ type ConnectionLog struct {
 }
 
 type responseLogger struct {
-	index int
+	timestamp   time.Time
+	skipLogging bool
 }
+
+type LogType int
 
 const (
-	logIndexSkip = -1
+	LogTypeRequest LogType = iota
+	LogTypeResponse
+	LogTypeServer
 )
 
-var (
-	responseLogs   []ConnectionLog
-	responseLogsMu sync.Mutex
-)
+// DirectionIndicator returns a string representation of the data flow
+// direction for each log type. For requests ("<-"), it indicates data
+// flowing from client to server. For responses ("->"), it indicates
+// data flowing from server to client. For server messages ("--"), it
+// indicates internal server events not directly involving data flow.
+func (lt LogType) DirectionIndicator() string {
+	return [...]string{"<-", "->", "--"}[lt]
+}
 
 func newResponseLogger(conn net.Conn) *responseLogger {
-	responseLogsMu.Lock()
-	defer responseLogsMu.Unlock()
-
-	var peerAddr, localAddr string
-
-	if conn.RemoteAddr() != nil {
-		peerAddr = conn.RemoteAddr().String()
-	} else {
-		peerAddr = "unknown"
-	}
-
-	if conn.LocalAddr() != nil {
-		localAddr = conn.LocalAddr().String()
-	} else {
-		localAddr = "unknown"
-	}
-
-	index := len(responseLogs)
-
-	responseLogs = append(responseLogs, ConnectionLog{
-		PeerAddr:  peerAddr,
-		LocalAddr: localAddr,
-		Timestamp: time.Now(),
+	timestamp := time.Now()
+	responseLogs.Store(timestamp, &ConnectionLog{
+		PeerAddr:  conn.RemoteAddr().String(),
+		LocalAddr: conn.LocalAddr().String(),
+		Timestamp: timestamp,
 	})
-
-	return &responseLogger{index: index}
+	return &responseLogger{timestamp: timestamp}
 }
 
-func (rl *responseLogger) setRequestLine(requestLine string) {
-	responseLogsMu.Lock()
-	defer responseLogsMu.Unlock()
-
-	responseLogs[rl.index].RequestLine = requestLine
-
-	log.Printf("%v >>> %v Received request: %s",
-		responseLogs[rl.index].LocalAddr,
-		responseLogs[rl.index].PeerAddr,
-		responseLogs[rl.index].RequestLine)
-}
-
-func (rl *responseLogger) logResponse(data string) {
-	if rl.index == logIndexSkip {
+func (rl *responseLogger) recordAndLog(logType LogType, format string, args ...interface{}) {
+	if rl.skipLogging {
 		return
 	}
 
+	msg := fmt.Sprintf(format, args...)
+
+	value, ok := responseLogs.Load(rl.timestamp)
+	if !ok {
+		log.Fatalf("No log entry found for timestamp %v", rl.timestamp)
+	}
+	logEntry := value.(*ConnectionLog)
+
+	// Use the DirectionIndicator method to get the correct indicator
+	directionIndicator := logType.DirectionIndicator()
+
+	// Format the log message with direction
+	formattedMsg := fmt.Sprintf("%s %s %s: %s",
+		logEntry.LocalAddr,
+		directionIndicator,
+		logEntry.PeerAddr,
+		msg)
+
+	// Append to the log entries
+	logEntry.Entries = append(logEntry.Entries, formattedMsg)
+	responseLogs.Store(rl.timestamp, logEntry)
+
+	log.Print(formattedMsg)
+}
+
+func (rl *responseLogger) setRequestLine(requestLine string) {
+	if value, ok := responseLogs.Load(rl.timestamp); ok {
+		log := value.(*ConnectionLog)
+		log.RequestLine = requestLine
+		responseLogs.Store(rl.timestamp, log)
+	}
+
+	rl.recordAndLog(LogTypeRequest, "Received request: %s", requestLine)
+}
+
+func (rl *responseLogger) logResponse(data string) {
 	for _, msg := range rl.formatResponseData(data) {
-		rl.recordMessage(msg)
+		rl.recordResponse(msg)
 	}
 }
 
 func (rl *responseLogger) logError(err error, bytesWritten int, content string) {
-	if rl.index == logIndexSkip {
-		return
-	}
-
 	if err != nil {
 		rl.recordError(err)
 	}
 
 	for _, msg := range rl.formatWriteError(err, bytesWritten, content) {
-		rl.recordMessage(msg)
+		rl.recordResponse(msg)
 	}
 }
 
@@ -169,52 +194,55 @@ func (rl *responseLogger) formatResponseData(data string) []string {
 		return result
 	}
 
-	result = append(result, "Body: "+strings.TrimSpace(data))
-	return result
+	return append(result, "Body: "+strings.TrimSpace(data))
 }
 
 func (rl *responseLogger) formatWriteError(err error, bytesWritten int, content string) []string {
 	maxContentLength := 200
 	if len(content) > maxContentLength {
-		content = content[:maxContentLength] + "... (truncated)"
+		content = content[:maxContentLength] + "..."
 	}
 
-	var result = []string{
-		fmt.Sprintf("error writing %q after %d bytes: %v", content, bytesWritten, err),
+	var result []string
+
+	result = append(result, "Write error:")
+	result = append(result, fmt.Sprintf("  Content: %q", content))
+	result = append(result, fmt.Sprintf("  Bytes written: %d", bytesWritten))
+	result = append(result, fmt.Sprintf("  Error: %v", err))
+	result = append(result, "Stack trace:")
+
+	for i, frame := range formatStackTrace(getStackFrames(6)) {
+		result = append(result, "  "+frame)
+		if i > 5 {
+			break // some brevity
+		}
 	}
 
-	return append(result, formatStackTrace(getStackFrames(6))...)
+	return result
 }
 
 func (rl *responseLogger) recordError(err error) {
-	responseLogsMu.Lock()
-	defer responseLogsMu.Unlock()
-
-	if responseLogs[rl.index].ConnError == "" && err != nil {
-		responseLogs[rl.index].ConnError = err.Error()
-	}
-}
-
-func (rl *responseLogger) recordMessage(format string, args ...interface{}) {
-	if rl.index == logIndexSkip {
+	if err == nil {
 		return
 	}
 
-	responseLogsMu.Lock()
-	defer responseLogsMu.Unlock()
+	// Retrieve the existing log entry.
+	value, ok := responseLogs.Load(rl.timestamp)
+	if !ok {
+		log.Fatalf("No log entry found for timestamp %v", rl.timestamp)
+	}
 
-	msg := fmt.Sprintf(format, args...)
-	responseLogs[rl.index].Entries = append(responseLogs[rl.index].Entries, msg)
+	logEntry := value.(*ConnectionLog)
 
-	log.Printf("%v <<< %v %s",
-		responseLogs[rl.index].LocalAddr,
-		responseLogs[rl.index].PeerAddr,
-		msg)
-
+	// Update ConnError if it hasn't been set yet.
+	if logEntry.ConnError == "" {
+		logEntry.ConnError = err.Error()
+		responseLogs.Store(rl.timestamp, logEntry)
+	}
 }
 
-func (rl *responseLogger) skipLogging() {
-	rl.index = logIndexSkip
+func (rl *responseLogger) recordResponse(format string, args ...interface{}) {
+	rl.recordAndLog(LogTypeResponse, format, args...)
 }
 
 // getStackFrames returns a slice of runtime.Frame, skipping the
@@ -274,6 +302,7 @@ func (w *responseWriter) writeToConnection(data string) (int, error) {
 
 	n, err := io.WriteString(w.conn, data)
 	if err != nil {
+		w.connWriteErr = err
 		w.logWriteError(err, n, data)
 	} else {
 		w.logResponseData(data)
@@ -386,7 +415,7 @@ func handleConnection(conn net.Conn) {
 		timeoutErr := clearTimeout()
 		closeErr := conn.Close()
 		if timeoutErr != nil || closeErr != nil {
-			logger.recordMessage("Error during connection cleanup: %v %v", timeoutErr, closeErr)
+			logger.recordAndLog(LogTypeServer, "Error during connection cleanup: %v %v", timeoutErr, closeErr)
 		}
 	}()
 
@@ -488,32 +517,35 @@ func handleDuplicateTransferEncodingRequest(w *responseWriter, method string) {
 }
 
 func accessLogsHandler(w *responseWriter, method string) {
-	// Skip logging for this request to avoid recursive logging.
-	w.logger.skipLogging()
+	w.logger.skipLogging = true
 
-	responseLogsMu.Lock()
-	logs := make([]ConnectionLog, len(responseLogs))
-	copy(logs, responseLogs)
-	responseLogsMu.Unlock()
+	var logs []ConnectionLog
+
+	responseLogs.Range(func(key, value interface{}) bool {
+		logs = append(logs, *(value.(*ConnectionLog)))
+		return true
+	})
+
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].Timestamp.Before(logs[j].Timestamp)
+	})
 
 	logsJSON, err := json.Marshal(logs)
 	if err != nil {
-		w.httpError("Failed to marshal access logs", http.StatusInternalServerError)
+		w.httpError("Failed to marshall access logs to JSON", http.StatusInternalServerError)
 		return
 	}
 
 	handleHTTPRequest(w, method, http.StatusOK, string(logsJSON), false, 0)
 }
 
-// createListener creates a TCP listener on the specified port. If
-// useTLS is true, it loads a TLS certificate and configures the
-// listener for secure connections. It returns a net.Listener or an
-// error if the listener creation fails.
+// createListener creates a TCP listener on the specified port.
+// If useTLS is true, it loads a TLS certificate and configures
+// the listener for secure connections. It returns a net.Listener or an error.
 func createListener(port string, useTLS bool) (net.Listener, error) {
 	if useTLS {
 		cert, err := tls.LoadX509KeyPair("/etc/serving-cert/tls.crt", "/etc/serving-cert/tls.key")
 		if err != nil {
-			log.Printf("Error loading TLS certificate: %v\n", err)
 			return nil, fmt.Errorf("error loading TLS certificate: %w", err)
 		}
 
@@ -526,29 +558,45 @@ func createListener(port string, useTLS bool) (net.Listener, error) {
 	return net.Listen("tcp", ":"+port)
 }
 
-// startServer starts a TCP server on the specified port with optional
-// TLS. It creates a listener using the createListener function, which
-// may configure TLS if useTLS is true. The server listens for
-// incoming connections and spawns a new goroutine for each connection
-// using handleConnection. If an error occurs during the creation of
-// the listener, the function logs a fatal error and exits.
-func startServer(port string, useTLS bool) {
+// startServer starts a TCP server on the specified port with optional TLS.
+// It creates a listener using the createListener function, which may configure TLS if useTLS is true.
+// It returns an error if the listener creation fails or if there are issues accepting connections.
+// The context is used to handle graceful shutdown.
+func startServer(ctx context.Context, port string, useTLS bool) error {
 	listener, err := createListener(port, useTLS)
 	if err != nil {
-		log.Fatalf("Error starting server on port %s: %v\n", port, err)
+		return fmt.Errorf("error starting server on port %s: %w", port, err)
 	}
 	defer listener.Close()
 
-	log.Printf("Server is listening on port %s (TLS=%v)\n", port, useTLS)
+	log.Printf("Listening on %s (TLS=%v)", listener.Addr(), useTLS)
 
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Printf("Error accepting connection: %v\n", err)
-			continue
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				select {
+				case <-ctx.Done():
+					log.Printf("Shutting down server on port %s", port)
+					return
+				default:
+					log.Printf("Error accepting connection on port %s: %v", port, err)
+				}
+				continue
+			}
+
+			go handleConnection(conn)
 		}
-		go handleConnection(conn)
-	}
+	}()
+
+	// Block until context is cancelled (graceful shutdown).
+	<-ctx.Done()
+
+	shutdownTimeout := time.Second
+	_, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	return nil
 }
 
 func main() {
@@ -556,11 +604,31 @@ func main() {
 	httpsPort := os.Getenv("HTTPS_PORT")
 
 	if httpPort == "" || httpsPort == "" {
-		log.Fatalf("Environment variables HTTP_PORT and HTTPS_PORT must be set\n")
+		log.Fatalf("Environment variables HTTP_PORT and HTTPS_PORT must be set")
 	}
 
-	go startServer(httpPort, false) // Start non-TLS server.
-	go startServer(httpsPort, true) // Start TLS server.
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
 
-	select {}
+	// Context to handle graceful shutdown.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 2)
+
+	go func() {
+		errCh <- startServer(ctx, httpPort, false)
+	}()
+
+	go func() {
+		errCh <- startServer(ctx, httpsPort, true)
+	}()
+
+	select {
+	case sig := <-signalChan:
+		log.Printf("Received signal: %v. Initiating graceful shutdown...", sig)
+		cancel()
+	case err := <-errCh:
+		log.Fatalf("Start Server encountered an error: %v", err)
+	}
 }
