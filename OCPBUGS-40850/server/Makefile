@@ -5,3 +5,7 @@ image: server
 
 server: server.go
 	CGO_ENABLED=0 go build -o server server.go
+
+regress:
+	./regress.sh 1051 current
+	diff -r tests/current tests/baseline
