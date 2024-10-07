@@ -1,0 +1,13 @@
+HTTP/1.1 200 OK
+Content-Type: text/plain
+Trailer: Transfer-Encoding, Transfer-Encoding
+Transfer-Encoding: chunked
+
+16
+duplicate-te-trailers
+
+0
+
+Transfer-Encoding: chunked
+Transfer-Encoding: chunked
+

@@ -3,18 +3,6 @@
 // debugging HTTP interactions around duplicate Transfer-Encoding
 // headers.
 //
-// Key features:
-// - HTTP and HTTPS servers
-// - Detailed request and response logging:
-//   - All client interactions are logged to stdout in real-time
-//   - Logs are also stored in an in-memory replay buffer
-//
-// Additional endpoints:
-// - /healthz: Responds with "OK" for basic health checks
-// - /single-te: Sends a response with a single "Transfer-Encoding: chunked" header
-// - /duplicate-te: Sends a response with multiple "Transfer-Encoding: chunked" headers
-// - /access-logs: Provides JSON-formatted logs of all historical connections
-//
 // Note: This server is intended for testing and debugging purposes
 // only due to its ability to generate non-standard HTTP responses and
 // its in-memory log storage.
@@ -111,17 +99,14 @@ func (rl *responseLogger) recordAndLog(logType LogType, format string, args ...i
 	}
 	logEntry := value.(*ConnectionLog)
 
-	// Use the DirectionIndicator method to get the correct indicator
 	directionIndicator := logType.DirectionIndicator()
 
-	// Format the log message with direction
 	formattedMsg := fmt.Sprintf("%s %s %s: %s",
 		logEntry.LocalAddr,
 		directionIndicator,
 		logEntry.PeerAddr,
 		msg)
 
-	// Append to the log entries
 	logEntry.Entries = append(logEntry.Entries, formattedMsg)
 	responseLogs.Store(rl.timestamp, logEntry)
 
@@ -226,7 +211,6 @@ func (rl *responseLogger) recordError(err error) {
 		return
 	}
 
-	// Retrieve the existing log entry.
 	value, ok := responseLogs.Load(rl.timestamp)
 	if !ok {
 		log.Fatalf("No log entry found for timestamp %v", rl.timestamp)
@@ -234,7 +218,6 @@ func (rl *responseLogger) recordError(err error) {
 
 	logEntry := value.(*ConnectionLog)
 
-	// Update ConnError if it hasn't been set yet.
 	if logEntry.ConnError == "" {
 		logEntry.ConnError = err.Error()
 		responseLogs.Store(rl.timestamp, logEntry)
@@ -436,87 +419,158 @@ func handleConnection(conn net.Conn) {
 
 	switch path {
 	case "/healthz":
-		healthzHandler(&writer, method)
+		handleHealthzRequest(&writer, method)
 	case "/single-te":
 		handleSingleTransferEncodingRequest(&writer, method)
-	case "/duplicate-te":
-		handleDuplicateTransferEncodingRequest(&writer, method)
+	case "/single-te-with-trailer":
+		handleSingleTransferEncodingWithTrailerRequest(&writer, method)
+	case "/duplicate-te-headers":
+		handleDuplicateTransferEncodingInHeadersRequest(&writer, method)
+	case "/duplicate-te-trailers":
+		handleDuplicateTransferEncodingInTrailersRequest(&writer, method)
+	case "/duplicate-te-both":
+		handleDuplicateTransferEncodingInBothRequest(&writer, method)
 	case "/access-logs":
-		accessLogsHandler(&writer, method)
+		handleAccessLogsRequest(&writer, method)
 	default:
-		writer.httpError("Not found\n", http.StatusNotFound)
+		notFoundHandler(&writer, method)
 	}
 }
 
-// handleHTTPRequest is a comprehensive handler for various HTTP
-// endpoints. It supports different status codes, chunked and
-// non-chunked responses, and handles GET, HEAD, and other HTTP
-// methods consistently.
-//
-// Behavior:
-//   - GET: Sends the full response with headers and body.
-//   - HEAD: Sends only the headers without a body, but includes Content-Length if applicable.
-//   - Other methods: Responds with the specified status code, but does not send a body.
-func handleHTTPRequest(w *responseWriter, method string, statusCode int, body string, useChunkedEncoding bool, additionalTEHeaders int) {
+// TEPosition defines where the duplicate Transfer-Encoding header(s)
+// should be added in HTTP responses.
+type TEPosition int
+
+const (
+	// NoDuplicateTE specifies that no duplicate Transfer-Encoding
+	// headers will be added.
+	NoDuplicateTE TEPosition = iota
+
+	// DuplicateTransferEncodingInHeaders adds a duplicate
+	// Transfer-Encoding header in the HTTP response headers.
+	DuplicateTransferEncodingInHeaders
+
+	// DuplicateTransferEncodingInTrailers adds a duplicate
+	// Transfer-Encoding header as a trailer after the response
+	// body.
+	DuplicateTransferEncodingInTrailers
+
+	// DuplicateTransferEncodingInBoth adds a duplicate
+	// Transfer-Encoding header in both headers and trailers.
+	DuplicateTransferEncodingInBoth
+)
+
+func handleHTTPRequest(w *responseWriter, method string, statusCode int, body string, useChunkedEncoding bool, tePosition TEPosition, trailerHeaders []string) {
 	// Set basic headers.
 	w.header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	w.header().Set("Content-Type", "text/plain")
 
-	// Determine if a body can or should be sent (skip for 1xx,
-	// 204, 304).
-	bodyAllowed := statusCode >= 200 && statusCode != http.StatusNoContent && statusCode != http.StatusNotModified
+	// Ensure the connection is closed after the response.
+	w.header().Set("Connection", "close")
 
-	// Handle HEAD requests: set Content-Length, but skip sending
-	// the body.
+	// Handle HEAD request: set Content-Length, but no body.
 	if method == http.MethodHead {
-		if bodyAllowed {
-			w.header().Set("Content-Length", strconv.Itoa(len(body)))
-		}
+		w.header().Set("Content-Length", strconv.Itoa(len(body)))
 		w.writeHeader(statusCode)
-		// No body is sent for HEAD requests.
 		return
 	}
 
-	// For GET or other methods, handle Transfer-Encoding and
-	// Content-Length.
+	// Determine if a body should be sent (skip for 1xx, 204, 304).
+	bodyAllowed := statusCode >= 200 && statusCode != http.StatusNoContent && statusCode != http.StatusNotModified
+
+	// Set Transfer-Encoding or Content-Length depending on bodyAllowed.
 	if bodyAllowed {
 		if useChunkedEncoding {
 			w.header().Set("Transfer-Encoding", "chunked")
-			for i := 0; i < additionalTEHeaders; i++ {
+
+			// Handle the iota-based TEPosition: add duplicates in headers, trailers, or both.
+			if tePosition == DuplicateTransferEncodingInHeaders || tePosition == DuplicateTransferEncodingInBoth {
 				w.header().Add("Transfer-Encoding", "chunked")
+			}
+
+			// Inform client about trailers if they exist.
+			if len(trailerHeaders) > 0 {
+				// Gather trailer keys by parsing the headers in the slice.
+				trailerKeys := make([]string, 0, len(trailerHeaders))
+				for _, trailer := range trailerHeaders {
+					keyValue := strings.SplitN(trailer, ": ", 2)
+					if len(keyValue) == 2 {
+						trailerKeys = append(trailerKeys, keyValue[0])
+					}
+				}
+				w.header().Set("Trailer", strings.Join(trailerKeys, ", "))
 			}
 		} else {
 			w.header().Set("Content-Length", strconv.Itoa(len(body)))
 		}
+	} else {
+		w.header().Set("Content-Length", "0")
 	}
 
-	// Write the headers to the client.
+	// Write the headers.
 	w.writeHeader(statusCode)
 
-	// Send the body only for GET and other non-HEAD methods.
-	if bodyAllowed && method == http.MethodGet {
+	// Write the body (if applicable).
+	if bodyAllowed {
 		if useChunkedEncoding {
-			w.writeChunk(body)
-			w.writeChunk("") // End chunked transfer
+			if body != "" {
+				w.writeChunk(body)
+			}
+			w.writeChunk("") // End of chunked body.
+
+			// Write trailers after the body.
+			if len(trailerHeaders) > 0 {
+				// Write all trailer headers from the slice.
+				for _, header := range trailerHeaders {
+					w.write([]byte(fmt.Sprintf("%s\r\n", header)))
+				}
+				w.write([]byte("\r\n")) // End of trailers.
+			}
 		} else {
-			w.write([]byte(body)) // Send entire body
+			w.write([]byte(body))
 		}
 	}
 }
 
-func healthzHandler(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "OK\n", false, 0)
+// Handler for health check without trailers.
+func handleHealthzRequest(w *responseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusOK, "OK\n", false, NoDuplicateTE, nil)
 }
 
+// Handler for single Transfer-Encoding without trailers.
 func handleSingleTransferEncodingRequest(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "single-te\n", true, 0)
+	handleHTTPRequest(w, method, http.StatusOK, "single-te\n", true, NoDuplicateTE, nil)
 }
 
-func handleDuplicateTransferEncodingRequest(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te\n", true, 1)
+// Handler for single Transfer-Encoding with an arbitrary trailer.
+func handleSingleTransferEncodingWithTrailerRequest(w *responseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusOK, "single-te-with-trailer\n", true, NoDuplicateTE, []string{
+		"X-Arbitrary-Trailer: TestTrailer",
+	})
 }
 
-func accessLogsHandler(w *responseWriter, method string) {
+// Handler for adding a duplicate Transfer-Encoding in the headers.
+func handleDuplicateTransferEncodingInHeadersRequest(w *responseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te-headers\n", true, DuplicateTransferEncodingInHeaders, nil)
+}
+
+// Handler for adding duplicate Transfer-Encoding in the trailers.
+func handleDuplicateTransferEncodingInTrailersRequest(w *responseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te-trailers\n", true, DuplicateTransferEncodingInTrailers, []string{
+		"Transfer-Encoding: chunked", // Trailer 1
+		"Transfer-Encoding: chunked", // Trailer 2 (duplicate)
+	})
+}
+
+// Handler for adding a duplicate Transfer-Encoding in both headers and trailers.
+func handleDuplicateTransferEncodingInBothRequest(w *responseWriter, method string) {
+	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te-both\n", true, DuplicateTransferEncodingInBoth, []string{
+		"Transfer-Encoding: chunked", // Trailer 1
+		"Transfer-Encoding: chunked", // Trailer 2 (duplicate)
+	})
+}
+
+func handleAccessLogsRequest(w *responseWriter, method string) {
 	w.logger.skipLogging = true
 
 	var logs []ConnectionLog
@@ -536,7 +590,20 @@ func accessLogsHandler(w *responseWriter, method string) {
 		return
 	}
 
-	handleHTTPRequest(w, method, http.StatusOK, string(logsJSON), false, 0)
+	handleHTTPRequest(w, method, http.StatusOK, string(logsJSON), false, NoDuplicateTE, nil)
+}
+
+func notFoundHandler(w *responseWriter, method string) {
+	w.writeHeader(http.StatusNotFound)
+
+	w.write([]byte("Endpoint not found. Available endpoints:\n"))
+	w.write([]byte("/healthz                 - Health check endpoint.\n"))
+	w.write([]byte("/single-te               - Single Transfer-Encoding without trailers.\n"))
+	w.write([]byte("/single-te-with-trailer  - Single Transfer-Encoding with arbitrary trailers.\n"))
+	w.write([]byte("/duplicate-te-headers    - Duplicate Transfer-Encoding in headers.\n"))
+	w.write([]byte("/duplicate-te-trailers   - Duplicate Transfer-Encoding in trailers.\n"))
+	w.write([]byte("/duplicate-te-both       - Duplicate Transfer-Encoding in both headers and trailers.\n"))
+	w.write([]byte("/access-logs             - Retrieve access logs.\n"))
 }
 
 // createListener creates a TCP listener on the specified port.
@@ -592,8 +659,7 @@ func startServer(ctx context.Context, port string, useTLS bool) error {
 	// Block until context is cancelled (graceful shutdown).
 	<-ctx.Done()
 
-	shutdownTimeout := time.Second
-	_, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	_, cancel := context.WithTimeout(context.Background(), 0)
 	defer cancel()
 
 	return nil

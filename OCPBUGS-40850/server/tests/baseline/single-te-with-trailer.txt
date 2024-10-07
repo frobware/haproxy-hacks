@@ -1,0 +1,12 @@
+HTTP/1.1 200 OK
+Content-Type: text/plain
+Trailer: X-Arbitrary-Trailer
+Transfer-Encoding: chunked
+
+17
+single-te-with-trailer
+
+0
+
+X-Arbitrary-Trailer: TestTrailer
+
