@@ -464,11 +464,9 @@ func handleHTTPRequest(w *responseWriter, method string, statusCode int, body st
 	// Set basic headers.
 	w.header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
 	w.header().Set("Content-Type", "text/plain")
-
-	// Ensure the connection is closed after the response.
 	w.header().Set("Connection", "close")
 
-	// Handle HEAD request: set Content-Length, but no body.
+	// Handle HEAD request: return early after writing headers.
 	if method == http.MethodHead {
 		w.header().Set("Content-Length", strconv.Itoa(len(body)))
 		w.writeHeader(statusCode)
@@ -476,59 +474,55 @@ func handleHTTPRequest(w *responseWriter, method string, statusCode int, body st
 	}
 
 	// Determine if a body should be sent (skip for 1xx, 204, 304).
-	bodyAllowed := statusCode >= 200 && statusCode != http.StatusNoContent && statusCode != http.StatusNotModified
-
-	// Set Transfer-Encoding or Content-Length depending on bodyAllowed.
-	if bodyAllowed {
-		if useChunkedEncoding {
-			w.header().Set("Transfer-Encoding", "chunked")
-
-			// Handle the iota-based TEPosition: add duplicates in headers, trailers, or both.
-			if tePosition == DuplicateTransferEncodingInHeaders || tePosition == DuplicateTransferEncodingInBoth {
-				w.header().Add("Transfer-Encoding", "chunked")
-			}
-
-			// Inform client about trailers if they exist.
-			if len(trailerHeaders) > 0 {
-				// Gather trailer keys by parsing the headers in the slice.
-				trailerKeys := make([]string, 0, len(trailerHeaders))
-				for _, trailer := range trailerHeaders {
-					keyValue := strings.SplitN(trailer, ": ", 2)
-					if len(keyValue) == 2 {
-						trailerKeys = append(trailerKeys, keyValue[0])
-					}
-				}
-				w.header().Set("Trailer", strings.Join(trailerKeys, ", "))
-			}
-		} else {
-			w.header().Set("Content-Length", strconv.Itoa(len(body)))
-		}
-	} else {
+	if statusCode < 200 || statusCode == http.StatusNoContent || statusCode == http.StatusNotModified {
 		w.header().Set("Content-Length", "0")
+		w.writeHeader(statusCode)
+		return
 	}
 
-	// Write the headers.
-	w.writeHeader(statusCode)
-
-	// Write the body (if applicable).
-	if bodyAllowed {
-		if useChunkedEncoding {
-			if body != "" {
-				w.writeChunk(body)
-			}
-			w.writeChunk("") // End of chunked body.
-
-			// Write trailers after the body.
-			if len(trailerHeaders) > 0 {
-				// Write all trailer headers from the slice.
-				for _, header := range trailerHeaders {
-					w.write([]byte(fmt.Sprintf("%s\r\n", header)))
-				}
-				w.write([]byte("\r\n")) // End of trailers.
-			}
-		} else {
+	// Handle non-chunked encoding: set Content-Length and write the body.
+	if !useChunkedEncoding {
+		w.header().Set("Content-Length", strconv.Itoa(len(body)))
+		w.writeHeader(statusCode)
+		if body != "" {
 			w.write([]byte(body))
 		}
+		return
+	}
+
+	// Handle chunked encoding.
+	w.header().Set("Transfer-Encoding", "chunked")
+
+	// Set Trailer header if there are trailers.
+	if len(trailerHeaders) > 0 {
+		trailerKeys := make([]string, 0, len(trailerHeaders))
+		for _, trailer := range trailerHeaders {
+			keyValue := strings.SplitN(trailer, ": ", 2)
+			if len(keyValue) == 2 {
+				trailerKeys = append(trailerKeys, keyValue[0])
+			}
+		}
+		w.header().Set("Trailer", strings.Join(trailerKeys, ", "))
+	}
+
+	// Handle duplicate Transfer-Encoding in headers.
+	if tePosition == DuplicateTransferEncodingInHeaders || tePosition == DuplicateTransferEncodingInBoth {
+		w.header().Add("Transfer-Encoding", "chunked")
+	}
+
+	w.writeHeader(statusCode)
+
+	if body != "" {
+		w.writeChunk(body)
+	}
+	w.writeChunk("") // End of chunked body.
+
+	// Write trailers after the body.
+	if len(trailerHeaders) > 0 {
+		for _, header := range trailerHeaders {
+			w.write([]byte(fmt.Sprintf("%s\r\n", header)))
+		}
+		w.write([]byte("\r\n")) // End of trailers.
 	}
 }
 
