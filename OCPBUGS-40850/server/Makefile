@@ -7,5 +7,6 @@ server: server.go
 	CGO_ENABLED=0 go build -o server server.go
 
 regress:
+	$(RM) -r current
 	./regress.sh 1051 current
-	diff -r tests/current tests/baseline
+	difft tests/current tests/baseline

@@ -1,10 +1,8 @@
 HTTP/1.1 200 OK
-Connection: close
 Content-Type: text/plain
 Transfer-Encoding: chunked
 
-A
-single-te
-
+a
+/single-te
 0
 

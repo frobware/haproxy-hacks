@@ -1,11 +1,9 @@
 HTTP/1.1 200 OK
-Connection: close
 Content-Type: text/plain
 Transfer-Encoding: chunked
 Transfer-Encoding: chunked
 
-15
-duplicate-te-headers
-
+d
+/duplicate-te
 0
 

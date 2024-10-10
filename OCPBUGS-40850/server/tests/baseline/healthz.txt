@@ -1,6 +1,9 @@
 HTTP/1.1 200 OK
 Connection: close
-Content-Length: 3
 Content-Type: text/plain
+Transfer-Encoding: chunked
 
-OK
+8
+/healthz
+0
+
