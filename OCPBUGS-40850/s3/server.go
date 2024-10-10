@@ -61,9 +61,6 @@ func main() {
 	httpPort := os.Getenv("HTTP_PORT")
 	httpsPort := os.Getenv("HTTPS_PORT")
 
-	httpPort = "1051"
-	httpsPort = "1052"
-
 	if httpPort == "" || httpsPort == "" {
 		log.Fatalf("Environment variables HTTP_PORT and HTTPS_PORT must be set")
 	}
