@@ -2,7 +2,7 @@
 
 set -e
 
-endpoints="/duplicate-te-both /duplicate-te-headers /duplicate-te-trailers /healthz /single-te /single-te-with-trailer"
+endpoints="/healthz /single-te /duplicate-te"
 
 # Retrieve routes and iterate through each host
 oc get routes --no-headers -o custom-columns=HOST:.spec.host | while read -r host; do
