@@ -1,662 +1,60 @@
-// Package main implements a customizable HTTP/HTTPS server with
-// comprehensive logging capabilities, designed for testing and
-// debugging HTTP interactions around duplicate Transfer-Encoding
-// headers.
-//
-// Note: This server is intended for testing and debugging purposes
-// only due to its ability to generate non-standard HTTP responses and
-// its in-memory log storage.
 package main
 
 import (
-	"bufio"
-	"context"
 	"crypto/tls"
-	"encoding/json"
-	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
-	"path/filepath"
-	"runtime"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
 )
 
-var responseLogs sync.Map
-
-// responseWriter is a custom writer that handles HTTP response
-// writing directly over a net.Conn. It provides methods to write
-// headers and body to the connection, and it tracks any errors that
-// occur during writing. This allows fine-grained control over the
-// response, enabling scenarios that bypass Go's standard HTTP
-// sanitisation mechanisms.
-type responseWriter struct {
-	conn         net.Conn
-	connWriteErr error
-	httpHeader   http.Header
-	logger       *responseLogger
+type listenerConfig struct {
+	Address  string
+	UseTLS   bool
+	CertFile string
+	KeyFile  string
 }
 
-type ConnectionLog struct {
-	ConnError   string    `json:"conn_error,omitempty"`
-	Entries     []string  `json:"entries"`
-	LocalAddr   string    `json:"local_addr"`
-	PeerAddr    string    `json:"peer_addr"`
-	RequestLine string    `json:"request_line"`
-	Timestamp   time.Time `json:"timestamp"`
-}
-
-type responseLogger struct {
-	timestamp   time.Time
-	skipLogging bool
-}
-
-type LogType int
-
-const (
-	LogTypeRequest LogType = iota
-	LogTypeResponse
-	LogTypeServer
-)
-
-// DirectionIndicator returns a string representation of the data flow
-// direction for each log type. For requests ("<-"), it indicates data
-// flowing from client to server. For responses ("->"), it indicates
-// data flowing from server to client. For server messages ("--"), it
-// indicates internal server events not directly involving data flow.
-func (lt LogType) DirectionIndicator() string {
-	return [...]string{"<-", "->", "--"}[lt]
-}
-
-func newResponseLogger(conn net.Conn) *responseLogger {
-	timestamp := time.Now()
-	responseLogs.Store(timestamp, &ConnectionLog{
-		PeerAddr:  conn.RemoteAddr().String(),
-		LocalAddr: conn.LocalAddr().String(),
-		Timestamp: timestamp,
-	})
-	return &responseLogger{timestamp: timestamp}
-}
-
-func (rl *responseLogger) recordAndLog(logType LogType, format string, args ...interface{}) {
-	if rl.skipLogging {
-		return
-	}
-
-	msg := fmt.Sprintf(format, args...)
-
-	value, ok := responseLogs.Load(rl.timestamp)
-	if !ok {
-		log.Fatalf("No log entry found for timestamp %v", rl.timestamp)
-	}
-	logEntry := value.(*ConnectionLog)
-
-	directionIndicator := logType.DirectionIndicator()
-
-	formattedMsg := fmt.Sprintf("%s %s %s: %s",
-		logEntry.LocalAddr,
-		directionIndicator,
-		logEntry.PeerAddr,
-		msg)
-
-	logEntry.Entries = append(logEntry.Entries, formattedMsg)
-	responseLogs.Store(rl.timestamp, logEntry)
-
-	log.Print(formattedMsg)
-}
-
-func (rl *responseLogger) setRequestLine(requestLine string) {
-	if value, ok := responseLogs.Load(rl.timestamp); ok {
-		log := value.(*ConnectionLog)
-		log.RequestLine = requestLine
-		responseLogs.Store(rl.timestamp, log)
-	}
-
-	rl.recordAndLog(LogTypeRequest, "Received request: %s", requestLine)
-}
-
-func (rl *responseLogger) logResponse(data string) {
-	for _, msg := range rl.formatResponseData(data) {
-		rl.recordResponse(msg)
-	}
-}
-
-func (rl *responseLogger) logError(err error, bytesWritten int, content string) {
-	if err != nil {
-		rl.recordError(err)
-	}
-
-	for _, msg := range rl.formatWriteError(err, bytesWritten, content) {
-		rl.recordResponse(msg)
-	}
-}
-
-func (rl *responseLogger) formatResponseData(data string) []string {
-	var result []string
-	maxContentLength := 200
-
-	if len(data) > maxContentLength {
-		data = data[:maxContentLength] + "... (truncated)"
-	}
-
-	if strings.HasPrefix(data, "HTTP/") || strings.Contains(data, ": ") {
-		result = append(result, data)
-		return result
-	}
-
-	if strings.HasSuffix(data, "\r\n") {
-		parts := strings.SplitN(data, "\r\n", 2)
-		if len(parts) == 2 {
-			chunkSize := parts[0]
-			chunkData := strings.TrimSuffix(parts[1], "\r\n")
-
-			if chunkSize != "" {
-				result = append(result, "Chunk-Size: 0x"+chunkSize)
-			}
-
-			if chunkData != "" {
-				result = append(result, "Chunk-Data: "+chunkData)
-			}
-
-			if chunkSize == "0" {
-				result = append(result, "End-Of-Chunked-Transfer")
-			}
-
-			return result
-		}
-	}
-
-	if data == "" {
-		result = append(result, "Empty-Response")
-		return result
-	}
-
-	return append(result, "Body: "+strings.TrimSpace(data))
-}
-
-func (rl *responseLogger) formatWriteError(err error, bytesWritten int, content string) []string {
-	maxContentLength := 200
-	if len(content) > maxContentLength {
-		content = content[:maxContentLength] + "..."
-	}
-
-	var result []string
-
-	result = append(result, "Write error:")
-	result = append(result, fmt.Sprintf("  Content: %q", content))
-	result = append(result, fmt.Sprintf("  Bytes written: %d", bytesWritten))
-	result = append(result, fmt.Sprintf("  Error: %v", err))
-	result = append(result, "Stack trace:")
-
-	for i, frame := range formatStackTrace(getStackFrames(6)) {
-		result = append(result, "  "+frame)
-		if i > 5 {
-			break // some brevity
-		}
-	}
-
-	return result
-}
-
-func (rl *responseLogger) recordError(err error) {
-	if err == nil {
-		return
-	}
-
-	value, ok := responseLogs.Load(rl.timestamp)
-	if !ok {
-		log.Fatalf("No log entry found for timestamp %v", rl.timestamp)
-	}
-
-	logEntry := value.(*ConnectionLog)
-
-	if logEntry.ConnError == "" {
-		logEntry.ConnError = err.Error()
-		responseLogs.Store(rl.timestamp, logEntry)
-	}
-}
-
-func (rl *responseLogger) recordResponse(format string, args ...interface{}) {
-	rl.recordAndLog(LogTypeResponse, format, args...)
-}
-
-// getStackFrames returns a slice of runtime.Frame, skipping the
-// specified number of frames.
-func getStackFrames(skip int) []runtime.Frame {
-	pcs := make([]uintptr, 32)
-	n := runtime.Callers(skip, pcs)
-	frames := runtime.CallersFrames(pcs[:n])
-
-	var stackFrames []runtime.Frame
-
-	for {
-		frame, more := frames.Next()
-		stackFrames = append(stackFrames, frame)
-		if !more {
-			break
-		}
-	}
-
-	return stackFrames
-}
-
-func (w *responseWriter) logResponseData(data string) {
-	w.logger.logResponse(data)
-}
-
-func (w *responseWriter) logWriteError(err error, bytesWritten int, content string) {
-	w.logger.logError(err, bytesWritten, content)
-}
-
-// formatStackTrace converts a slice of runtime.Frame into a slice of
-// formatted strings. Each string represents a stack frame with the
-// function name, file name, and line number.
-func formatStackTrace(frames []runtime.Frame) []string {
-	var stackElements []string
-
-	for _, frame := range frames {
-		file := filepath.Base(frame.File)
-		stackElements = append(stackElements, fmt.Sprintf("%s (%s:%d)", frame.Function, file, frame.Line))
-	}
-
-	return stackElements
-}
-
-// header returns the HTTP headers.
-func (w *responseWriter) header() http.Header {
-	if w.httpHeader == nil {
-		w.httpHeader = make(http.Header)
-	}
-	return w.httpHeader
-}
-
-func (w *responseWriter) writeToConnection(data string) (int, error) {
-	if w.connWriteErr != nil {
-		return 0, w.connWriteErr
-	}
-
-	n, err := io.WriteString(w.conn, data)
-	if err != nil {
-		w.connWriteErr = err
-		w.logWriteError(err, n, data)
-	} else {
-		w.logResponseData(data)
-	}
-
-	return n, err
-}
-
-// write writes the byte slice 'b' directly to the underlying
-// net.Conn. If an error occurs during writing, it logs the error and
-// updates the internal writeErr state. If a previous write error
-// exists, write returns immediately without writing. It returns the
-// number of bytes written and any error encountered during the write
-// operation.
-func (w *responseWriter) write(b []byte) (int, error) {
-	return w.writeToConnection(string(b))
-}
-
-// writeHeader writes the HTTP status code and headers to the
-// connection. It first writes the status line in the format "HTTP/1.1
-// <statusCode> <statusText>\r\n". Then, it writes each header as
-// "<key>: <value>\r\n". If any write operation encounters an error,
-// it stops further writes and returns immediately. If a previous
-// write error exists, writeHeader does nothing.
-func (w *responseWriter) writeHeader(statusCode int) {
-	if w.connWriteErr != nil {
-		return
-	}
-
-	w.writeToConnection(fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, http.StatusText(statusCode)))
-
-	var keys []string
-	for k := range w.header() {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		for _, v := range w.header()[k] {
-			w.writeToConnection(fmt.Sprintf("%s: %s\r\n", k, v))
-		}
-	}
-
-	w.writeToConnection("\r\n")
-}
-
-// writeChunk writes a single chunk to the connection. If 'data' is
-// non-empty, it writes the chunk size in hexadecimal followed by the
-// data and a trailing CRLF. If 'data' is empty, it writes the
-// terminating chunk ("0\r\n\r\n") to signal the end of the chunked
-// transfer. It returns the number of bytes written and any error
-// encountered during the write operation.
-func (w *responseWriter) writeChunk(data string) (int, error) {
-	if data == "" {
-		return w.writeToConnection("0\r\n\r\n")
-	}
-
-	return w.writeToConnection(fmt.Sprintf("%X\r\n%s\r\n", len(data), data))
-}
-
-// setConnTimeout sets a deadline on the connection by adding the
-// specified timeout to the current time. It returns a function to
-// clear the timeout by resetting the connection's deadline to zero
-// (i.e., no deadline). If setting the deadline fails, it returns an
-// error. The returned function logs any error that occurs when
-// clearing the deadline.
-func (w *responseWriter) setConnTimeout(timeout time.Duration) (clearTimeout func() error, err error) {
-	if err := w.conn.SetDeadline(time.Now().Add(timeout)); err != nil {
-		return nil, err
-	}
-
-	return func() error {
-		return w.conn.SetDeadline(time.Time{})
-	}, nil
-}
-
-// Error replies to the request with the specified error message and
-// HTTP code. It does not otherwise end the request; the caller should
-// ensure no further writes are done to w. The error message should be
-// plain text.
-func (w *responseWriter) httpError(error string, code int) {
-	w.header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.header().Set("X-Content-Type-Options", "nosniff")
-	w.writeHeader(code)
-	w.write([]byte(error))
-}
-
-// handleConnection processes an incoming connection by setting a
-// timeout, reading the request line, and routing it to the
-// appropriate handler. It sets a connection timeout using
-// setConnTimeout and logs any errors. Once the connection is
-// processed or an error occurs, it ensures the connection is closed.
-// The request is parsed for method, path, and protocol, and the
-// request is routed based on the path.
-func handleConnection(conn net.Conn) {
-	logger := newResponseLogger(conn)
-
-	writer := responseWriter{
-		conn:   conn,
-		logger: logger,
-	}
-
-	clearTimeout, err := writer.setConnTimeout(30 * time.Second)
-	if err != nil {
-		writer.httpError("Internal Server Error", http.StatusInternalServerError)
-		conn.Close()
-		return
-	}
-
-	defer func() {
-		timeoutErr := clearTimeout()
-		closeErr := conn.Close()
-		if timeoutErr != nil || closeErr != nil {
-			logger.recordAndLog(LogTypeServer, "Error during connection cleanup: %v %v", timeoutErr, closeErr)
-		}
-	}()
-
-	reader := bufio.NewReader(conn)
-	requestLine, _, err := reader.ReadLine()
-	if err != nil {
-		writer.httpError(fmt.Sprintf("Failed to read request line: %v", err), http.StatusBadRequest)
-		return
-	}
-
-	logger.setRequestLine(string(requestLine))
-
-	var method, path, protocol string
-	if _, err = fmt.Sscanf(string(requestLine), "%s %s %s", &method, &path, &protocol); err != nil {
-		writer.httpError("Error parsing request line", http.StatusBadRequest)
-		return
-	}
-
-	switch path {
-	case "/healthz":
-		handleHealthzRequest(&writer, method)
-	case "/single-te":
-		handleSingleTransferEncodingRequest(&writer, method)
-	case "/single-te-with-trailer":
-		handleSingleTransferEncodingWithTrailerRequest(&writer, method)
-	case "/duplicate-te-headers":
-		handleDuplicateTransferEncodingInHeadersRequest(&writer, method)
-	case "/duplicate-te-trailers":
-		handleDuplicateTransferEncodingInTrailersRequest(&writer, method)
-	case "/duplicate-te-both":
-		handleDuplicateTransferEncodingInBothRequest(&writer, method)
-	case "/access-logs":
-		handleAccessLogsRequest(&writer, method)
-	default:
-		notFoundHandler(&writer, method)
-	}
-}
-
-// TEPosition defines where the duplicate Transfer-Encoding header(s)
-// should be added in HTTP responses.
-type TEPosition int
-
-const (
-	// NoDuplicateTE specifies that no duplicate Transfer-Encoding
-	// headers will be added.
-	NoDuplicateTE TEPosition = iota
-
-	// DuplicateTransferEncodingInHeaders adds a duplicate
-	// Transfer-Encoding header in the HTTP response headers.
-	DuplicateTransferEncodingInHeaders
-
-	// DuplicateTransferEncodingInTrailers adds a duplicate
-	// Transfer-Encoding header as a trailer after the response
-	// body.
-	DuplicateTransferEncodingInTrailers
-
-	// DuplicateTransferEncodingInBoth adds a duplicate
-	// Transfer-Encoding header in both headers and trailers.
-	DuplicateTransferEncodingInBoth
-)
-
-func handleHTTPRequest(w *responseWriter, method string, statusCode int, body string, useChunkedEncoding bool, tePosition TEPosition, trailerHeaders []string) {
-	// Set basic headers.
-	w.header().Set("Date", time.Now().UTC().Format(http.TimeFormat))
-	w.header().Set("Content-Type", "text/plain")
-	w.header().Set("Connection", "close")
-
-	// Handle HEAD request: return early after writing headers.
-	if method == http.MethodHead {
-		w.header().Set("Content-Length", strconv.Itoa(len(body)))
-		w.writeHeader(statusCode)
-		return
-	}
-
-	// Determine if a body should be sent (skip for 1xx, 204, 304).
-	if statusCode < 200 || statusCode == http.StatusNoContent || statusCode == http.StatusNotModified {
-		w.header().Set("Content-Length", "0")
-		w.writeHeader(statusCode)
-		return
-	}
-
-	// Handle non-chunked encoding: set Content-Length and write the body.
-	if !useChunkedEncoding {
-		w.header().Set("Content-Length", strconv.Itoa(len(body)))
-		w.writeHeader(statusCode)
-		if body != "" {
-			w.write([]byte(body))
-		}
-		return
-	}
-
-	// Handle chunked encoding.
-	w.header().Set("Transfer-Encoding", "chunked")
-
-	// Set Trailer header if there are trailers.
-	if len(trailerHeaders) > 0 {
-		trailerKeys := make([]string, 0, len(trailerHeaders))
-		for _, trailer := range trailerHeaders {
-			keyValue := strings.SplitN(trailer, ": ", 2)
-			if len(keyValue) == 2 {
-				trailerKeys = append(trailerKeys, keyValue[0])
-			}
-		}
-		w.header().Set("Trailer", strings.Join(trailerKeys, ", "))
-	}
-
-	// Handle duplicate Transfer-Encoding in headers.
-	if tePosition == DuplicateTransferEncodingInHeaders || tePosition == DuplicateTransferEncodingInBoth {
-		w.header().Add("Transfer-Encoding", "chunked")
-	}
-
-	w.writeHeader(statusCode)
-
-	if body != "" {
-		w.writeChunk(body)
-	}
-	w.writeChunk("") // End of chunked body.
-
-	// Write trailers after the body.
-	if len(trailerHeaders) > 0 {
-		for _, header := range trailerHeaders {
-			w.write([]byte(fmt.Sprintf("%s\r\n", header)))
-		}
-		w.write([]byte("\r\n")) // End of trailers.
-	}
-}
-
-// Handler for health check without trailers.
-func handleHealthzRequest(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "OK\n", false, NoDuplicateTE, nil)
-}
-
-// Handler for single Transfer-Encoding without trailers.
-func handleSingleTransferEncodingRequest(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "single-te\n", true, NoDuplicateTE, nil)
-}
-
-// Handler for single Transfer-Encoding with an arbitrary trailer.
-func handleSingleTransferEncodingWithTrailerRequest(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "single-te-with-trailer\n", true, NoDuplicateTE, []string{
-		"X-Arbitrary-Trailer: TestTrailer",
-	})
-}
-
-// Handler for adding a duplicate Transfer-Encoding in the headers.
-func handleDuplicateTransferEncodingInHeadersRequest(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te-headers\n", true, DuplicateTransferEncodingInHeaders, nil)
-}
-
-// Handler for adding duplicate Transfer-Encoding in the trailers.
-func handleDuplicateTransferEncodingInTrailersRequest(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te-trailers\n", true, DuplicateTransferEncodingInTrailers, []string{
-		"Transfer-Encoding: chunked", // Trailer 1
-		"Transfer-Encoding: chunked", // Trailer 2 (duplicate)
-	})
-}
-
-// Handler for adding a duplicate Transfer-Encoding in both headers and trailers.
-func handleDuplicateTransferEncodingInBothRequest(w *responseWriter, method string) {
-	handleHTTPRequest(w, method, http.StatusOK, "duplicate-te-both\n", true, DuplicateTransferEncodingInBoth, []string{
-		"Transfer-Encoding: chunked", // Trailer 1
-		"Transfer-Encoding: chunked", // Trailer 2 (duplicate)
-	})
-}
-
-func handleAccessLogsRequest(w *responseWriter, method string) {
-	w.logger.skipLogging = true
-
-	var logs []ConnectionLog
-
-	responseLogs.Range(func(key, value interface{}) bool {
-		logs = append(logs, *(value.(*ConnectionLog)))
-		return true
-	})
-
-	sort.Slice(logs, func(i, j int) bool {
-		return logs[i].Timestamp.Before(logs[j].Timestamp)
-	})
-
-	logsJSON, err := json.Marshal(logs)
-	if err != nil {
-		w.httpError("Failed to marshall access logs to JSON", http.StatusInternalServerError)
-		return
-	}
-
-	handleHTTPRequest(w, method, http.StatusOK, string(logsJSON), false, NoDuplicateTE, nil)
-}
-
-func notFoundHandler(w *responseWriter, method string) {
-	w.writeHeader(http.StatusNotFound)
-
-	w.write([]byte("Endpoint not found. Available endpoints:\n"))
-	w.write([]byte("/healthz                 - Health check endpoint.\n"))
-	w.write([]byte("/single-te               - Single Transfer-Encoding without trailers.\n"))
-	w.write([]byte("/single-te-with-trailer  - Single Transfer-Encoding with arbitrary trailers.\n"))
-	w.write([]byte("/duplicate-te-headers    - Duplicate Transfer-Encoding in headers.\n"))
-	w.write([]byte("/duplicate-te-trailers   - Duplicate Transfer-Encoding in trailers.\n"))
-	w.write([]byte("/duplicate-te-both       - Duplicate Transfer-Encoding in both headers and trailers.\n"))
-	w.write([]byte("/access-logs             - Retrieve access logs.\n"))
-}
-
-// createListener creates a TCP listener on the specified port.
-// If useTLS is true, it loads a TLS certificate and configures
-// the listener for secure connections. It returns a net.Listener or an error.
-func createListener(port string, useTLS bool) (net.Listener, error) {
-	if useTLS {
-		cert, err := tls.LoadX509KeyPair("/etc/serving-cert/tls.crt", "/etc/serving-cert/tls.key")
+func createListener(config listenerConfig) (net.Listener, error) {
+	if config.UseTLS {
+		cert, err := tls.LoadX509KeyPair(config.CertFile, config.KeyFile)
 		if err != nil {
-			return nil, fmt.Errorf("error loading TLS certificate: %w", err)
+			return nil, err
 		}
-
-		config := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
-		return tls.Listen("tcp", ":"+port, config)
+		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cert}}
+		return tls.Listen("tcp", config.Address, tlsConfig)
 	}
-
-	return net.Listen("tcp", ":"+port)
+	return net.Listen("tcp", config.Address)
 }
 
-// startServer starts a TCP server on the specified port with optional TLS.
-// It creates a listener using the createListener function, which may configure TLS if useTLS is true.
-// It returns an error if the listener creation fails or if there are issues accepting connections.
-// The context is used to handle graceful shutdown.
-func startServer(ctx context.Context, port string, useTLS bool) error {
-	listener, err := createListener(port, useTLS)
+func handleConnection(conn net.Conn, server *httpServer) {
+	wrappedConn := newNetConnWrapper(conn)
+	handler := newConnectionHandler(server, &stdoutLogger{})
+	if err := handler.processConnection(wrappedConn); err != nil {
+		handler.logger.Logf("%s -- %s: Connection error: %v", conn.LocalAddr(), conn.RemoteAddr(), err)
+	} else {
+		handler.logger.Logf("%s -- %s: Connection closed", conn.LocalAddr(), conn.RemoteAddr())
+	}
+}
+
+func startListener(config listenerConfig, server *httpServer) {
+	listener, err := createListener(config)
 	if err != nil {
-		return fmt.Errorf("error starting server on port %s: %w", port, err)
+		log.Fatalf("Failed to create listener on %s: %v", config.Address, err)
 	}
 	defer listener.Close()
 
-	log.Printf("Listening on %s (TLS=%v)", listener.Addr(), useTLS)
+	log.Printf("Accepting connections on %s (TLS: %v)", config.Address, config.UseTLS)
 
-	go func() {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				select {
-				case <-ctx.Done():
-					log.Printf("Shutting down server on port %s", port)
-					return
-				default:
-					log.Printf("Error accepting connection on port %s: %v", port, err)
-				}
-				continue
-			}
-
-			go handleConnection(conn)
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Printf("Failed to accept connection: %v", err)
+			continue
 		}
-	}()
 
-	// Block until context is cancelled (graceful shutdown).
-	<-ctx.Done()
-
-	_, cancel := context.WithTimeout(context.Background(), 0)
-	defer cancel()
-
-	return nil
+		go handleConnection(conn, server)
+	}
 }
 
 func main() {
@@ -667,28 +65,25 @@ func main() {
 		log.Fatalf("Environment variables HTTP_PORT and HTTPS_PORT must be set")
 	}
 
-	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	httpServer := newHTTPServer()
 
-	// Context to handle graceful shutdown.
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	httpServer.Handle("/healthz", http.HandlerFunc(healthzHandler))
+	httpServer.Handle("/access-logs", http.HandlerFunc(accessLogsHandler))
+	httpServer.Handle("/single-te", http.HandlerFunc(singleTransferEncodingHandler))
+	httpServer.Handle("/duplicate-te", http.HandlerFunc(duplicateTransferEncodingHandler))
+	httpServer.Handle("/discovery", http.HandlerFunc(discoveryHandler))
 
-	errCh := make(chan error, 2)
-
-	go func() {
-		errCh <- startServer(ctx, httpPort, false)
-	}()
-
-	go func() {
-		errCh <- startServer(ctx, httpsPort, true)
-	}()
-
-	select {
-	case sig := <-signalChan:
-		log.Printf("Received signal: %v. Initiating graceful shutdown...", sig)
-		cancel()
-	case err := <-errCh:
-		log.Fatalf("Start Server encountered an error: %v", err)
+	for _, config := range []listenerConfig{{
+		Address: "[::]:" + httpPort,
+		UseTLS:  false,
+	}, {
+		Address:  "[::]:" + httpsPort,
+		UseTLS:   true,
+		CertFile: "/etc/serving-cert/tls.crt",
+		KeyFile:  "/etc/serving-cert/tls.key",
+	}} {
+		go startListener(config, httpServer)
 	}
+
+	select {}
 }

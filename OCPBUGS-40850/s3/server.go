@@ -31,9 +31,9 @@ func handleConnection(conn net.Conn, server *httpServer) {
 	wrappedConn := newNetConnWrapper(conn)
 	handler := newConnectionHandler(server, &stdoutLogger{})
 	if err := handler.processConnection(wrappedConn); err != nil {
-		log.Printf("Connection error: %v", err)
+		handler.logger.Logf("%s -- %s: Connection error: %v", conn.LocalAddr(), conn.RemoteAddr(), err)
 	} else {
-		log.Printf("Connection closed normally: %v", conn.RemoteAddr())
+		handler.logger.Logf("%s -- %s: Connection closed", conn.LocalAddr(), conn.RemoteAddr())
 	}
 }
 
@@ -52,9 +52,9 @@ func startListener(config listenerConfig, server *httpServer) {
 			log.Printf("Failed to accept connection: %v", err)
 			continue
 		}
+
 		go handleConnection(conn, server)
 	}
-
 }
 
 func main() {

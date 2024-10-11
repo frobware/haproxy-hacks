@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
 # Function to normalize HTTP responses by removing dynamic headers and carriage returns
 normalize_output() {
     sed '/^Date: /d' | sed '/^\*/d' | tr -d '\r'
