@@ -3,7 +3,7 @@
 set -eu
 
 # Number of routes to create for each type (default is 3).
-N=${1:-3}
+N=${1:-10}
 
 # Bash associative array to map termination types to target ports.
 declare -A target_ports=(
