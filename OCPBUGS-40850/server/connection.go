@@ -31,7 +31,7 @@ type ConnectionLog struct {
 	PeerAddr    string       `json:"peer_addr"`
 	RequestLine string       `json:"request_line"`
 	Timestamp   time.Time    `json:"timestamp"`
-	Complete    bool         `json:"finished"`
+	Complete    bool         `json:"complete"`
 }
 
 type ResponseLog struct {
