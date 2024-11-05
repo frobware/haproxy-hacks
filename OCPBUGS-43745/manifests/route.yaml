@@ -9,7 +9,7 @@ spec:
     targetPort: http
   to:
     kind: Service
-    name: service-unsecure
+    name: service-unsecure1
     weight: 100
   wildcardPolicy: None
   

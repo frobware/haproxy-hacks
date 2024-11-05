@@ -5,14 +5,14 @@ items:
   kind: ReplicationController
   metadata:
     labels:
-      name: web-server-rc
-    name: web-server-rc
+      name: web-server-rc1
+    name: web-server-rc1
   spec:
     replicas: 1
     template:
       metadata:
         labels:
-          name: web-server-rc
+          name: web-server-rc1
       spec:
         containers:
         - image: quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0
@@ -21,27 +21,14 @@ items:
   kind: Service
   metadata:
     labels:
-      name: service-secure
-    name: service-secure
-  spec:
-    ports:
-    - name: https
-      port: 27443
-      protocol: TCP
-      targetPort: 8443
-    selector:
-      name: web-server-rc
-- apiVersion: v1
-  kind: Service
-  metadata:
-    labels:
-      name: service-unsecure
-    name: service-unsecure
+      name: service-unsecure1
+    name: service-unsecure1
   spec:
     ports:
     - name: http
-      port: 27017
+      port: 8080
       protocol: TCP
       targetPort: 8080
     selector:
-      name: web-server-rc
+      name: web-server-rc1
+
