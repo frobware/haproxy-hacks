@@ -528,12 +528,19 @@ func getRouteResponse(logger *slog.Logger, route *routev1.Route) (string, error)
 }
 
 func fetchServiceResponse(tc *TestConfig, route *routev1.Route) (string, error) {
-	tc.Logger.Info("getting response from service", "service", route.Spec.To.Name)
-	response, err := getRouteResponse(tc.Logger, route)
+	// Re-fetch the latest version of the route
+	updatedRoute, err := tc.RouteClient.RouteV1().Routes(route.Namespace).Get(tc.Context, route.Name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to re-fetch route: %w", err)
+	}
+
+	tc.Logger.Info("getting response from service", "service", updatedRoute.Spec.To.Name)
+	response, err := getRouteResponse(tc.Logger, updatedRoute)
 	if err != nil {
 		return "", fmt.Errorf("failed to get response from service: %w", err)
 	}
-	tc.Logger.Info("received response from service", "service", route.Spec.To.Name, "response", response)
+
+	tc.Logger.Info("received response from service", "service", updatedRoute.Spec.To.Name, "response", response)
 	return response, nil
 }
 
