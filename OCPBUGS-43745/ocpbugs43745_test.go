@@ -22,6 +22,8 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 
+	configclientset "github.com/openshift/client-go/config/clientset/versioned"
+
 	routev1 "github.com/openshift/api/route/v1"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned"
 
@@ -345,6 +347,18 @@ func setupTest(t *testing.T) *TestConfig {
 	if err != nil {
 		t.Fatalf("failed to create route client: %v", err)
 	}
+
+	configClient, err := configclientset.NewForConfig(cfg)
+	if err != nil {
+		t.Fatalf("Failed to create config clientset: %v", err)
+	}
+
+	clusterVersion, err := configClient.ConfigV1().ClusterVersions().Get(context.TODO(), "version", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Failed to retrieve cluster version: %v", err)
+	}
+
+	logger.Info("Running test on OpenShift Cluster Version", "version", clusterVersion.Status.Desired.Version)
 
 	tc := &TestConfig{
 		Context:     ctx,
