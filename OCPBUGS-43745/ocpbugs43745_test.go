@@ -619,6 +619,8 @@ func setupTest(t *testing.T) *TestConfig {
 		return current.Status.ReadyReplicas >= *current.Spec.Replicas, nil
 	}
 
+	routeCreator := ocpbugs43745.NewLoggingCreator(&routeCreator{routeClient: routeClient}, logger)
+
 	for i := 1; i <= 2; i++ {
 		rcCreator := ocpbugs43745.NewReadinessAwareCreator(
 			ocpbugs43745.NewLoggingCreator(&replicationControllerCreator{clientset: kubeClient}, logger),
@@ -655,9 +657,14 @@ func setupTest(t *testing.T) *TestConfig {
 		}
 
 		tc.Pods = append(tc.Pods, podList.Items...)
+
+		_, err = routeCreator.Create(ctx, ocpbugs43745.ResourceMeta{
+			Name:      "route-service-" + strconv.Itoa(i),
+			Namespace: ns.Name,
+			Labels:    map[string]string{"app": "web-server"},
+		})
 	}
 
-	routeCreator := ocpbugs43745.NewLoggingCreator(&routeCreator{routeClient: routeClient}, logger)
 	route, err := routeCreator.Create(ctx, ocpbugs43745.ResourceMeta{
 		Name:      "test-route",
 		Namespace: ns.Name,
