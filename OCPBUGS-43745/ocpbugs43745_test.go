@@ -2,6 +2,7 @@ package ocpbugs43745_test
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -16,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	ocpbugs43745 "github.com/frobware/haproxy-hacks/OCPBUGS-43745"
 	routev1 "github.com/openshift/api/route/v1"
 	configclientset "github.com/openshift/client-go/config/clientset/versioned"
 	routeclientset "github.com/openshift/client-go/route/clientset/versioned"
@@ -25,7 +25,10 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
@@ -38,9 +41,6 @@ type TestConfig struct {
 	Services    []*corev1.Service
 	Route       *routev1.Route
 	Pods        []corev1.Pod
-	PodExecutor ocpbugs43745.PodExecutor
-	Cleaner     *ocpbugs43745.Cleaner
-	cancel      context.CancelFunc
 }
 
 type callerInfo struct {
@@ -196,111 +196,19 @@ func findBackend(backends []haproxyBackend, route *routev1.Route, service *corev
 }
 
 type routerPod struct {
-	name      string
-	namespace string
-	executor  ocpbugs43745.PodExecutor
+	name       string
+	namespace  string
+	kubeClient *kubernetes.Clientset
+	restConfig *rest.Config
 }
 
 func (p *routerPod) getHAProxyConfig(ctx context.Context) ([]haproxyBackend, error) {
-	stdout, stderr, err := p.executor.Execute(ctx, p.name, p.namespace, "router", []string{"cat", "/var/lib/haproxy/conf/haproxy.config"})
+	stdout, stderr, err := executeCommandWithRetries(ctx, p.kubeClient, p.restConfig, p.name, p.namespace, "router", []string{"cat", "/var/lib/haproxy/conf/haproxy.config"}, 3, time.Second)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get HAProxy config from pod %s: %w\nstderr: %s", p.name, err, stderr)
 	}
 
 	return parseHAProxyConfig(stdout), nil
-}
-
-type replicationControllerCreator struct {
-	clientset *kubernetes.Clientset
-}
-
-func (r *replicationControllerCreator) Create(ctx context.Context, meta ocpbugs43745.ResourceMeta) (*corev1.ReplicationController, error) {
-	rc := corev1.ReplicationController{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      meta.Name,
-			Namespace: meta.Namespace,
-			Labels:    meta.Labels,
-		},
-		Spec: corev1.ReplicationControllerSpec{
-			Replicas: ocpbugs43745.Int32Ptr(1),
-			Selector: meta.Labels,
-			Template: &corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels: meta.Labels,
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
-						{
-							Name:  "nginx",
-							Image: "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0",
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "http",
-									Protocol:      corev1.ProtocolTCP,
-									ContainerPort: 8080,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-
-	return r.clientset.CoreV1().ReplicationControllers(meta.Namespace).Create(ctx, &rc, metav1.CreateOptions{})
-}
-
-type serviceCreator struct {
-	clientset *kubernetes.Clientset
-}
-
-func (s *serviceCreator) Create(ctx context.Context, meta ocpbugs43745.ResourceMeta) (*corev1.Service, error) {
-	svc := corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      meta.Name,
-			Namespace: meta.Namespace,
-			Labels:    meta.Labels,
-		},
-		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{
-					Name:       "http",
-					Port:       8080,
-					Protocol:   corev1.ProtocolTCP,
-					TargetPort: intstr.FromInt(8080),
-				},
-			},
-			Selector: meta.Labels,
-		},
-	}
-
-	return s.clientset.CoreV1().Services(meta.Namespace).Create(ctx, &svc, metav1.CreateOptions{})
-}
-
-type routeCreator struct {
-	routeClient *routeclientset.Clientset
-}
-
-func (r *routeCreator) Create(ctx context.Context, meta ocpbugs43745.ResourceMeta) (*routev1.Route, error) {
-	route := routev1.Route{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      meta.Name,
-			Namespace: meta.Namespace,
-			Labels:    meta.Labels,
-		},
-		Spec: routev1.RouteSpec{
-			To: routev1.RouteTargetReference{
-				Kind: "Service",
-				Name: fmt.Sprintf("service-%d", 1),
-			},
-			Port: &routev1.RoutePort{
-				TargetPort: intstr.FromString("http"),
-			},
-			WildcardPolicy: routev1.WildcardPolicyNone,
-		},
-	}
-
-	return r.routeClient.RouteV1().Routes(meta.Namespace).Create(ctx, &route, metav1.CreateOptions{})
 }
 
 type waitForAllRoutesAddmittedProgressFunc func(admittedRoutes, totalRoutes int, pendingRoutes []string)
@@ -374,9 +282,10 @@ func waitForHAProxyConfigCondition(tc *TestConfig, routeName string, service *co
 	routerPods := make([]*routerPod, 0, len(pods.Items))
 	for _, pod := range pods.Items {
 		routerPods = append(routerPods, &routerPod{
-			name:      pod.Name,
-			namespace: pod.Namespace,
-			executor:  tc.PodExecutor,
+			name:       pod.Name,
+			namespace:  pod.Namespace,
+			kubeClient: tc.KubeClient,
+			restConfig: tc.KubeConfig,
 		})
 	}
 
@@ -482,31 +391,33 @@ func fetchServiceResponse(tc *TestConfig, route *routev1.Route) (string, error) 
 	return response, nil
 }
 
-type routeUpdater struct {
-	routeClient *routeclientset.Clientset
-}
-
-func (u *routeUpdater) Get(ctx context.Context, namespace, name string) (*routev1.Route, error) {
-	return u.routeClient.RouteV1().Routes(namespace).Get(ctx, name, metav1.GetOptions{})
-}
-
-func (u *routeUpdater) Update(ctx context.Context, route *routev1.Route) (*routev1.Route, error) {
-	return u.routeClient.RouteV1().Routes(route.Namespace).Update(ctx, route, metav1.UpdateOptions{})
-}
-
 func updateRouteService(ctx context.Context, routeClient *routeclientset.Clientset, route *routev1.Route, newServiceName string, logger *slog.Logger) (*routev1.Route, error) {
-	retryingUpdater := ocpbugs43745.NewRetryingUpdater(ocpbugs43745.NewLoggingUpdater(&routeUpdater{routeClient: routeClient}, logger))
+	var updatedRoute *routev1.Route
 
-	modifyFunc := func(r *routev1.Route) *routev1.Route {
-		r.Spec.To = routev1.RouteTargetReference{
-			Kind: "Service",
-			Name: newServiceName,
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		currentRoute, err := routeClient.RouteV1().Routes(route.Namespace).Get(ctx, route.Name, metav1.GetOptions{})
+		if err != nil {
+			logger.Error("Failed to get the latest version of the route", "route", route.Name, "error", err)
+			return err
 		}
 
-		return r
+		currentRoute.Spec.To.Name = newServiceName
+
+		updatedRoute, err = routeClient.RouteV1().Routes(route.Namespace).Update(ctx, currentRoute, metav1.UpdateOptions{})
+		if err != nil {
+			logger.Error("Failed to update the route", "route", route.Name, "error", err)
+		} else {
+			logger.Info("Successfully updated the route", "route", route.Name, "newServiceName", newServiceName)
+		}
+
+		return err
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update route %s: %w", route.Name, err)
 	}
 
-	return retryingUpdater.Update(ctx, route, modifyFunc)
+	return updatedRoute, nil
 }
 
 func routeSwitchServiceAndVerifyResponse(tc *TestConfig, service *corev1.Service, pod *corev1.Pod) error {
@@ -524,7 +435,7 @@ func routeSwitchServiceAndVerifyResponse(tc *TestConfig, service *corev1.Service
 	return nil
 }
 
-func switchServiceAndFetchResponse(
+func switchRouteServiceAndFetchResponse(
 	tc *TestConfig,
 	serviceIndex int,
 	delay time.Duration,
@@ -550,10 +461,108 @@ func switchServiceAndFetchResponse(
 	return fetchServiceResponse(tc, tc.Route)
 }
 
+func waitForReplicationControllerReady(ctx context.Context, kubeClient *kubernetes.Clientset, rc *corev1.ReplicationController, timeout time.Duration) error {
+	return wait.PollUntilContextTimeout(ctx, time.Second, timeout, true, func(ctx context.Context) (bool, error) {
+		current, err := kubeClient.CoreV1().ReplicationControllers(rc.Namespace).Get(ctx, rc.Name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		return current.Status.ReadyReplicas >= *current.Spec.Replicas, nil
+	})
+}
+
+func createRoute(ctx context.Context, routeClient *routeclientset.Clientset, namespace, name, serviceName string, labels map[string]string) (*routev1.Route, error) {
+	route := &routev1.Route{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+		Spec: routev1.RouteSpec{
+			To: routev1.RouteTargetReference{
+				Kind: "Service",
+				Name: serviceName,
+			},
+			Port: &routev1.RoutePort{
+				TargetPort: intstr.FromString("http"),
+			},
+			WildcardPolicy: routev1.WildcardPolicyNone,
+		},
+	}
+
+	return routeClient.RouteV1().Routes(namespace).Create(ctx, route, metav1.CreateOptions{})
+}
+
+func executeCommandWithRetries(ctx context.Context, kubeClient *kubernetes.Clientset, restConfig *rest.Config, podName, namespace, container string, command []string, attempts int, delay time.Duration) (string, string, error) {
+	var (
+		stdout string
+		stderr string
+		err    error
+	)
+
+	for i := 0; i < attempts; i++ {
+		stdout, stderr, err = executeCommandInPod(ctx, kubeClient, restConfig, podName, namespace, container, command)
+		if err == nil {
+			return stdout, stderr, nil
+		}
+
+		if i >= attempts-1 {
+			return stdout, stderr, err
+		}
+
+		select {
+		case <-ctx.Done():
+			return stdout, stderr, fmt.Errorf("retry cancelled: %w", ctx.Err())
+		case <-time.After(delay):
+		}
+	}
+
+	return "", "", err
+}
+
+func executeCommandInPod(ctx context.Context, kubeClient *kubernetes.Clientset, restConfig *rest.Config, podName, namespace, container string, command []string) (string, string, error) {
+	req := kubeClient.CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(podName).
+		Namespace(namespace).
+		SubResource("exec").
+		VersionedParams(&corev1.PodExecOptions{
+			Container: container,
+			Command:   command,
+			Stdin:     false,
+			Stdout:    true,
+			Stderr:    true,
+			TTY:       false,
+		}, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create executor: %w", err)
+	}
+
+	var stdout, stderr bytes.Buffer
+
+	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if err != nil {
+		return "", "", fmt.Errorf("failed to execute command: %w", err)
+	}
+
+	return stdout.String(), stderr.String(), nil
+}
+
 func setupTest(t *testing.T) *TestConfig {
+	int32Ptr := func(i int32) *int32 { return &i }
+
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
 	logger := slog.New(&slogt{t: t})
 
 	cfg, err := config.GetConfig()
@@ -573,12 +582,12 @@ func setupTest(t *testing.T) *TestConfig {
 
 	configClient, err := configclientset.NewForConfig(cfg)
 	if err != nil {
-		t.Fatalf("Failed to create config clientset: %v", err)
+		t.Fatalf("failed to create config clientset: %v", err)
 	}
 
 	clusterVersion, err := configClient.ConfigV1().ClusterVersions().Get(context.TODO(), "version", metav1.GetOptions{})
 	if err != nil {
-		t.Fatalf("Failed to retrieve cluster version: %v", err)
+		t.Fatalf("failed to retrieve cluster version: %v", err)
 	}
 
 	logger.Info("Running test on OpenShift Cluster Version", "version", clusterVersion.Status.Desired.Version)
@@ -588,61 +597,88 @@ func setupTest(t *testing.T) *TestConfig {
 		KubeConfig:  cfg,
 		KubeClient:  kubeClient,
 		RouteClient: routeClient,
-		Cleaner:     ocpbugs43745.NewCleaner(),
-		cancel:      cancel,
 	}
 
-	nsCreator := ocpbugs43745.NewLoggingCreator(&ocpbugs43745.NamespaceCreator{ClientSet: kubeClient}, logger)
-	ns, err := nsCreator.Create(ctx, ocpbugs43745.ResourceMeta{
-		Name:   "route-service-switcher-test-",
-		Labels: map[string]string{"test": "namespace"},
-	})
+	ns := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "route-service-switcher-test-",
+			Labels:       map[string]string{"test": "namespace"},
+		},
+	}
 
+	ns, err = kubeClient.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if err != nil {
 		t.Fatalf("failed to create namespace: %v", err)
 	}
 
 	tc.Namespace = ns
 
-	if v := os.Getenv("NO_CLEANUP"); v != "1" {
-		tc.Cleaner.Add(func() error {
-			return kubeClient.CoreV1().Namespaces().Delete(context.Background(), ns.Name, metav1.DeleteOptions{})
-		})
-	}
+	for i := 1; i <= 2; i++ {
+		instanceLabel := strconv.Itoa(i)
+		labels := map[string]string{"app": "web-server", "instance": instanceLabel}
 
-	rcCheck := func(ctx context.Context, rc *corev1.ReplicationController) (bool, error) {
-		current, err := kubeClient.CoreV1().ReplicationControllers(rc.Namespace).Get(ctx, rc.Name, metav1.GetOptions{})
-		if err != nil {
-			return false, err
+		rc := &corev1.ReplicationController{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("web-server-%d", i),
+				Namespace: ns.Name,
+				Labels:    labels,
+			},
+			Spec: corev1.ReplicationControllerSpec{
+				Replicas: int32Ptr(1),
+				Selector: labels,
+				Template: &corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: labels,
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  "nginx",
+								Image: "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0",
+								Ports: []corev1.ContainerPort{
+									{
+										Name:          "http",
+										Protocol:      corev1.ProtocolTCP,
+										ContainerPort: 8080,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
 		}
 
-		return current.Status.ReadyReplicas >= *current.Spec.Replicas, nil
-	}
-
-	routeCreator := ocpbugs43745.NewLoggingCreator(&routeCreator{routeClient: routeClient}, logger)
-
-	for i := 1; i <= 2; i++ {
-		rcCreator := ocpbugs43745.NewReadinessAwareCreator(
-			ocpbugs43745.NewLoggingCreator(&replicationControllerCreator{clientset: kubeClient}, logger),
-			rcCheck, 2*time.Minute,
-		)
-
-		_, err := rcCreator.Create(ctx, ocpbugs43745.ResourceMeta{
-			Name:      fmt.Sprintf("web-server-%d", i),
-			Namespace: ns.Name,
-			Labels:    map[string]string{"app": "web-server", "instance": strconv.Itoa(i)},
-		})
+		rc, err = kubeClient.CoreV1().ReplicationControllers(ns.Name).Create(ctx, rc, metav1.CreateOptions{})
 		if err != nil {
 			t.Fatalf("failed to create ReplicationController %d: %v", i, err)
 		}
 
-		svcCreator := ocpbugs43745.NewLoggingCreator(&serviceCreator{clientset: kubeClient}, logger)
-		svc, err := svcCreator.Create(ctx, ocpbugs43745.ResourceMeta{
-			Name:      fmt.Sprintf("service-%d", i),
-			Namespace: ns.Name,
-			Labels:    map[string]string{"app": "web-server", "instance": strconv.Itoa(i)},
-		})
+		err = waitForReplicationControllerReady(ctx, kubeClient, rc, 2*time.Minute)
+		if err != nil {
+			t.Fatalf("ReplicationController %d is not ready: %v", i, err)
+		}
 
+		svc := &corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("service-%d", i),
+				Namespace: ns.Name,
+				Labels:    labels,
+			},
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "http",
+						Port:       8080,
+						Protocol:   corev1.ProtocolTCP,
+						TargetPort: intstr.FromInt(8080),
+					},
+				},
+				Selector: labels,
+			},
+		}
+
+		svc, err = kubeClient.CoreV1().Services(ns.Name).Create(ctx, svc, metav1.CreateOptions{})
 		if err != nil {
 			t.Fatalf("failed to create Service %d: %v", i, err)
 		}
@@ -656,31 +692,23 @@ func setupTest(t *testing.T) *TestConfig {
 			t.Fatalf("failed to list pods for RC %d: %v", i, err)
 		}
 
-		tc.Pods = append(tc.Pods, podList.Items...)
+		if len(podList.Items) == 0 {
+			t.Fatalf("no pods found for RC %d", i)
+		}
 
-		_, err = routeCreator.Create(ctx, ocpbugs43745.ResourceMeta{
-			Name:      "route-service-" + strconv.Itoa(i),
-			Namespace: ns.Name,
-			Labels:    map[string]string{"app": "web-server"},
-		})
+		tc.Pods = append(tc.Pods, podList.Items[0])
+
+		_, err = createRoute(context.Background(), tc.RouteClient, ns.Name, "svc"+strconv.Itoa(i), svc.Name, nil)
+		if err != nil {
+			t.Fatalf("Failed to create test-route: %v", err)
+		}
 	}
 
-	route, err := routeCreator.Create(ctx, ocpbugs43745.ResourceMeta{
-		Name:      "test-route",
-		Namespace: ns.Name,
-		Labels:    map[string]string{"app": "web-server"},
-	})
-
+	route, err := createRoute(context.Background(), tc.RouteClient, ns.Name, "test", tc.Services[0].Name, nil)
 	if err != nil {
-		t.Fatalf("failed to create route: %v", err)
+		t.Fatalf("Failed to create test: %v", err)
 	}
-
 	tc.Route = route
-	baseExecutor := ocpbugs43745.NewPodExecutor(kubeClient, cfg)
-	tc.PodExecutor = ocpbugs43745.NewLoggingPodExecutor(
-		ocpbugs43745.NewRetryingExecutor(baseExecutor, 3, time.Second),
-		logger,
-	)
 
 	return tc
 }
@@ -698,25 +726,24 @@ func TestRouteServiceSwitch(t *testing.T) {
 	}
 
 	tc := setupTest(t)
-	defer func() {
-		tc.cancel()
 
-		if err := tc.Cleaner.Cleanup(); err != nil {
-			t.Errorf("cleanup failed: %v", err)
-		}
-	}()
+	if v := os.Getenv("NO_CLEANUP"); v != "1" {
+		t.Cleanup(func() {
+			tc.KubeClient.CoreV1().Namespaces().Delete(context.Background(), tc.Namespace.Name, metav1.DeleteOptions{})
+		})
+	}
 
 	t.Run("switching between services returns different responses", func(t *testing.T) {
 		if len(tc.Services) < 2 || len(tc.Pods) < 2 {
 			t.Fatal("Not enough services or pods to test switching")
 		}
 
-		resp1, err := switchServiceAndFetchResponse(tc, 0, 0)
+		resp1, err := switchRouteServiceAndFetchResponse(tc, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		resp2, err := switchServiceAndFetchResponse(tc, 1, delay)
+		resp2, err := switchRouteServiceAndFetchResponse(tc, 1, delay)
 		if err != nil {
 			t.Fatal(err)
 		}
