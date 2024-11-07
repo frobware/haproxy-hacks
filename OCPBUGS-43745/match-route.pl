@@ -20,7 +20,6 @@ while (<>) {
     # at column 1
     if ($in_block && /^[^\s]/ && !/$start_pattern/) {
         $in_block = 0;
-        last;
     }
 
     print "$_\n" if $in_block && /\S/;

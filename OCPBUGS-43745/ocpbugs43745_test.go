@@ -739,10 +739,10 @@ func TestRouteServiceSwitch(t *testing.T) {
 
 			tc.backendPods = append(tc.backendPods, &podList.Items[0])
 
-			// _, err = createRoute(ctx, tc.routeClientset, ns.Name, "route-svc-"+strconv.Itoa(i), svc.Name, nil)
-			// if err != nil {
-			// 	t.Fatalf("Failed to create route: %v", err)
-			// }
+			_, err = createRoute(ctx, tc.routeClientset, ns.Name, "svc-"+strconv.Itoa(i), svc.Name, nil)
+			if err != nil {
+				t.Fatalf("Failed to create route: %v", err)
+			}
 		}
 
 		route, err := createRoute(ctx, tc.routeClientset, ns.Name, "test", tc.services[0].Name, nil)
