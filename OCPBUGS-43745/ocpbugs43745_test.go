@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -49,8 +50,10 @@ type haproxyBackend struct {
 
 // parseHAProxyConfig parses the HAProxy configuration content and returns a slice of haproxyBackend.
 func parseHAProxyConfig(content string) ([]haproxyBackend, error) {
-	var backends []haproxyBackend
-	var currentBackend *haproxyBackend
+	var (
+		backends       []haproxyBackend
+		currentBackend *haproxyBackend
+	)
 
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	lineNum := 0
@@ -82,6 +85,7 @@ func parseHAProxyConfig(content string) ([]haproxyBackend, error) {
 				settings: []string{},
 				servers:  []string{},
 			}
+
 			continue
 		}
 
@@ -110,7 +114,7 @@ func parseHAProxyConfig(content string) ([]haproxyBackend, error) {
 
 	// Validate we found at least one backend
 	if len(backends) == 0 {
-		return nil, fmt.Errorf("no backends found in configuration")
+		return nil, errors.New("no backends found in configuration")
 	}
 
 	return backends, nil
@@ -150,8 +154,6 @@ func (p *routerPod) getHAProxyConfig(ctx context.Context) ([]haproxyBackend, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to get HAProxy config from pod %s: %w\nstderr: %s", p.name, err, stderr)
 	}
-
-	fmt.Println(stdout)
 
 	return parseHAProxyConfig(stdout)
 }
@@ -320,81 +322,19 @@ func waitForHAProxyConfigUpdate(
 	return nil
 }
 
-// createHTTPClient creates an HTTP client with the specified timeout.
-func createHTTPClient(timeout time.Duration) *http.Client {
-	return &http.Client{
-		Timeout: timeout,
-	}
-}
-
-// constructRequest constructs an HTTP request with the given method and URL.
-func constructRequest(ctx context.Context, method, url string) (*http.Request, error) {
-	return http.NewRequestWithContext(ctx, method, url, nil)
-}
-
-// performRequest executes the HTTP request and returns the response.
-func performRequest(client *http.Client, req *http.Request) (*http.Response, error) {
-	return client.Do(req)
-}
-
-// readResponseBody reads the response body from the HTTP response.
-func readResponseBody(resp *http.Response) (string, error) {
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", err
-	}
-
-	return string(body), nil
-}
-
-// getRouteResponse sends a GET request to the route's host and returns the response body.
-func getRouteResponse(logger *slog.Logger, route *routev1.Route) (string, error) {
-	if route.Spec.Host == "" {
-		return "", fmt.Errorf("route %s/%s has no host", route.Namespace, route.Name)
-	}
-
-	url := "http://" + route.Spec.Host
-	logger.Info("Making GET request", "url", url)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	req, err := constructRequest(ctx, http.MethodGet, url)
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	client := createHTTPClient(10 * time.Second)
-
-	resp, err := performRequest(client, req)
-	if err != nil {
-		return "", fmt.Errorf("GET request failed: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	body, err := readResponseBody(resp)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return body, nil
-}
-
-// fetchServiceResponse retrieves the response from the service behind the route.
 func fetchServiceResponse(logger *slog.Logger, route *routev1.Route) (string, error) {
-	logger.Info("Getting response from service", "service", route.Spec.To.Name)
-	response, err := getRouteResponse(logger, route)
+	client := newRouteClient(10*time.Second, logger)
 
+	logger.Info("Getting response from service", "service", route.Spec.To.Name)
+
+	response, err := client.getResponse(route)
 	if err != nil {
 		return "", fmt.Errorf("failed to get response from service: %w", err)
 	}
 
-	logger.Info("Received response from service", "service", route.Spec.To.Name, "response", response)
+	logger.Info("Received response from service",
+		"service", route.Spec.To.Name,
+		"response", response)
 
 	return response, nil
 }
@@ -482,7 +422,10 @@ func switchRouteServiceAndFetchResponse(
 
 	if _, err := waitForAllRoutesAdmitted(tc.routeClientset, tc.testNamespace.Name, 30*time.Second, func(admittedRoutes, totalRoutes int, pendingRoutes []string) {
 		if len(pendingRoutes) > 0 {
-			tc.logger.Info("Not all routes have been admitted", "admittedRoutes", admittedRoutes, "totalRoutes", totalRoutes, "pending", strings.Join(pendingRoutes, ", "))
+			tc.logger.Info("Not all routes have been admitted",
+				"admittedRoutes", admittedRoutes,
+				"totalRoutes", totalRoutes,
+				"pending", strings.Join(pendingRoutes, ", "))
 		}
 	}); err != nil {
 		return "", fmt.Errorf("not all routes have been admitted in namespace %s: %w", tc.testNamespace.Name, err)
@@ -565,7 +508,146 @@ func executeCommandInPod(ctx context.Context, kubeClient *kubernetes.Clientset, 
 	return stdout.String(), stderr.String(), nil
 }
 
-// TestRouteServiceSwitch tests switching services behind a route and verifies the response changes.
+// routeClient encapsulates HTTP operations for routes.
+type routeClient struct {
+	client  *http.Client
+	logger  *slog.Logger
+	timeout time.Duration
+}
+
+// routeResponse represents the HTTP response data.
+type routeResponse struct {
+	statusCode int
+	body       string
+	headers    http.Header
+}
+
+// newRouteClient creates a new routeClient with the given
+// configuration.
+func newRouteClient(timeout time.Duration, logger *slog.Logger) *routeClient {
+	return &routeClient{
+		client:  &http.Client{Timeout: timeout},
+		logger:  logger,
+		timeout: timeout,
+	}
+}
+
+// getResponse handles the complete HTTP request/response cycle for a
+// route.
+func (c *routeClient) getResponse(route *routev1.Route) (string, error) {
+	if err := c.validateRoute(route); err != nil {
+		return "", err
+	}
+
+	url := c.buildURL(route)
+	c.logger.Info("Making GET request", "url", url)
+
+	response, err := c.executeRequest(url)
+	if err != nil {
+		return "", fmt.Errorf("request execution failed: %w", err)
+	}
+
+	return response.body, nil
+}
+
+// validateRoute checks if the route has required fields.
+func (c *routeClient) validateRoute(route *routev1.Route) error {
+	if route == nil {
+		return errors.New("route cannot be nil")
+	}
+
+	if route.Spec.Host == "" {
+		return fmt.Errorf("route %s/%s has no host", route.Namespace, route.Name)
+	}
+
+	return nil
+}
+
+// buildURL constructs the URL for the route.
+func (c *routeClient) buildURL(route *routev1.Route) string {
+	return "http://" + route.Spec.Host
+}
+
+// executeRequest performs the HTTP request and returns the response.
+func (c *routeClient) executeRequest(url string) (*routeResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	req, err := c.createRequest(ctx, url)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.doRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	return c.processResponse(resp)
+}
+
+// createRequest creates a new HTTP request with context.
+func (c *routeClient) createRequest(ctx context.Context, url string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	return req, nil
+}
+
+// doRequest executes the HTTP request.
+func (c *routeClient) doRequest(req *http.Request) (*http.Response, error) {
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("GET request failed: %w", err)
+	}
+
+	return resp, nil
+}
+
+// processResponse handles the HTTP response and returns a
+// routeResponse.
+func (c *routeClient) processResponse(resp *http.Response) (*routeResponse, error) {
+	if err := c.validateStatusCode(resp.StatusCode); err != nil {
+		return nil, err
+	}
+
+	body, err := c.readBody(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	return &routeResponse{
+		statusCode: resp.StatusCode,
+		body:       body,
+		headers:    resp.Header,
+	}, nil
+}
+
+// validateStatusCode checks if the response status code is
+// acceptable.
+func (c *routeClient) validateStatusCode(statusCode int) error {
+	if statusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d", statusCode)
+	}
+
+	return nil
+}
+
+// readBody reads and returns the response body as a string.
+func (c *routeClient) readBody(body io.ReadCloser) (string, error) {
+	bodyBytes, err := io.ReadAll(body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return string(bodyBytes), nil
+}
+
+// TestRouteServiceSwitch tests switching services behind a route and
+// verifies the response changes.
 func TestRouteServiceSwitch(t *testing.T) {
 	var getResponseDelay time.Duration
 
