@@ -305,6 +305,10 @@ func waitForHAProxyConfigUpdate(
 	expectedBackendName := fmt.Sprintf("be_http:%s:%s", route.Namespace, route.Name)
 	expectedServerName := fmt.Sprintf("pod:%s:%s", backendPod.Name, service.Name)
 
+	logger.Info("Waiting for HAProxy config update",
+		"backend", expectedBackendName,
+		"server", expectedServerName)
+
 	// Wait for the HAProxy configuration condition to be met
 	err = waitForHAProxyConfigCondition(ctx, routerPods, expectedBackendName, expectedServerName, true, logger)
 	if err != nil {
@@ -526,43 +530,6 @@ func createRoute(ctx context.Context, routeClient *routeclientset.Clientset, nam
 	return routeClient.RouteV1().Routes(namespace).Create(ctx, route, metav1.CreateOptions{})
 }
 
-// RetryWithDelay retries a given operation with a delay between
-// attempts.
-func RetryWithDelay(ctx context.Context, attempts int, delay time.Duration, operation func() error) error {
-	for i := 0; i < attempts; i++ {
-		err := operation()
-		if err == nil {
-			return nil
-		}
-
-		if i < attempts-1 {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(delay):
-			}
-		} else {
-			return err
-		}
-	}
-
-	return nil
-}
-
-// executeCommandWithRetries executes a command in a pod with retries.
-func executeCommandWithRetries(ctx context.Context, kubeClient *kubernetes.Clientset, restConfig *rest.Config, podName, namespace, container string, command []string, attempts int, delay time.Duration) (string, string, error) {
-	var stdout, stderr string
-
-	err := RetryWithDelay(ctx, attempts, delay, func() error {
-		var err error
-		stdout, stderr, err = executeCommandInPod(ctx, kubeClient, restConfig, podName, namespace, container, command)
-
-		return err
-	})
-
-	return stdout, stderr, err
-}
-
 // executeCommandInPod executes a command in a specific pod container.
 func executeCommandInPod(ctx context.Context, kubeClient *kubernetes.Clientset, restConfig *rest.Config, podName, namespace, container string, command []string) (string, string, error) {
 	req := kubeClient.CoreV1().RESTClient().
@@ -724,7 +691,7 @@ func TestRouteServiceSwitch(t *testing.T) {
 							Name:       "http",
 							Port:       8080,
 							Protocol:   corev1.ProtocolTCP,
-							TargetPort: intstr.FromInt(8080),
+							TargetPort: intstr.FromInt32(8080),
 						},
 					},
 					Selector: labels,
