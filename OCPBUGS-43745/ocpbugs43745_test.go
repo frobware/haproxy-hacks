@@ -69,7 +69,7 @@ func (g *ResourceGetter) GetBackendPods(ctx context.Context) ([]*corev1.Pod, err
 }
 
 func (g *ResourceGetter) GetServices(ctx context.Context) ([]*corev1.Service, error) {
-	// Use only the app label to find all services
+	// Use only the app label to find all services.
 	labelSelector := map[string]string{
 		"app": "web-server",
 	}
@@ -128,7 +128,8 @@ type haproxyBackend struct {
 	servers  []string
 }
 
-// parseHAProxyConfig parses the HAProxy configuration content and returns a slice of haproxyBackend.
+// parseHAProxyConfig parses the HAProxy configuration content and
+// returns a slice of haproxyBackend.
 func parseHAProxyConfig(content string) ([]haproxyBackend, error) {
 	var (
 		backends       []haproxyBackend
@@ -148,7 +149,6 @@ func parseHAProxyConfig(content string) ([]haproxyBackend, error) {
 		}
 
 		if strings.HasPrefix(trimmedLine, "backend ") {
-			// If we were parsing a backend, append it to our list
 			if currentBackend != nil {
 				backends = append(backends, *currentBackend)
 			}
@@ -380,7 +380,6 @@ func waitForHAProxyConfigUpdate(
 		return fmt.Errorf("failed to get router pods: %w", err)
 	}
 
-	// Construct the expected backend and service names.
 	expectedBackendName := fmt.Sprintf("be_http:%s:%s", route.Namespace, route.Name)
 	expectedServerName := fmt.Sprintf("pod:%s:%s", backendPod.Name, service.Name)
 
@@ -393,24 +392,33 @@ func waitForHAProxyConfigUpdate(
 		return fmt.Errorf("failed waiting for HAProxy configuration update: %w", err)
 	}
 
-	logger.Info("HAProxy configuration updated", "backend", expectedBackendName, "server", expectedServerName)
-
 	return nil
 }
 
 func fetchServiceResponse(logger *slog.Logger, route *routev1.Route) (string, error) {
 	client := newRouteClient(10*time.Second, logger)
 
-	logger.Info("Getting response from service", "service", route.Spec.To.Name)
+	logger.Info("Getting response from service",
+		"service", route.Spec.To.Name,
+		"host", route.Spec.Host,
+		"namespace", route.Namespace,
+		"routeName", route.Name)
 
 	response, err := client.getResponse(route)
 	if err != nil {
+		logger.Error("Failed getting response from service",
+			"service", route.Spec.To.Name,
+			"host", route.Spec.Host,
+			"error", err)
 		return "", fmt.Errorf("failed to get response from service: %w", err)
 	}
 
 	logger.Info("Received response from service",
 		"service", route.Spec.To.Name,
-		"response", response)
+		"host", route.Spec.Host,
+		"response", response,
+		"namespace", route.Namespace,
+		"routeName", route.Name)
 
 	return response, nil
 }
@@ -466,41 +474,38 @@ func routeSwitchServiceAndVerifyResponse(
 		return nil, err
 	}
 
+	logger.Info("Waiting for route admission after HAProxy update")
+	if err := waitForRouteAdmission(ctx, routeClient, updatedRoute.Namespace, updatedRoute.Name); err != nil {
+		return nil, fmt.Errorf("route not admitted after service switch: %w", err)
+	}
+
 	return updatedRoute, nil
 }
 
-// waitForRouteAdmission waits for a specific route to be admitted.
-func waitForRouteAdmission(ctx context.Context, tc *TestConfig, routeName string) error {
-	isRouteAdmitted := func(route *routev1.Route) bool {
+func waitForRouteAdmission(ctx context.Context, routeClient *routeclientset.Clientset, namespace, name string) error {
+	return wait.PollUntilContextTimeout(ctx, time.Second, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+		route, err := routeClient.RouteV1().Routes(namespace).Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return false, err
+		}
+
+		admitted := false
+		ready := false
+
 		for _, ingress := range route.Status.Ingress {
 			if ingress.RouterCanonicalHostname != "" {
-				return true
+				admitted = true
+				for _, condition := range ingress.Conditions {
+					if condition.Type == routev1.RouteAdmitted && condition.Status == corev1.ConditionTrue {
+						ready = true
+						break
+					}
+				}
 			}
 		}
 
-		return false
-	}
-
-	return wait.PollUntilContextTimeout(
-		ctx,
-		time.Second,
-		30*time.Second,
-		true,
-		func(ctx context.Context) (bool, error) {
-			route, err := tc.routeClientset.RouteV1().Routes(tc.namespace).Get(ctx, routeName, metav1.GetOptions{})
-			if err != nil {
-				return false, fmt.Errorf("failed to get route %s/%s: %w", tc.namespace, routeName, err)
-			}
-
-			admitted := isRouteAdmitted(route)
-			if !admitted {
-				tc.logger.Info("Route not yet admitted",
-					"route", routeName,
-					"namespace", tc.namespace)
-			}
-
-			return admitted, nil
-		})
+		return admitted && ready, nil
+	})
 }
 
 // switchRouteServiceAndFetchResponse switches the route to a
@@ -538,10 +543,9 @@ func switchRouteServiceAndFetchResponse(
 	}
 
 	tc.testRouteName = updatedRoute.Name
-	tc.logger.Info("Switched to service", "service", service.Name)
+	tc.logger.Info("Route switched service", "route", tc.testRouteName, "service", service.Name)
 
-	// Wait for specific route admission
-	if err := waitForRouteAdmission(ctx, tc, updatedRoute.Name); err != nil {
+	if err := waitForRouteAdmission(ctx, tc.routeClientset, updatedRoute.Namespace, updatedRoute.Name); err != nil {
 		return "", fmt.Errorf("route admission failed: %w", err)
 	}
 
@@ -558,7 +562,8 @@ func switchRouteServiceAndFetchResponse(
 	return fetchServiceResponse(tc.logger, currentRoute)
 }
 
-// waitForReplicationControllerReady waits for the replication controller to have the desired number of ready replicas.
+// waitForReplicationControllerReady waits for the replication
+// controller to have the desired number of ready replicas.
 func waitForReplicationControllerReady(ctx context.Context, kubeClient *kubernetes.Clientset, rc *corev1.ReplicationController, timeout time.Duration) error {
 	return wait.PollUntilContextTimeout(ctx, time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		current, err := kubeClient.CoreV1().ReplicationControllers(rc.Namespace).Get(ctx, rc.Name, metav1.GetOptions{})
@@ -655,19 +660,64 @@ func newRouteClient(timeout time.Duration, logger *slog.Logger) *routeClient {
 // getResponse handles the complete HTTP request/response cycle for a
 // route.
 func (c *routeClient) getResponse(route *routev1.Route) (string, error) {
-	if err := c.validateRoute(route); err != nil {
-		return "", err
+	if route.Spec.Host == "" {
+		return "", fmt.Errorf("route %s/%s has no host", route.Namespace, route.Name)
 	}
 
-	url := c.buildURL(route)
-	c.logger.Info("Making GET request", "url", url)
+	url := "http://" + route.Spec.Host
+	c.logger.Info("Making GET request",
+		"url", url,
+		"routeName", route.Name,
+		"namespace", route.Namespace,
+		"service", route.Spec.To.Name)
 
-	response, err := c.executeRequest(url)
+	client := &http.Client{
+		Timeout: c.timeout,
+		Transport: &http.Transport{
+			// Disable keep-alive to avoid connection reuse
+			DisableKeepAlives: true,
+		},
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return "", fmt.Errorf("request execution failed: %w", err)
+		return "", fmt.Errorf("failed to create request: %w", err)
 	}
 
-	return response.body, nil
+	// Add headers to prevent caching.
+	req.Header.Add("Cache-Control", "no-cache")
+	req.Header.Add("Pragma", "no-cache")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		c.logger.Error("Request failed",
+			"url", url,
+			"error", err,
+			"routeName", route.Name,
+			"service", route.Spec.To.Name)
+		return "", fmt.Errorf("GET request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	c.logger.Info("Received response",
+		"status", resp.Status,
+		"headers", fmt.Sprintf("%+v", resp.Header),
+		"routeName", route.Name,
+		"service", route.Spec.To.Name)
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	return string(body), nil
 }
 
 // validateRoute checks if the route has required fields.
@@ -1031,7 +1081,62 @@ func TestRouteServiceSwitch(t *testing.T) {
 		}
 
 		if resp1 == resp2 {
-			t.Fatalf("Expected different responses after switching services, but got the same response: %s", resp1)
+			t.Errorf("Expected different responses after switching services, but got the same response: %s", resp1)
+
+			// Keep trying until we get a different response or timeout
+			logger := tc.logger.With("phase", "retry")
+			retryCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+			defer cancel()
+
+			logger.Info("Starting retry loop to wait for service switch to take effect")
+
+			ticker := time.NewTicker(5 * time.Second)
+			defer ticker.Stop()
+
+			getter := NewResourceGetter(tc)
+			attempts := 0
+
+			for {
+				select {
+				case <-retryCtx.Done():
+					t.Fatalf("Timed out waiting for service switch. All responses matched original: %s", resp1)
+					return
+				case <-ticker.C:
+					attempts++
+					logger.Info("Retrying request", "attempt", attempts)
+
+					route, err := getter.GetTestRoute(retryCtx)
+					if err != nil {
+						logger.Error("Failed to get route during retry", "error", err)
+						continue
+					}
+
+					newResp, err := fetchServiceResponse(logger, route)
+					if err != nil {
+						logger.Error("Failed to get response during retry",
+							"error", err,
+							"route", route.Name,
+							"service", route.Spec.To.Name)
+						continue
+					}
+
+					if newResp != resp1 {
+						logger.Info("Successfully got different response",
+							"originalResponse", resp1,
+							"newResponse", newResp,
+							"attempts", attempts,
+							"route", route.Name,
+							"service", route.Spec.To.Name)
+						return
+					}
+
+					logger.Info("Still getting original response",
+						"response", newResp,
+						"attempts", attempts,
+						"route", route.Name,
+						"service", route.Spec.To.Name)
+				}
+			}
 		}
 	})
 }
