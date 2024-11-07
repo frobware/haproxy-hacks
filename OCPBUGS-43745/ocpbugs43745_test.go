@@ -50,61 +50,79 @@ type haproxyBackend struct {
 // parseHAProxyConfig parses the HAProxy configuration content and returns a slice of haproxyBackend.
 func parseHAProxyConfig(content string) ([]haproxyBackend, error) {
 	var backends []haproxyBackend
+	var currentBackend *haproxyBackend
 
 	scanner := bufio.NewScanner(strings.NewReader(content))
+	lineNum := 0
+
 	for scanner.Scan() {
+		lineNum++
 		line := scanner.Text()
-		if strings.TrimSpace(line) == "" {
+		trimmedLine := strings.TrimSpace(line)
+
+		if trimmedLine == "" {
 			continue
 		}
 
-		if strings.HasPrefix(line, "backend ") {
-			backends = append(backends, parseBackend(scanner, line))
+		// Check for new backend section
+		if strings.HasPrefix(trimmedLine, "backend ") {
+			// If we were parsing a backend, append it to our list
+			if currentBackend != nil {
+				backends = append(backends, *currentBackend)
+			}
+
+			// Start new backend
+			name := strings.TrimSpace(strings.TrimPrefix(trimmedLine, "backend"))
+			if name == "" {
+				return nil, fmt.Errorf("empty backend name on line %d", lineNum)
+			}
+
+			currentBackend = &haproxyBackend{
+				name:     name,
+				settings: []string{},
+				servers:  []string{},
+			}
+			continue
+		}
+
+		// If we're not in a backend section, skip the line
+		if currentBackend == nil {
+			continue
+		}
+
+		// Parse backend content
+		if strings.HasPrefix(trimmedLine, "server ") {
+			currentBackend.servers = append(currentBackend.servers, trimmedLine)
+		} else {
+			currentBackend.settings = append(currentBackend.settings, trimmedLine)
 		}
 	}
 
+	// Don't forget to append the last backend if we were parsing one
+	if currentBackend != nil {
+		backends = append(backends, *currentBackend)
+	}
+
+	// Check for scanner errors
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("error reading HAProxy config: %w", err)
+	}
+
+	// Validate we found at least one backend
+	if len(backends) == 0 {
+		return nil, fmt.Errorf("no backends found in configuration")
 	}
 
 	return backends, nil
 }
 
-// parseBackend parses a single backend section in the HAProxy configuration.
-func parseBackend(scanner *bufio.Scanner, firstLine string) haproxyBackend {
-	backend := haproxyBackend{
-		name:     strings.TrimSpace(strings.TrimPrefix(firstLine, "backend")),
-		settings: []string{},
-		servers:  []string{},
-	}
-
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.HasPrefix(line, "backend") {
-			// We've reached the next backend
-			scanner.Scan() // Move back one line
-
-			break
-		}
-
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" {
-			continue
-		}
-
-		if strings.HasPrefix(trimmedLine, "server") {
-			backend.servers = append(backend.servers, trimmedLine)
-		} else {
-			backend.settings = append(backend.settings, trimmedLine)
-		}
-	}
-
-	return backend
-}
-
-// findBackend searches for a backend with the expected backend and
-// server names.
+// findBackend searches for a backend with the expected backend and server names.
+// Returns the found backend and true if found, or an empty backend and false if not found.
 func findBackend(backends []haproxyBackend, expectedBackendName, expectedServiceName string) (haproxyBackend, bool) {
+	if expectedBackendName == "" || expectedServiceName == "" {
+		return haproxyBackend{}, false
+	}
+
 	for _, b := range backends {
 		if b.name == expectedBackendName {
 			for _, server := range b.servers {
@@ -128,10 +146,12 @@ type routerPod struct {
 // getHAProxyConfig retrieves the HAProxy configuration from the
 // router pod.
 func (p *routerPod) getHAProxyConfig(ctx context.Context) ([]haproxyBackend, error) {
-	stdout, stderr, err := executeCommandWithRetries(ctx, p.kubeClient, p.restConfig, p.name, p.namespace, "router", []string{"cat", "/var/lib/haproxy/conf/haproxy.config"}, 3, time.Second)
+	stdout, stderr, err := executeCommandInPod(ctx, p.kubeClient, p.restConfig, p.name, p.namespace, "router", []string{"cat", "/var/lib/haproxy/conf/haproxy.config"})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get HAProxy config from pod %s: %w\nstderr: %s", p.name, err, stderr)
 	}
+
+	fmt.Println(stdout)
 
 	return parseHAProxyConfig(stdout)
 }
@@ -227,7 +247,7 @@ func waitForHAProxyConfigCondition(
 	shouldBePresent bool,
 	logger *slog.Logger,
 ) error {
-	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(ctx, 7*time.Second, time.Minute, true, func(ctx context.Context) (bool, error) {
 		for _, routerPod := range routerPods {
 			backends, err := routerPod.getHAProxyConfig(ctx)
 			if err != nil {
@@ -238,21 +258,17 @@ func waitForHAProxyConfigCondition(
 
 			if found == shouldBePresent {
 				if found {
-					logger.Info("HAProxy backend entry found",
+					logger.Info("HAProxy backend entry FOUND",
 						"pod", routerPod.name,
 						"backend", expectedBackendName,
-						"server", expectedServerName,
-						"config", fmt.Sprintf("backend %s\n  %s\n  %s",
-							backend.name,
-							strings.Join(backend.settings, "\n  "),
-							strings.Join(backend.servers, "\n  ")))
+						"servers", strings.Join(backend.servers, " "))
 				} else {
 					logger.Info("Backend entry absent as expected",
 						"pod", routerPod.name,
 						"route", expectedBackendName)
 				}
 			} else {
-				logger.Info("HAProxy backend entry not found",
+				logger.Info("HAProxy backend entry NOT found",
 					"pod", routerPod.name,
 					"backend", expectedBackendName,
 					"server", expectedServerName,
@@ -755,7 +771,11 @@ func TestRouteServiceSwitch(t *testing.T) {
 
 	if v := os.Getenv("NO_CLEANUP"); v != "1" {
 		t.Cleanup(func() {
-			tc.kubeClientset.CoreV1().Namespaces().Delete(context.Background(), tc.testNamespace.Name, metav1.DeleteOptions{})
+			if !t.Failed() {
+				tc.kubeClientset.CoreV1().Namespaces().Delete(context.Background(), tc.testNamespace.Name, metav1.DeleteOptions{})
+			} else {
+				t.Logf("leaving test setup in place for namespace %s", tc.testNamespace.Name)
+			}
 		})
 	}
 
