@@ -47,7 +47,7 @@ func (l *LoggingCreator[T]) Create(ctx context.Context, meta ResourceMeta) (*T, 
 	if err != nil {
 		l.logger.Error("failed to create resource", "type", fmt.Sprintf("%T", *new(T)), "error", err)
 	} else {
-		l.logger.Info("successfully created resource", "type", fmt.Sprintf("%T", *new(T)))
+		l.logger.Info("successfully created resource", "type", fmt.Sprintf("%T", *new(T)), "namespace", meta.Namespace, "name", meta.Name)
 	}
 	return result, err
 }
