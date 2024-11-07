@@ -4,6 +4,7 @@ package ocpbugs43745
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -38,17 +39,20 @@ func NewLoggingCreator[T any](next Creator[T], logger *slog.Logger) Creator[T] {
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	return &LoggingCreator[T]{next: next, logger: logger}
 }
 
 func (l *LoggingCreator[T]) Create(ctx context.Context, meta ResourceMeta) (*T, error) {
 	l.logger.Info("creating resource", "type", fmt.Sprintf("%T", *new(T)), "namespace", meta.Namespace, "name", meta.Name)
 	result, err := l.next.Create(ctx, meta)
+
 	if err != nil {
 		l.logger.Error("failed to create resource", "type", fmt.Sprintf("%T", *new(T)), "error", err)
 	} else {
 		l.logger.Info("successfully created resource", "type", fmt.Sprintf("%T", *new(T)), "namespace", meta.Namespace, "name", meta.Name)
 	}
+
 	return result, err
 }
 
@@ -89,6 +93,7 @@ func (r *ReadinessAwareCreator[T]) Create(ctx context.Context, meta ResourceMeta
 			if err != nil {
 				return result, fmt.Errorf("readiness check failed: %w", err)
 			}
+
 			if ready {
 				return result, nil
 			}
@@ -118,16 +123,20 @@ type ModifyFunc[T DeepCopyable] func(T) T
 
 func (r *RetryingUpdater[T]) Update(ctx context.Context, resource T, modify ModifyFunc[T]) (T, error) {
 	var updatedResource T
+
 	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		latestResource, err := r.updater.Get(ctx, resource.GetNamespace(), resource.GetName())
 		if err != nil {
 			return fmt.Errorf("failed to get latest resource: %w", err)
 		}
+
 		resourceCopy, ok := latestResource.DeepCopyObject().(T)
 		if !ok {
-			return fmt.Errorf("failed to convert deep copy to type T")
+			return errors.New("failed to convert deep copy to type T")
 		}
+
 		updatedResource, err = r.updater.Update(ctx, modify(resourceCopy))
+
 		return err
 	})
 
@@ -146,22 +155,26 @@ func NewLoggingUpdater[T DeepCopyable](next Updater[T], logger *slog.Logger) Upd
 func (l *LoggingUpdater[T]) Get(ctx context.Context, namespace, name string) (T, error) {
 	l.logger.Info("getting resource", "namespace", namespace, "name", name)
 	obj, err := l.next.Get(ctx, namespace, name)
+
 	if err != nil {
 		l.logger.Error("get operation failed", "error", err)
 	} else {
 		l.logger.Info("get operation successful", "resource", fmt.Sprintf("%T", obj), "namespace", obj.GetNamespace(), "name", obj.GetName())
 	}
+
 	return obj, err
 }
 
 func (l *LoggingUpdater[T]) Update(ctx context.Context, obj T) (T, error) {
 	l.logger.Info("starting update operation", "resource", fmt.Sprintf("%T", obj), "namespace", obj.GetNamespace(), "name", obj.GetName())
 	updatedObj, err := l.next.Update(ctx, obj)
+
 	if err != nil {
 		l.logger.Error("update operation failed", "error", err)
 	} else {
 		l.logger.Info("update operation successful", "resource", fmt.Sprintf("%T", updatedObj), "namespace", updatedObj.GetNamespace(), "name", updatedObj.GetName())
 	}
+
 	return updatedObj, err
 }
 
@@ -189,6 +202,7 @@ func (c *Cleaner) Cleanup() error {
 	defer c.mu.Unlock()
 
 	var errs []error
+
 	for i := len(c.funcs) - 1; i >= 0; i-- {
 		if err := c.funcs[i](); err != nil {
 			errs = append(errs, err)
@@ -198,6 +212,7 @@ func (c *Cleaner) Cleanup() error {
 	if len(errs) > 0 {
 		return fmt.Errorf("cleanup errors: %v", errs)
 	}
+
 	return nil
 }
 
@@ -236,16 +251,17 @@ func (e *k8sExecutor) Execute(ctx context.Context, podName, namespace, container
 
 	exec, err := remotecommand.NewSPDYExecutor(e.config, "POST", req.URL())
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create executor: %v", err)
+		return "", "", fmt.Errorf("failed to create executor: %w", err)
 	}
 
 	var stdout, stderr bytes.Buffer
+
 	err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdout: &stdout,
 		Stderr: &stderr,
 	})
 	if err != nil {
-		return "", "", fmt.Errorf("failed to execute command: %v", err)
+		return "", "", fmt.Errorf("failed to execute command: %w", err)
 	}
 
 	return stdout.String(), stderr.String(), nil
@@ -260,15 +276,18 @@ func NewLoggingPodExecutor(next PodExecutor, logger *slog.Logger) PodExecutor {
 	if logger == nil {
 		logger = slog.Default()
 	}
+
 	return &LoggingPodExecutor{next: next, logger: logger}
 }
 
 func (l *LoggingPodExecutor) Execute(ctx context.Context, podName, namespace, container string, command []string) (string, string, error) {
 	l.logger.Info("executing pod command", "pod", podName, "namespace", namespace, "container", container, "command", command)
 	stdout, stderr, err := l.next.Execute(ctx, podName, namespace, container, command)
+
 	if err != nil {
 		l.logger.Error("command failed", "pod", podName, "error", err)
 	}
+
 	return stdout, stderr, err
 }
 
@@ -282,22 +301,31 @@ func NewRetryingExecutor(next PodExecutor, attempts int, delay time.Duration) Po
 	return &RetryingExecutor{next: next, attempts: attempts, delay: delay}
 }
 
-func (r *RetryingExecutor) Execute(ctx context.Context, podName, namespace, container string, command []string) (stdout string, stderr string, err error) {
+func (r *RetryingExecutor) Execute(ctx context.Context, podName, namespace, container string, command []string) (string, string, error) {
+	var (
+		stdout string
+		stderr string
+		err    error
+	)
+
 	for i := 0; i < r.attempts; i++ {
 		stdout, stderr, err = r.next.Execute(ctx, podName, namespace, container, command)
 		if err == nil {
 			return stdout, stderr, nil
 		}
+
 		if i >= r.attempts-1 {
 			return stdout, stderr, err
 		}
+
 		select {
 		case <-ctx.Done():
 			return stdout, stderr, fmt.Errorf("retry cancelled: %w", ctx.Err())
 		case <-time.After(r.delay):
 		}
 	}
-	return stdout, stderr, err
+
+	return "", "", err
 }
 
 type NamespaceCreator struct {

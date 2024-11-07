@@ -11,10 +11,15 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	ocpbugs43745 "github.com/frobware/haproxy-hacks/OCPBUGS-43745"
+	routev1 "github.com/openshift/api/route/v1"
+	configclientset "github.com/openshift/client-go/config/clientset/versioned"
+	routeclientset "github.com/openshift/client-go/route/clientset/versioned"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -22,17 +27,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
-
-	configclientset "github.com/openshift/client-go/config/clientset/versioned"
-
-	routev1 "github.com/openshift/api/route/v1"
-	routeclientset "github.com/openshift/client-go/route/clientset/versioned"
-
-	ocpbugs43745 "github.com/frobware/haproxy-hacks/OCPBUGS-43745"
 )
 
 type TestConfig struct {
-	Context     context.Context
 	Logger      *slog.Logger
 	KubeConfig  *rest.Config
 	KubeClient  *kubernetes.Clientset
@@ -56,6 +53,7 @@ func getCallerInfo() callerInfo {
 	if !ok {
 		return callerInfo{file: "unknown", line: 0}
 	}
+
 	return callerInfo{
 		file: filepath.Base(fullPath),
 		line: line,
@@ -72,12 +70,13 @@ func (h *slogt) Enabled(_ context.Context, _ slog.Level) bool {
 	return true
 }
 
-func (h *slogt) Handle(ctx context.Context, r slog.Record) error {
+func (h *slogt) Handle(_ context.Context, r slog.Record) error {
 	caller := getCallerInfo()
 	attrs := h.formatAttributes(r)
 	msg := h.formatMessage(r.Message, attrs)
 
 	log.Printf("    %s:%d: %s\n", caller.file, caller.line, msg)
+
 	return nil
 }
 
@@ -97,6 +96,7 @@ func (h *slogt) formatAttributes(r slog.Record) []string {
 	// Add record attributes.
 	r.Attrs(func(a slog.Attr) bool {
 		attrs = append(attrs, formatAttr(a))
+
 		return true
 	})
 
@@ -111,11 +111,13 @@ func (h *slogt) formatMessage(msg string, attrs []string) string {
 	if len(attrs) > 0 {
 		return fmt.Sprintf("%s (%s)", msg, strings.Join(attrs, " "))
 	}
+
 	return msg
 }
 
 func (h *slogt) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newAttrs := append(h.attrs, attrs...)
+
 	return &slogt{t: h.t, attrs: newAttrs}
 }
 
@@ -134,8 +136,10 @@ type haproxyBackend struct {
 }
 
 func parseHAProxyConfig(content string) []haproxyBackend {
-	var backends []haproxyBackend
-	var current *haproxyBackend
+	var (
+		backends []haproxyBackend
+		current  *haproxyBackend
+	)
 
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
@@ -148,10 +152,12 @@ func parseHAProxyConfig(content string) []haproxyBackend {
 			if current != nil {
 				backends = append(backends, *current)
 			}
+
 			current = &haproxyBackend{
 				name:    strings.TrimSpace(strings.TrimPrefix(line, "backend")),
 				servers: []string{},
 			}
+
 			continue
 		}
 
@@ -175,6 +181,7 @@ func parseHAProxyConfig(content string) []haproxyBackend {
 func findBackend(backends []haproxyBackend, route *routev1.Route, service *corev1.Service, pod *corev1.Pod) (haproxyBackend, bool) {
 	expectedBackendName := fmt.Sprintf("be_http:%s:%s", route.Namespace, route.Name)
 	expectedServiceName := fmt.Sprintf("pod:%s:%s", pod.Name, service.Name)
+
 	for _, b := range backends {
 		if b.name == expectedBackendName {
 			for _, server := range b.servers {
@@ -197,54 +204,17 @@ type routerPod struct {
 func (p *routerPod) getHAProxyConfig(ctx context.Context) ([]haproxyBackend, error) {
 	stdout, stderr, err := p.executor.Execute(ctx, p.name, p.namespace, "router", []string{"cat", "/var/lib/haproxy/conf/haproxy.config"})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get HAProxy config from pod %s: %v\nstderr: %s", p.name, err, stderr)
+		return nil, fmt.Errorf("failed to get HAProxy config from pod %s: %w\nstderr: %s", p.name, err, stderr)
 	}
+
 	return parseHAProxyConfig(stdout), nil
 }
 
-type configPoller struct {
-	interval time.Duration
-	timeout  time.Duration
-	logger   *slog.Logger
-}
-
-func newConfigPoller(interval, timeout time.Duration, logger *slog.Logger) *configPoller {
-	return &configPoller{
-		interval: interval,
-		timeout:  timeout,
-		logger:   logger,
-	}
-}
-
-func (p *configPoller) waitForCondition(ctx context.Context, check func(context.Context) (bool, error)) error {
-	ctx, cancel := context.WithTimeout(ctx, p.timeout)
-	defer cancel()
-
-	ticker := time.NewTicker(p.interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("timeout waiting for condition: %w", ctx.Err())
-		case <-ticker.C:
-			ok, err := check(ctx)
-			if err != nil {
-				return err
-			}
-			if ok {
-				return nil
-			}
-		}
-	}
-}
-
-// Resource creators
-type rcCreator struct {
+type replicationControllerCreator struct {
 	clientset *kubernetes.Clientset
 }
 
-func (r *rcCreator) Create(ctx context.Context, meta ocpbugs43745.ResourceMeta) (*corev1.ReplicationController, error) {
+func (r *replicationControllerCreator) Create(ctx context.Context, meta ocpbugs43745.ResourceMeta) (*corev1.ReplicationController, error) {
 	rc := corev1.ReplicationController{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      meta.Name,
@@ -276,6 +246,7 @@ func (r *rcCreator) Create(ctx context.Context, meta ocpbugs43745.ResourceMeta) 
 			},
 		},
 	}
+
 	return r.clientset.CoreV1().ReplicationControllers(meta.Namespace).Create(ctx, &rc, metav1.CreateOptions{})
 }
 
@@ -302,6 +273,7 @@ func (s *serviceCreator) Create(ctx context.Context, meta ocpbugs43745.ResourceM
 			Selector: meta.Labels,
 		},
 	}
+
 	return s.clientset.CoreV1().Services(meta.Namespace).Create(ctx, &svc, metav1.CreateOptions{})
 }
 
@@ -331,13 +303,13 @@ func (r *routeCreator) Create(ctx context.Context, meta ocpbugs43745.ResourceMet
 	return r.routeClient.RouteV1().Routes(meta.Namespace).Create(ctx, &route, metav1.CreateOptions{})
 }
 
-type WaitForAllRoutesAddmittedProgressFunc func(namespace string, admittedRoutes, totalRoutes int, pendingRoutes []string)
+type waitForAllRoutesAddmittedProgressFunc func(admittedRoutes, totalRoutes int, pendingRoutes []string)
 
 func waitForAllRoutesAdmitted(
 	routeClient *routeclientset.Clientset,
 	namespace string,
 	timeout time.Duration,
-	progress WaitForAllRoutesAddmittedProgressFunc,
+	progress waitForAllRoutesAddmittedProgressFunc,
 ) (*routev1.RouteList, error) {
 	isRouteAdmitted := func(route *routev1.Route) bool {
 		for _, ingress := range route.Status.Ingress {
@@ -345,6 +317,7 @@ func waitForAllRoutesAdmitted(
 				return true
 			}
 		}
+
 		return false
 	}
 
@@ -352,13 +325,17 @@ func waitForAllRoutesAdmitted(
 
 	err := wait.PollUntilContextTimeout(context.Background(), time.Second, timeout, true, func(ctx context.Context) (bool, error) {
 		var err error
-		routeList, err = routeClient.RouteV1().Routes(namespace).List(context.TODO(), metav1.ListOptions{})
+
+		routeList, err = routeClient.RouteV1().Routes(namespace).List(ctx, metav1.ListOptions{})
+
 		if err != nil {
-			return false, fmt.Errorf("failed to list routes in namespace %s: %v", namespace, err)
+			return false, fmt.Errorf("failed to list routes in namespace %s: %w", namespace, err)
 		}
 
 		admittedRoutes := 0
+
 		var pendingRoutes []string
+
 		for _, route := range routeList.Items {
 			if isRouteAdmitted(&route) {
 				admittedRoutes++
@@ -369,7 +346,7 @@ func waitForAllRoutesAdmitted(
 
 		totalRoutes := len(routeList.Items)
 		if progress != nil {
-			progress(namespace, admittedRoutes, totalRoutes, pendingRoutes)
+			progress(admittedRoutes, totalRoutes, pendingRoutes)
 		}
 
 		if admittedRoutes == totalRoutes {
@@ -380,14 +357,14 @@ func waitForAllRoutesAdmitted(
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("not all routes were admitted in namespace %s: %v", namespace, err)
+		return nil, fmt.Errorf("not all routes were admitted in namespace %s: %w", namespace, err)
 	}
 
 	return routeList, nil
 }
 
 func waitForHAProxyConfigCondition(tc *TestConfig, routeName string, service *corev1.Service, servicePod *corev1.Pod, shouldBePresent bool) error {
-	pods, err := tc.KubeClient.CoreV1().Pods("openshift-ingress").List(tc.Context, metav1.ListOptions{
+	pods, err := tc.KubeClient.CoreV1().Pods("openshift-ingress").List(context.Background(), metav1.ListOptions{
 		LabelSelector: "ingresscontroller.operator.openshift.io/deployment-ingresscontroller=default",
 	})
 	if err != nil {
@@ -403,16 +380,14 @@ func waitForHAProxyConfigCondition(tc *TestConfig, routeName string, service *co
 		})
 	}
 
-	poller := newConfigPoller(5*time.Second, 2*time.Minute, tc.Logger)
-
-	return poller.waitForCondition(tc.Context, func(ctx context.Context) (bool, error) {
+	return wait.PollUntilContextTimeout(context.Background(), 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
 		for _, pod := range routerPods {
 			backends, err := pod.getHAProxyConfig(ctx)
 			if err != nil {
 				return false, err
 			}
 
-			backend, found := findBackend(backends, tc.Route, service, servicePod) // Adjust as needed
+			backend, found := findBackend(backends, tc.Route, service, servicePod)
 			if found == shouldBePresent {
 				if found {
 					tc.Logger.Info("backend entry found",
@@ -434,20 +409,25 @@ func waitForHAProxyConfigCondition(tc *TestConfig, routeName string, service *co
 					"service", service.Name,
 					"shouldBePresent", shouldBePresent,
 					"found", found)
+
 				return false, nil
 			}
 		}
+
 		return true, nil
 	})
 }
 
-func waitForHAProxyUpdate(tc *TestConfig, routeName string, service *corev1.Service, pod *corev1.Pod) error {
+func waitForHAProxyConfigUpdate(tc *TestConfig, routeName string, service *corev1.Service, pod *corev1.Pod) error {
 	tc.Logger.Info("waiting for HAProxy configuration update", "service", service.Name)
 	err := waitForHAProxyConfigCondition(tc, routeName, service, pod, true)
+
 	if err != nil {
 		return fmt.Errorf("failed waiting for HAProxy configuration update: %w", err)
 	}
+
 	tc.Logger.Info("HAProxy configuration updated successfully", "service", service.Name)
+
 	return nil
 }
 
@@ -456,14 +436,22 @@ func getRouteResponse(logger *slog.Logger, route *routev1.Route) (string, error)
 		return "", fmt.Errorf("route %s/%s has no host", route.Namespace, route.Name)
 	}
 
-	url := fmt.Sprintf("http://%s", route.Spec.Host)
+	url := "http://" + route.Spec.Host
 	logger.Info("making GET request", "url", url)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
 
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	resp, err := client.Get(url)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("GET request failed: %w", err)
 	}
@@ -484,11 +472,13 @@ func getRouteResponse(logger *slog.Logger, route *routev1.Route) (string, error)
 func fetchServiceResponse(tc *TestConfig, route *routev1.Route) (string, error) {
 	tc.Logger.Info("getting response from service", "service", route.Spec.To.Name)
 	response, err := getRouteResponse(tc.Logger, route)
+
 	if err != nil {
 		return "", fmt.Errorf("failed to get response from service: %w", err)
 	}
 
 	tc.Logger.Info("received response from service", "service", route.Spec.To.Name, "response", response)
+
 	return response, nil
 }
 
@@ -512,6 +502,7 @@ func updateRouteService(ctx context.Context, routeClient *routeclientset.Clients
 			Kind: "Service",
 			Name: newServiceName,
 		}
+
 		return r
 	}
 
@@ -519,46 +510,49 @@ func updateRouteService(ctx context.Context, routeClient *routeclientset.Clients
 }
 
 func routeSwitchServiceAndVerifyResponse(tc *TestConfig, service *corev1.Service, pod *corev1.Pod) error {
-	updatedRoute, err := updateRouteService(tc.Context, tc.RouteClient, tc.Route, service.Name, tc.Logger)
+	updatedRoute, err := updateRouteService(context.Background(), tc.RouteClient, tc.Route, service.Name, tc.Logger)
 	if err != nil {
 		return err
 	}
 
 	tc.Route = updatedRoute
 
-	if err := waitForHAProxyUpdate(tc, updatedRoute.Name, service, pod); err != nil {
+	if err := waitForHAProxyConfigUpdate(tc, updatedRoute.Name, service, pod); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func switchServiceWaitAndFetchResponse(
+func switchServiceAndFetchResponse(
 	tc *TestConfig,
 	serviceIndex int,
 	delay time.Duration,
 ) (string, error) {
 	if err := routeSwitchServiceAndVerifyResponse(tc, tc.Services[serviceIndex], &tc.Pods[serviceIndex]); err != nil {
-		return "", fmt.Errorf("failed during switch to service %s: %v", tc.Services[serviceIndex].Name, err)
+		return "", fmt.Errorf("failed during switch to service %s: %w", tc.Services[serviceIndex].Name, err)
 	}
+
 	tc.Logger.Info("Switched to service", "service", tc.Services[serviceIndex].Name)
 
-	if _, err := waitForAllRoutesAdmitted(tc.RouteClient, tc.Namespace.Name, 30*time.Second, func(namespace string, admittedRoutes, totalRoutes int, pendingRoutes []string) {
+	if _, err := waitForAllRoutesAdmitted(tc.RouteClient, tc.Namespace.Name, 30*time.Second, func(admittedRoutes, totalRoutes int, pendingRoutes []string) {
 		if len(pendingRoutes) > 0 {
 			tc.Logger.Info("Pending routes", "admittedRoutes", admittedRoutes, "totalRoutes", totalRoutes, "routes", strings.Join(pendingRoutes, ", "))
 		}
 	}); err != nil {
-		return "", fmt.Errorf("not all routes have been admitted in namespace %s: %v", tc.Namespace.Name, err)
+		return "", fmt.Errorf("not all routes have been admitted in namespace %s: %w", tc.Namespace.Name, err)
 	}
-	tc.Logger.Info("All routes admitted", "namespace", tc.Namespace.Name)
 
-	tc.Logger.Info("Delaying GET request", "route", tc.Route, "duation", delay)
+	tc.Logger.Info("All routes admitted", "namespace", tc.Namespace.Name)
+	tc.Logger.Info("Delaying GET request", "route", tc.Route.Name, "duation", delay)
 	time.Sleep(delay)
 
 	return fetchServiceResponse(tc, tc.Route)
 }
 
 func setupTest(t *testing.T) *TestConfig {
+	t.Helper()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	logger := slog.New(&slogt{t: t})
 
@@ -590,7 +584,6 @@ func setupTest(t *testing.T) *TestConfig {
 	logger.Info("Running test on OpenShift Cluster Version", "version", clusterVersion.Status.Desired.Version)
 
 	tc := &TestConfig{
-		Context:     ctx,
 		Logger:      logger,
 		KubeConfig:  cfg,
 		KubeClient:  kubeClient,
@@ -604,9 +597,11 @@ func setupTest(t *testing.T) *TestConfig {
 		Name:   "route-service-switcher-test-",
 		Labels: map[string]string{"test": "namespace"},
 	})
+
 	if err != nil {
 		t.Fatalf("failed to create namespace: %v", err)
 	}
+
 	tc.Namespace = ns
 
 	if v := os.Getenv("NO_CLEANUP"); v != "1" {
@@ -620,19 +615,20 @@ func setupTest(t *testing.T) *TestConfig {
 		if err != nil {
 			return false, err
 		}
+
 		return current.Status.ReadyReplicas >= *current.Spec.Replicas, nil
 	}
 
 	for i := 1; i <= 2; i++ {
 		rcCreator := ocpbugs43745.NewReadinessAwareCreator(
-			ocpbugs43745.NewLoggingCreator(&rcCreator{clientset: kubeClient}, logger),
+			ocpbugs43745.NewLoggingCreator(&replicationControllerCreator{clientset: kubeClient}, logger),
 			rcCheck, 2*time.Minute,
 		)
 
 		_, err := rcCreator.Create(ctx, ocpbugs43745.ResourceMeta{
 			Name:      fmt.Sprintf("web-server-%d", i),
 			Namespace: ns.Name,
-			Labels:    map[string]string{"app": "web-server", "instance": fmt.Sprintf("%d", i)},
+			Labels:    map[string]string{"app": "web-server", "instance": strconv.Itoa(i)},
 		})
 		if err != nil {
 			t.Fatalf("failed to create ReplicationController %d: %v", i, err)
@@ -642,11 +638,13 @@ func setupTest(t *testing.T) *TestConfig {
 		svc, err := svcCreator.Create(ctx, ocpbugs43745.ResourceMeta{
 			Name:      fmt.Sprintf("service-%d", i),
 			Namespace: ns.Name,
-			Labels:    map[string]string{"app": "web-server", "instance": fmt.Sprintf("%d", i)},
+			Labels:    map[string]string{"app": "web-server", "instance": strconv.Itoa(i)},
 		})
+
 		if err != nil {
 			t.Fatalf("failed to create Service %d: %v", i, err)
 		}
+
 		tc.Services = append(tc.Services, svc)
 
 		podList, err := kubeClient.CoreV1().Pods(ns.Name).List(ctx, metav1.ListOptions{
@@ -655,6 +653,7 @@ func setupTest(t *testing.T) *TestConfig {
 		if err != nil {
 			t.Fatalf("failed to list pods for RC %d: %v", i, err)
 		}
+
 		tc.Pods = append(tc.Pods, podList.Items...)
 	}
 
@@ -664,11 +663,12 @@ func setupTest(t *testing.T) *TestConfig {
 		Namespace: ns.Name,
 		Labels:    map[string]string{"app": "web-server"},
 	})
+
 	if err != nil {
 		t.Fatalf("failed to create route: %v", err)
 	}
-	tc.Route = route
 
+	tc.Route = route
 	baseExecutor := ocpbugs43745.NewPodExecutor(kubeClient, cfg)
 	tc.PodExecutor = ocpbugs43745.NewLoggingPodExecutor(
 		ocpbugs43745.NewRetryingExecutor(baseExecutor, 3, time.Second),
@@ -678,20 +678,22 @@ func setupTest(t *testing.T) *TestConfig {
 	return tc
 }
 
-func TestServiceSwitcheroo(t *testing.T) {
-	var delay time.Duration = 0
+func TestRouteServiceSwitch(t *testing.T) {
+	var delay time.Duration
 
 	if v := os.Getenv("SWITCH_DELAY"); v != "" {
 		n, err := time.ParseDuration(v)
 		if err != nil {
 			log.Fatalf("Invalid duration: %s: %v", v, err)
 		}
+
 		delay = n
 	}
 
 	tc := setupTest(t)
 	defer func() {
 		tc.cancel()
+
 		if err := tc.Cleaner.Cleanup(); err != nil {
 			t.Errorf("cleanup failed: %v", err)
 		}
@@ -702,19 +704,16 @@ func TestServiceSwitcheroo(t *testing.T) {
 			t.Fatal("Not enough services or pods to test switching")
 		}
 
-		// Switch to the first service and fetch the response.
-		resp1, err := switchServiceWaitAndFetchResponse(tc, 0, 0)
+		resp1, err := switchServiceAndFetchResponse(tc, 0, 0)
 		if err != nil {
-			t.Fatalf(err.Error())
+			t.Fatal(err)
 		}
 
-		// Switch to the second service and fetch the response.
-		resp2, err := switchServiceWaitAndFetchResponse(tc, 1, delay)
+		resp2, err := switchServiceAndFetchResponse(tc, 1, delay)
 		if err != nil {
-			t.Fatalf(err.Error())
+			t.Fatal(err)
 		}
 
-		// Compare the responses to ensure they are different.
 		if resp1 == resp2 {
 			t.Fatalf("Expected different responses after switching services, but got the same response: %s", resp1)
 		}
