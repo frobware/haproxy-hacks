@@ -10,8 +10,6 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -41,92 +39,6 @@ type TestConfig struct {
 	Services    []*corev1.Service
 	Route       *routev1.Route
 	Pods        []corev1.Pod
-}
-
-type callerInfo struct {
-	file string
-	line int
-}
-
-func getCallerInfo() callerInfo {
-	_, fullPath, line, ok := runtime.Caller(4)
-	if !ok {
-		return callerInfo{file: "unknown", line: 0}
-	}
-
-	return callerInfo{
-		file: filepath.Base(fullPath),
-		line: line,
-	}
-}
-
-type slogt struct {
-	t     *testing.T
-	attrs []slog.Attr
-	group string
-}
-
-func (h *slogt) Enabled(_ context.Context, _ slog.Level) bool {
-	return true
-}
-
-func (h *slogt) Handle(_ context.Context, r slog.Record) error {
-	caller := getCallerInfo()
-	attrs := h.formatAttributes(r)
-	msg := h.formatMessage(r.Message, attrs)
-
-	log.Printf("    %s:%d: %s\n", caller.file, caller.line, msg)
-
-	return nil
-}
-
-func (h *slogt) formatAttributes(r slog.Record) []string {
-	attrs := make([]string, 0)
-
-	// Add existing attributes.
-	for _, a := range h.attrs {
-		attrs = append(attrs, formatAttr(a))
-	}
-
-	// Add group if present.
-	if h.group != "" {
-		attrs = append([]string{formatAttr(slog.String("group", h.group))}, attrs...)
-	}
-
-	// Add record attributes.
-	r.Attrs(func(a slog.Attr) bool {
-		attrs = append(attrs, formatAttr(a))
-
-		return true
-	})
-
-	return attrs
-}
-
-func formatAttr(a slog.Attr) string {
-	return fmt.Sprintf("%s=%s", a.Key, strings.TrimSpace(fmt.Sprint(a.Value)))
-}
-
-func (h *slogt) formatMessage(msg string, attrs []string) string {
-	if len(attrs) > 0 {
-		return fmt.Sprintf("%s (%s)", msg, strings.Join(attrs, " "))
-	}
-
-	return msg
-}
-
-func (h *slogt) WithAttrs(attrs []slog.Attr) slog.Handler {
-	newAttrs := append(h.attrs, attrs...)
-
-	return &slogt{t: h.t, attrs: newAttrs}
-}
-
-func (h *slogt) WithGroup(name string) slog.Handler {
-	return &slogt{
-		t:     h.t,
-		attrs: h.attrs,
-		group: name,
-	}
 }
 
 type haproxyBackend struct {
@@ -563,7 +475,7 @@ func setupTest(t *testing.T) *TestConfig {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	logger := slog.New(&slogt{t: t})
+	logger := slog.Default()
 
 	cfg, err := config.GetConfig()
 	if err != nil {
