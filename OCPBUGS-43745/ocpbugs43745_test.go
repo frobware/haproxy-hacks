@@ -378,7 +378,10 @@ func waitForHAProxyConfigUpdate(
 	backendPod *corev1.Pod,
 	logger *slog.Logger,
 ) error {
-	logger.Info("Waiting for HAProxy configuration update", "service", service.Name)
+	logger.Info("Waiting for HAProxy configuration update",
+		"service", service.Name,
+		"backend", fmt.Sprintf("be_http:%s:%s", route.Namespace, route.Name),
+		"server", fmt.Sprintf("pod:%s:%s", backendPod.Name, service.Name))
 
 	routerPods, err := getRouterPods(kubeClient, restConfig)
 	if err != nil {
@@ -401,12 +404,6 @@ func waitForHAProxyConfigUpdate(
 }
 
 func fetchServiceResponse(logger *slog.Logger, route *routev1.Route, client *routeClient) (string, error) {
-	logger.Info("Getting response from service",
-		"service", route.Spec.To.Name,
-		"host", route.Spec.Host,
-		"namespace", route.Namespace,
-		"routeName", route.Name)
-
 	response, err := client.getResponse(route)
 	if err != nil {
 		logger.Error("Failed getting response from service",
@@ -478,11 +475,13 @@ func routeSwitchServiceAndVerifyResponse(
 		return nil, err
 	}
 
-	logger.Info("Waiting for route admission after HAProxy update")
-
 	if err := waitForRouteAdmission(ctx, routeClient, updatedRoute.Namespace, updatedRoute.Name); err != nil {
 		return nil, fmt.Errorf("route not admitted after service switch: %w", err)
 	}
+
+	logger.Info("Route service switch complete",
+		"route", updatedRoute.Name,
+		"service", service.Name)
 
 	return updatedRoute, nil
 }
@@ -550,7 +549,6 @@ func switchRouteServiceAndFetchResponse(
 	}
 
 	tc.testRouteName = updatedRoute.Name
-	tc.logger.Info("Route switched service", "route", tc.testRouteName, "service", service.Name)
 
 	if err := waitForRouteAdmission(ctx, tc.routeClientset, updatedRoute.Namespace, updatedRoute.Name); err != nil {
 		return "", fmt.Errorf("route admission failed: %w", err)
@@ -681,11 +679,6 @@ func (c *routeClient) getResponse(route *routev1.Route) (string, error) {
 	}
 
 	url := c.buildURL(route)
-	c.logger.Info("Making GET request",
-		"url", url,
-		"routeName", route.Name,
-		"namespace", route.Namespace,
-		"service", route.Spec.To.Name)
 
 	response, err := c.executeRequest(route, url)
 	if err != nil {
@@ -725,8 +718,9 @@ func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeRe
 		req.Header.Add("Pragma", "no-cache")
 	}
 
-	c.logger.Info("Executing request",
+	c.logger.Info("Making HTTP request",
 		"url", url,
+		"service", route.Spec.To.Name,
 		"keepAliveDisabled", sharedTransport.DisableKeepAlives,
 		"cacheControl", c.options.CacheControl)
 
