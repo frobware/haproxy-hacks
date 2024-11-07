@@ -9,7 +9,9 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"net"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"strconv"
 	"strings"
@@ -391,10 +393,6 @@ func waitForHAProxyConfigUpdate(
 	expectedBackendName := fmt.Sprintf("be_http:%s:%s", route.Namespace, route.Name)
 	expectedServerName := fmt.Sprintf("pod:%s:%s", backendPod.Name, service.Name)
 
-	logger.Info("Waiting for HAProxy config update",
-		"backend", expectedBackendName,
-		"server", expectedServerName)
-
 	err = waitForHAProxyConfigCondition(ctx, routerPods, expectedBackendName, expectedServerName, true, logger)
 	if err != nil {
 		return fmt.Errorf("failed waiting for HAProxy configuration update: %w", err)
@@ -639,9 +637,9 @@ func executeCommandInPod(ctx context.Context, kubeClient *kubernetes.Clientset, 
 }
 
 type routeClientOptions struct {
-	DisableKeepAlive bool
-	CacheControl     bool
-	Timeout          time.Duration
+	EnableKeepAlive bool
+	CacheControl    bool
+	Timeout         time.Duration
 }
 
 type routeClient struct {
@@ -659,7 +657,21 @@ type routeResponse struct {
 func newRouteClient(options routeClientOptions, logger *slog.Logger) *routeClient {
 	if sharedTransport == nil {
 		sharedTransport = &http.Transport{
-			DisableKeepAlives: options.DisableKeepAlive,
+			DisableKeepAlives: !options.EnableKeepAlive,
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				dialer := &net.Dialer{}
+
+				conn, err := dialer.DialContext(ctx, network, addr)
+				if err != nil {
+					return nil, err
+				}
+
+				localAddr := conn.LocalAddr().String()
+				remoteAddr := conn.RemoteAddr().String()
+				logger.Info("Connection", "local", localAddr, "remote", remoteAddr)
+
+				return conn, nil
+			},
 		}
 	}
 
@@ -708,9 +720,40 @@ func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeRe
 	ctx, cancel := context.WithTimeout(context.Background(), c.options.Timeout)
 	defer cancel()
 
+	trace := &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			c.logger.Info("Connection info",
+				"reused", info.Reused,
+				"wasIdle", info.WasIdle,
+				"idleTime", info.IdleTime)
+		},
+		ConnectDone: func(network, addr string, err error) {
+			if err != nil {
+				c.logger.Error("Connection failed",
+					"network", network,
+					"addr", addr,
+					"error", err)
+			} else {
+				c.logger.Info("Connection established",
+					"network", network,
+					"addr", addr)
+			}
+		},
+		PutIdleConn: func(err error) {
+			if err != nil {
+				c.logger.Warn("Connection not put back to idle",
+					"error", err)
+			} else {
+				c.logger.Info("Connection returned to idle pool")
+			}
+		},
+	}
+
+	ctx = httptrace.WithClientTrace(ctx, trace)
+
 	req, err := c.createRequest(ctx, url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
 	if c.options.CacheControl {
@@ -724,6 +767,7 @@ func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeRe
 		"keepAliveDisabled", sharedTransport.DisableKeepAlives,
 		"cacheControl", c.options.CacheControl)
 
+	// Execute the request.
 	resp, err := c.doRequest(req)
 	if err != nil {
 		c.logger.Error("Request failed",
@@ -731,17 +775,19 @@ func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeRe
 			"error", err,
 			"routeName", route.Name,
 			"service", route.Spec.To.Name)
+
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Log connection reuse info if available
+	// Log connection reuse info if available.
 	if resp.Header.Get("X-Connection-Info") != "" {
 		c.logger.Info("Connection info",
 			"info", resp.Header.Get("X-Connection-Info"),
 			"url", url)
 	}
 
+	// Process and return the response.
 	return c.processResponse(resp)
 }
 
@@ -1045,9 +1091,9 @@ func TestRouteServiceSwitch(t *testing.T) {
 			"app":  "web-server",
 		},
 		httpClientOptions: routeClientOptions{
-			DisableKeepAlive: getEnvBool("DISABLE_KEEPALIVE", true),
-			CacheControl:     getEnvBool("USE_CACHE_CONTROL", true),
-			Timeout:          getEnvDuration("CLIENT_TIMEOUT", 10*time.Second),
+			EnableKeepAlive: getEnvBool("ENABLE_KEEPALIVE", true),
+			CacheControl:    getEnvBool("USE_CACHE_CONTROL", true),
+			Timeout:         getEnvDuration("CLIENT_TIMEOUT", 10*time.Second),
 		},
 	}
 
@@ -1084,10 +1130,10 @@ func TestRouteServiceSwitch(t *testing.T) {
 	}
 
 	t.Run("switching between services returns different responses", func(t *testing.T) {
-		t.Logf("Testing with options: DisableKeepAlive=%v, CacheControl=%v, Timeout=%v",
-			tc.httpClientOptions.DisableKeepAlive,
-			tc.httpClientOptions.CacheControl,
-			tc.httpClientOptions.Timeout)
+		tc.logger.Info("Testing with HTTP client options:",
+			"EnableKeepAlive", tc.httpClientOptions.EnableKeepAlive,
+			"CacheControl", tc.httpClientOptions.CacheControl,
+			"Timeout", tc.httpClientOptions.Timeout)
 
 		resp1, err := switchRouteServiceAndFetchResponse(ctx, tc, 0, 0)
 		if err != nil {

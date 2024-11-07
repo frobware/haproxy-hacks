@@ -5,12 +5,12 @@ use warnings;
 use Term::ANSIColor;
 
 sub run_test {
-    my ($keep_alive, $cache_control) = @_;
+    my ($enable_keep_alive, $cache_control) = @_;
     print "===================================================\n";
-    print "Testing with: DISABLE_KEEPALIVE=$keep_alive USE_CACHE_CONTROL=$cache_control\n";
+    print "Testing with: ENABLE_KEEPALIVE=$enable_keep_alive USE_CACHE_CONTROL=$cache_control\n";
     print "===================================================\n";
 
-    my $cmd = "DISABLE_KEEPALIVE=$keep_alive USE_CACHE_CONTROL=$cache_control go test -v 2>&1";
+    my $cmd = "ENABLE_KEEPALIVE=$enable_keep_alive USE_CACHE_CONTROL=$cache_control go test -v 2>&1";
     my $output = `$cmd`;
     my $exit_code = $? >> 8;
 
@@ -20,18 +20,18 @@ sub run_test {
 }
 
 my @configs = (
-    {keep_alive => "false", cache_control => "false"},
-    {keep_alive => "false", cache_control => "true"},
-    {keep_alive => "true",  cache_control => "false"},
-    {keep_alive => "true",  cache_control => "true"}
-    );
+    {enable_keep_alive => "false", cache_control => "false"},
+    {enable_keep_alive => "false", cache_control => "true"},
+    {enable_keep_alive => "true",  cache_control => "false"},
+    {enable_keep_alive => "true",  cache_control => "true"}
+);
 
 my %results;
 print "Running tests with explicit configurations...\n";
 
 for my $config (@configs) {
-    my ($exit_code, $output) = run_test($config->{keep_alive}, $config->{cache_control});
-    my $key = "$config->{keep_alive}_$config->{cache_control}";
+    my ($exit_code, $output) = run_test($config->{enable_keep_alive}, $config->{cache_control});
+    my $key = "$config->{enable_keep_alive}_$config->{cache_control}";
     $results{$key} = {
         exit_code => $exit_code,
         output => $output
@@ -45,11 +45,12 @@ printf "%-25s %-25s | %-9s | %-6s\n",
 print "-" x 70 . "\n";
 
 for my $config (@configs) {
-    my $key = "$config->{keep_alive}_$config->{cache_control}";
+    my $key = "$config->{enable_keep_alive}_$config->{cache_control}";
     my $result = $results{$key};
     my $result_text = $result->{exit_code} == 0 ? colored("PASS", "green") : colored("FAIL", "red");
 
-    my $reuse_status = $config->{keep_alive} eq 'false' ? "Enabled" : "Disabled";
+    # Adjust reuse status based on ENABLE_KEEPALIVE logic
+    my $reuse_status = $config->{enable_keep_alive} eq 'true' ? "Enabled" : "Disabled";
     my $cache_status = $config->{cache_control} eq 'true' ? "Yes" : "No";
 
     printf "%-25s %-25s | %-9d | %-6s\n",
