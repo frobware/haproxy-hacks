@@ -766,76 +766,6 @@ func (c *routeClient) readBody(body io.ReadCloser) (string, error) {
 	return string(bodyBytes), nil
 }
 
-func TestRouteServiceSwitch(t *testing.T) {
-	var getResponseDelay time.Duration
-
-	if v := os.Getenv("REQUEST_DELAY"); v != "" {
-		n, err := time.ParseDuration(v)
-		if err != nil {
-			log.Fatalf("Invalid duration: %s: %v", v, err)
-		}
-
-		getResponseDelay = n
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-
-	tc := &TestConfig{
-		logger: slog.Default(),
-		labels: map[string]string{
-			"test": "route-service-switch",
-			"app":  "web-server",
-		},
-	}
-
-	if err := setupClients(ctx, tc); err != nil {
-		t.Fatalf("failed to setup clients: %v", err)
-	}
-
-	if err := logClusterVersion(ctx, tc); err != nil {
-		t.Fatalf("failed to log cluster version: %v", err)
-	}
-
-	if err := setupNamespace(ctx, tc); err != nil {
-		t.Fatalf("failed to setup namespace: %v", err)
-	}
-
-	if err := setupBackendServices(ctx, tc); err != nil {
-		t.Fatalf("failed to setup backend services: %v", err)
-	}
-
-	if err := setupTestRoute(ctx, tc); err != nil {
-		t.Fatalf("failed to setup test route: %v", err)
-	}
-
-	if v := os.Getenv("NO_CLEANUP"); v != "1" {
-		t.Cleanup(func() {
-			if !t.Failed() {
-				tc.kubeClientset.CoreV1().Namespaces().Delete(context.Background(), tc.namespace, metav1.DeleteOptions{})
-			} else {
-				t.Logf("Test failed; leaving test setup in place in namespace %s", tc.namespace)
-			}
-		})
-	}
-
-	t.Run("switching between services returns different responses", func(t *testing.T) {
-		resp1, err := switchRouteServiceAndFetchResponse(ctx, tc, 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		resp2, err := switchRouteServiceAndFetchResponse(ctx, tc, 1, getResponseDelay)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if resp1 == resp2 {
-			t.Fatalf("Expected different responses after switching services, but got the same response: %s", resp1)
-		}
-	})
-}
-
 func setupClients(_ context.Context, tc *TestConfig) error {
 	cfg, err := config.GetConfig()
 	if err != nil {
@@ -1034,4 +964,74 @@ func setupTestRoute(ctx context.Context, tc *TestConfig) error {
 	tc.testRouteName = route.Name
 
 	return nil
+}
+
+func TestRouteServiceSwitch(t *testing.T) {
+	var getResponseDelay time.Duration
+
+	if v := os.Getenv("REQUEST_DELAY"); v != "" {
+		n, err := time.ParseDuration(v)
+		if err != nil {
+			log.Fatalf("Invalid duration: %s: %v", v, err)
+		}
+
+		getResponseDelay = n
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+
+	tc := &TestConfig{
+		logger: slog.Default(),
+		labels: map[string]string{
+			"test": "route-service-switch",
+			"app":  "web-server",
+		},
+	}
+
+	if err := setupClients(ctx, tc); err != nil {
+		t.Fatalf("failed to setup clients: %v", err)
+	}
+
+	if err := logClusterVersion(ctx, tc); err != nil {
+		t.Fatalf("failed to log cluster version: %v", err)
+	}
+
+	if err := setupNamespace(ctx, tc); err != nil {
+		t.Fatalf("failed to setup namespace: %v", err)
+	}
+
+	if err := setupBackendServices(ctx, tc); err != nil {
+		t.Fatalf("failed to setup backend services: %v", err)
+	}
+
+	if err := setupTestRoute(ctx, tc); err != nil {
+		t.Fatalf("failed to setup test route: %v", err)
+	}
+
+	if v := os.Getenv("NO_CLEANUP"); v != "1" {
+		t.Cleanup(func() {
+			if !t.Failed() {
+				tc.kubeClientset.CoreV1().Namespaces().Delete(context.Background(), tc.namespace, metav1.DeleteOptions{})
+			} else {
+				t.Logf("Test failed; leaving test setup in place in namespace %s", tc.namespace)
+			}
+		})
+	}
+
+	t.Run("switching between services returns different responses", func(t *testing.T) {
+		resp1, err := switchRouteServiceAndFetchResponse(ctx, tc, 0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		resp2, err := switchRouteServiceAndFetchResponse(ctx, tc, 1, getResponseDelay)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if resp1 == resp2 {
+			t.Fatalf("Expected different responses after switching services, but got the same response: %s", resp1)
+		}
+	})
 }
