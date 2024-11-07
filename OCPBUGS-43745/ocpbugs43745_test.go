@@ -32,23 +32,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
-type TestConfig struct {
+type ocpbugs43745TestConfig struct {
 	kubeClientset  *kubernetes.Clientset
 	kubeConfig     *rest.Config
 	logger         *slog.Logger
 	routeClientset *routeclientset.Clientset
 
-	namespace     string
-	labels        map[string]string
-	testRouteName string
+	namespace         string
+	labels            map[string]string
+	testRouteName     string
+	httpClientOptions routeClientOptions
 }
 
 // Resource getters that always fetch fresh resources.
 type ResourceGetter struct {
-	tc *TestConfig
+	tc *ocpbugs43745TestConfig
 }
 
-func NewResourceGetter(tc *TestConfig) *ResourceGetter {
+func NewResourceGetter(tc *ocpbugs43745TestConfig) *ResourceGetter {
 	return &ResourceGetter{tc: tc}
 }
 
@@ -395,8 +396,8 @@ func waitForHAProxyConfigUpdate(
 	return nil
 }
 
-func fetchServiceResponse(logger *slog.Logger, route *routev1.Route) (string, error) {
-	client := newRouteClient(10*time.Second, logger)
+func fetchServiceResponse(logger *slog.Logger, route *routev1.Route, options routeClientOptions) (string, error) {
+	client := newRouteClient(options, logger)
 
 	logger.Info("Getting response from service",
 		"service", route.Spec.To.Name,
@@ -410,6 +411,7 @@ func fetchServiceResponse(logger *slog.Logger, route *routev1.Route) (string, er
 			"service", route.Spec.To.Name,
 			"host", route.Spec.Host,
 			"error", err)
+
 		return "", fmt.Errorf("failed to get response from service: %w", err)
 	}
 
@@ -475,6 +477,7 @@ func routeSwitchServiceAndVerifyResponse(
 	}
 
 	logger.Info("Waiting for route admission after HAProxy update")
+
 	if err := waitForRouteAdmission(ctx, routeClient, updatedRoute.Namespace, updatedRoute.Name); err != nil {
 		return nil, fmt.Errorf("route not admitted after service switch: %w", err)
 	}
@@ -495,9 +498,11 @@ func waitForRouteAdmission(ctx context.Context, routeClient *routeclientset.Clie
 		for _, ingress := range route.Status.Ingress {
 			if ingress.RouterCanonicalHostname != "" {
 				admitted = true
+
 				for _, condition := range ingress.Conditions {
 					if condition.Type == routev1.RouteAdmitted && condition.Status == corev1.ConditionTrue {
 						ready = true
+
 						break
 					}
 				}
@@ -512,7 +517,7 @@ func waitForRouteAdmission(ctx context.Context, routeClient *routeclientset.Clie
 // specified service index and fetches the response.
 func switchRouteServiceAndFetchResponse(
 	ctx context.Context,
-	tc *TestConfig,
+	tc *ocpbugs43745TestConfig,
 	serviceIndex int,
 	delay time.Duration,
 ) (string, error) {
@@ -559,7 +564,7 @@ func switchRouteServiceAndFetchResponse(
 		return "", fmt.Errorf("failed to get current route: %w", err)
 	}
 
-	return fetchServiceResponse(tc.logger, currentRoute)
+	return fetchServiceResponse(tc.logger, currentRoute, tc.httpClientOptions)
 }
 
 // waitForReplicationControllerReady waits for the replication
@@ -633,94 +638,60 @@ func executeCommandInPod(ctx context.Context, kubeClient *kubernetes.Clientset, 
 	return stdout.String(), stderr.String(), nil
 }
 
-// routeClient encapsulates HTTP operations for routes.
+type routeClientOptions struct {
+	DisableKeepAlive bool
+	CacheControl     bool
+	Timeout          time.Duration
+}
+
 type routeClient struct {
 	client  *http.Client
 	logger  *slog.Logger
-	timeout time.Duration
+	options routeClientOptions
 }
 
-// routeResponse represents the HTTP response data.
 type routeResponse struct {
 	statusCode int
 	body       string
 	headers    http.Header
 }
 
-// newRouteClient creates a new routeClient with the given
-// configuration.
-func newRouteClient(timeout time.Duration, logger *slog.Logger) *routeClient {
+func newRouteClient(options routeClientOptions, logger *slog.Logger) *routeClient {
+	transport := &http.Transport{}
+	if options.DisableKeepAlive {
+		transport.DisableKeepAlives = true
+	}
+
 	return &routeClient{
-		client:  &http.Client{Timeout: timeout},
+		client: &http.Client{
+			Timeout:   options.Timeout,
+			Transport: transport,
+		},
 		logger:  logger,
-		timeout: timeout,
+		options: options,
 	}
 }
 
-// getResponse handles the complete HTTP request/response cycle for a
-// route.
 func (c *routeClient) getResponse(route *routev1.Route) (string, error) {
-	if route.Spec.Host == "" {
-		return "", fmt.Errorf("route %s/%s has no host", route.Namespace, route.Name)
+	if err := c.validateRoute(route); err != nil {
+		return "", err
 	}
 
-	url := "http://" + route.Spec.Host
+	url := c.buildURL(route)
 	c.logger.Info("Making GET request",
 		"url", url,
 		"routeName", route.Name,
 		"namespace", route.Namespace,
 		"service", route.Spec.To.Name)
 
-	client := &http.Client{
-		Timeout: c.timeout,
-		Transport: &http.Transport{
-			// Disable keep-alive to avoid connection reuse
-			DisableKeepAlives: true,
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
-	defer cancel()
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	response, err := c.executeRequest(route, url)
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", err
 	}
 
-	// Add headers to prevent caching.
-	req.Header.Add("Cache-Control", "no-cache")
-	req.Header.Add("Pragma", "no-cache")
-
-	resp, err := client.Do(req)
-	if err != nil {
-		c.logger.Error("Request failed",
-			"url", url,
-			"error", err,
-			"routeName", route.Name,
-			"service", route.Spec.To.Name)
-		return "", fmt.Errorf("GET request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	c.logger.Info("Received response",
-		"status", resp.Status,
-		"headers", fmt.Sprintf("%+v", resp.Header),
-		"routeName", route.Name,
-		"service", route.Spec.To.Name)
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response body: %w", err)
-	}
-
-	return string(body), nil
+	return response.body, nil
 }
 
-// validateRoute checks if the route has required fields.
 func (c *routeClient) validateRoute(route *routev1.Route) error {
 	if route == nil {
 		return errors.New("route cannot be nil")
@@ -733,14 +704,12 @@ func (c *routeClient) validateRoute(route *routev1.Route) error {
 	return nil
 }
 
-// buildURL constructs the URL for the route.
 func (c *routeClient) buildURL(route *routev1.Route) string {
 	return "http://" + route.Spec.Host
 }
 
-// executeRequest performs the HTTP request and returns the response.
-func (c *routeClient) executeRequest(url string) (*routeResponse, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.options.Timeout)
 	defer cancel()
 
 	req, err := c.createRequest(ctx, url)
@@ -748,8 +717,19 @@ func (c *routeClient) executeRequest(url string) (*routeResponse, error) {
 		return nil, err
 	}
 
+	if c.options.CacheControl {
+		req.Header.Add("Cache-Control", "no-cache")
+		req.Header.Add("Pragma", "no-cache")
+	}
+
 	resp, err := c.doRequest(req)
 	if err != nil {
+		c.logger.Error("Request failed",
+			"url", url,
+			"error", err,
+			"routeName", route.Name,
+			"service", route.Spec.To.Name)
+
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -757,7 +737,6 @@ func (c *routeClient) executeRequest(url string) (*routeResponse, error) {
 	return c.processResponse(resp)
 }
 
-// createRequest creates a new HTTP request with context.
 func (c *routeClient) createRequest(ctx context.Context, url string) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -767,7 +746,6 @@ func (c *routeClient) createRequest(ctx context.Context, url string) (*http.Requ
 	return req, nil
 }
 
-// doRequest executes the HTTP request.
 func (c *routeClient) doRequest(req *http.Request) (*http.Response, error) {
 	resp, err := c.client.Do(req)
 	if err != nil {
@@ -777,8 +755,6 @@ func (c *routeClient) doRequest(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-// processResponse handles the HTTP response and returns a
-// routeResponse.
 func (c *routeClient) processResponse(resp *http.Response) (*routeResponse, error) {
 	if err := c.validateStatusCode(resp.StatusCode); err != nil {
 		return nil, err
@@ -789,6 +765,10 @@ func (c *routeClient) processResponse(resp *http.Response) (*routeResponse, erro
 		return nil, err
 	}
 
+	c.logger.Info("Received response",
+		"status", resp.Status,
+		"headers", fmt.Sprintf("%+v", resp.Header))
+
 	return &routeResponse{
 		statusCode: resp.StatusCode,
 		body:       body,
@@ -796,8 +776,6 @@ func (c *routeClient) processResponse(resp *http.Response) (*routeResponse, erro
 	}, nil
 }
 
-// validateStatusCode checks if the response status code is
-// acceptable.
 func (c *routeClient) validateStatusCode(statusCode int) error {
 	if statusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", statusCode)
@@ -806,7 +784,6 @@ func (c *routeClient) validateStatusCode(statusCode int) error {
 	return nil
 }
 
-// readBody reads and returns the response body as a string.
 func (c *routeClient) readBody(body io.ReadCloser) (string, error) {
 	bodyBytes, err := io.ReadAll(body)
 	if err != nil {
@@ -816,7 +793,7 @@ func (c *routeClient) readBody(body io.ReadCloser) (string, error) {
 	return string(bodyBytes), nil
 }
 
-func setupClients(_ context.Context, tc *TestConfig) error {
+func setupKubernetesClients(_ context.Context, tc *ocpbugs43745TestConfig) error {
 	cfg, err := config.GetConfig()
 	if err != nil {
 		return fmt.Errorf("failed to get config: %w", err)
@@ -839,7 +816,7 @@ func setupClients(_ context.Context, tc *TestConfig) error {
 	return nil
 }
 
-func logClusterVersion(ctx context.Context, tc *TestConfig) error {
+func logClusterVersion(ctx context.Context, tc *ocpbugs43745TestConfig) error {
 	configClientset, err := configclientset.NewForConfig(tc.kubeConfig)
 	if err != nil {
 		return fmt.Errorf("failed to create config clientset: %w", err)
@@ -856,7 +833,7 @@ func logClusterVersion(ctx context.Context, tc *TestConfig) error {
 	return nil
 }
 
-func setupNamespace(ctx context.Context, tc *TestConfig) error {
+func setupNamespace(ctx context.Context, tc *ocpbugs43745TestConfig) error {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "route-service-switcher-test-",
@@ -874,7 +851,7 @@ func setupNamespace(ctx context.Context, tc *TestConfig) error {
 	return nil
 }
 
-func setupBackendServices(ctx context.Context, tc *TestConfig) error {
+func setupBackendServices(ctx context.Context, tc *ocpbugs43745TestConfig) error {
 	for i := 1; i <= 2; i++ {
 		if err := createBackendService(ctx, tc, i); err != nil {
 			return fmt.Errorf("failed to create backend %d: %w", i, err)
@@ -884,7 +861,7 @@ func setupBackendServices(ctx context.Context, tc *TestConfig) error {
 	return nil
 }
 
-func createReplicationController(ctx context.Context, tc *TestConfig, index int, labels map[string]string) (*corev1.ReplicationController, error) {
+func createReplicationController(ctx context.Context, tc *ocpbugs43745TestConfig, index int, labels map[string]string) (*corev1.ReplicationController, error) {
 	int32Ptr := func(i int32) *int32 { return &i }
 
 	rc := &corev1.ReplicationController{
@@ -932,7 +909,7 @@ func createReplicationController(ctx context.Context, tc *TestConfig, index int,
 	return created, nil
 }
 
-func createService(ctx context.Context, tc *TestConfig, index int, labels map[string]string) (*corev1.Service, error) {
+func createService(ctx context.Context, tc *ocpbugs43745TestConfig, index int, labels map[string]string) (*corev1.Service, error) {
 	svc := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("service-%d", index),
@@ -965,7 +942,7 @@ func createService(ctx context.Context, tc *TestConfig, index int, labels map[st
 	return created, nil
 }
 
-func createBackendService(ctx context.Context, tc *TestConfig, index int) error {
+func createBackendService(ctx context.Context, tc *ocpbugs43745TestConfig, index int) error {
 	instanceLabel := strconv.Itoa(index)
 	labels := map[string]string{
 		"app":      "web-server",
@@ -994,7 +971,7 @@ func createBackendService(ctx context.Context, tc *TestConfig, index int) error 
 	return nil
 }
 
-func setupTestRoute(ctx context.Context, tc *TestConfig) error {
+func setupTestRoute(ctx context.Context, tc *ocpbugs43745TestConfig) error {
 	getter := NewResourceGetter(tc)
 
 	services, err := getter.GetServices(ctx)
@@ -1016,6 +993,28 @@ func setupTestRoute(ctx context.Context, tc *TestConfig) error {
 	return nil
 }
 
+func getEnvBool(key string, defaultVal bool) bool {
+	if v := os.Getenv(key); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err == nil {
+			return b
+		}
+	}
+
+	return defaultVal
+}
+
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		d, err := time.ParseDuration(v)
+		if err == nil {
+			return d
+		}
+	}
+
+	return defaultVal
+}
+
 func TestRouteServiceSwitch(t *testing.T) {
 	var getResponseDelay time.Duration
 
@@ -1031,15 +1030,20 @@ func TestRouteServiceSwitch(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
-	tc := &TestConfig{
+	tc := &ocpbugs43745TestConfig{
 		logger: slog.Default(),
 		labels: map[string]string{
 			"test": "route-service-switch",
 			"app":  "web-server",
 		},
+		httpClientOptions: routeClientOptions{
+			DisableKeepAlive: getEnvBool("DISABLE_KEEPALIVE", true),
+			CacheControl:     getEnvBool("USE_CACHE_CONTROL", true),
+			Timeout:          getEnvDuration("CLIENT_TIMEOUT", 10*time.Second),
+		},
 	}
 
-	if err := setupClients(ctx, tc); err != nil {
+	if err := setupKubernetesClients(ctx, tc); err != nil {
 		t.Fatalf("failed to setup clients: %v", err)
 	}
 
@@ -1070,6 +1074,11 @@ func TestRouteServiceSwitch(t *testing.T) {
 	}
 
 	t.Run("switching between services returns different responses", func(t *testing.T) {
+		t.Logf("Testing with options: DisableKeepAlive=%v, CacheControl=%v, Timeout=%v",
+			tc.httpClientOptions.DisableKeepAlive,
+			tc.httpClientOptions.CacheControl,
+			tc.httpClientOptions.Timeout)
+
 		resp1, err := switchRouteServiceAndFetchResponse(ctx, tc, 0, 0)
 		if err != nil {
 			t.Fatal(err)
@@ -1085,6 +1094,7 @@ func TestRouteServiceSwitch(t *testing.T) {
 
 			// Keep trying until we get a different response or timeout
 			logger := tc.logger.With("phase", "retry")
+
 			retryCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancel()
 
@@ -1100,6 +1110,7 @@ func TestRouteServiceSwitch(t *testing.T) {
 				select {
 				case <-retryCtx.Done():
 					t.Fatalf("Timed out waiting for service switch. All responses matched original: %s", resp1)
+
 					return
 				case <-ticker.C:
 					attempts++
@@ -1108,15 +1119,17 @@ func TestRouteServiceSwitch(t *testing.T) {
 					route, err := getter.GetTestRoute(retryCtx)
 					if err != nil {
 						logger.Error("Failed to get route during retry", "error", err)
+
 						continue
 					}
 
-					newResp, err := fetchServiceResponse(logger, route)
+					newResp, err := fetchServiceResponse(logger, route, tc.httpClientOptions)
 					if err != nil {
 						logger.Error("Failed to get response during retry",
 							"error", err,
 							"route", route.Name,
 							"service", route.Spec.To.Name)
+
 						continue
 					}
 
@@ -1127,6 +1140,7 @@ func TestRouteServiceSwitch(t *testing.T) {
 							"attempts", attempts,
 							"route", route.Name,
 							"service", route.Spec.To.Name)
+
 						return
 					}
 
