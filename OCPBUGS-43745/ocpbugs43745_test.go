@@ -32,16 +32,20 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 )
 
+var sharedTransport *http.Transport
+
 type ocpbugs43745TestConfig struct {
 	kubeClientset  *kubernetes.Clientset
 	kubeConfig     *rest.Config
 	logger         *slog.Logger
 	routeClientset *routeclientset.Clientset
 
-	namespace         string
-	labels            map[string]string
-	testRouteName     string
+	namespace     string
+	labels        map[string]string
+	testRouteName string
+
 	httpClientOptions routeClientOptions
+	httpClient        *routeClient
 }
 
 // Resource getters that always fetch fresh resources.
@@ -396,9 +400,7 @@ func waitForHAProxyConfigUpdate(
 	return nil
 }
 
-func fetchServiceResponse(logger *slog.Logger, route *routev1.Route, options routeClientOptions) (string, error) {
-	client := newRouteClient(options, logger)
-
+func fetchServiceResponse(logger *slog.Logger, route *routev1.Route, client *routeClient) (string, error) {
 	logger.Info("Getting response from service",
 		"service", route.Spec.To.Name,
 		"host", route.Spec.Host,
@@ -564,7 +566,7 @@ func switchRouteServiceAndFetchResponse(
 		return "", fmt.Errorf("failed to get current route: %w", err)
 	}
 
-	return fetchServiceResponse(tc.logger, currentRoute, tc.httpClientOptions)
+	return fetchServiceResponse(tc.logger, currentRoute, tc.httpClient)
 }
 
 // waitForReplicationControllerReady waits for the replication
@@ -657,15 +659,16 @@ type routeResponse struct {
 }
 
 func newRouteClient(options routeClientOptions, logger *slog.Logger) *routeClient {
-	transport := &http.Transport{}
-	if options.DisableKeepAlive {
-		transport.DisableKeepAlives = true
+	if sharedTransport == nil {
+		sharedTransport = &http.Transport{
+			DisableKeepAlives: options.DisableKeepAlive,
+		}
 	}
 
 	return &routeClient{
 		client: &http.Client{
 			Timeout:   options.Timeout,
-			Transport: transport,
+			Transport: sharedTransport,
 		},
 		logger:  logger,
 		options: options,
@@ -722,6 +725,11 @@ func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeRe
 		req.Header.Add("Pragma", "no-cache")
 	}
 
+	c.logger.Info("Executing request",
+		"url", url,
+		"keepAliveDisabled", sharedTransport.DisableKeepAlives,
+		"cacheControl", c.options.CacheControl)
+
 	resp, err := c.doRequest(req)
 	if err != nil {
 		c.logger.Error("Request failed",
@@ -729,10 +737,16 @@ func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeRe
 			"error", err,
 			"routeName", route.Name,
 			"service", route.Spec.To.Name)
-
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	// Log connection reuse info if available
+	if resp.Header.Get("X-Connection-Info") != "" {
+		c.logger.Info("Connection info",
+			"info", resp.Header.Get("X-Connection-Info"),
+			"url", url)
+	}
 
 	return c.processResponse(resp)
 }
@@ -1043,6 +1057,8 @@ func TestRouteServiceSwitch(t *testing.T) {
 		},
 	}
 
+	tc.httpClient = newRouteClient(tc.httpClientOptions, tc.logger)
+
 	if err := setupKubernetesClients(ctx, tc); err != nil {
 		t.Fatalf("failed to setup clients: %v", err)
 	}
@@ -1123,7 +1139,7 @@ func TestRouteServiceSwitch(t *testing.T) {
 						continue
 					}
 
-					newResp, err := fetchServiceResponse(logger, route, tc.httpClientOptions)
+					newResp, err := fetchServiceResponse(logger, route, tc.httpClient)
 					if err != nil {
 						logger.Error("Failed to get response during retry",
 							"error", err,
