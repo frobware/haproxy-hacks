@@ -884,6 +884,15 @@ func logClusterVersion(ctx context.Context, tc *ocpbugs43745TestConfig) error {
 	tc.logger.Info("Running test on OpenShift Cluster Version",
 		"version", clusterVersion.Status.Desired.Version)
 
+	haproxyVersion, err := getHAProxyVersion(ctx, tc.kubeClientset, tc.kubeConfig)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve HAProxy version: %w", err)
+	}
+
+	if len(haproxyVersion) > 0 {
+		tc.logger.Info("HAProxy Version in Router Pods", "version", strings.TrimSpace(haproxyVersion[0]))
+	}
+
 	return nil
 }
 
@@ -1067,6 +1076,28 @@ func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
 	}
 
 	return defaultVal
+}
+
+// getHAProxyVersion retrieves the HAProxy version information from a
+// router pod, returning each line as a separate entry in a slice of
+// strings.
+func getHAProxyVersion(ctx context.Context, kubeClient *kubernetes.Clientset, restConfig *rest.Config) ([]string, error) {
+	// Get the router pods
+	routerPods, err := getRouterPods(kubeClient, restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get router pods: %w", err)
+	}
+
+	if len(routerPods) == 0 {
+		return nil, errors.New("no router pods found")
+	}
+
+	stdout, _, err := executeCommandInPod(ctx, kubeClient, restConfig, routerPods[0].name, routerPods[0].namespace, "router", []string{"/usr/sbin/haproxy", "-v"})
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve HAProxy version from pod %s: %w", routerPods[0].name, err)
+	}
+
+	return strings.Split(strings.TrimSpace(stdout), "\n"), nil
 }
 
 func TestRouteServiceSwitch(t *testing.T) {

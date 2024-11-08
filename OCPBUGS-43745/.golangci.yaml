@@ -1,0 +1,43 @@
+linters:
+  enable-all: true
+  disable:
+    - cyclop
+    - depguard
+    - execinquery
+    - exhaustruct
+    - funlen
+    - gochecknoglobals
+    - gomnd
+    - lll
+    - mnd
+    - paralleltest
+    - tparallel
+    - varnamelen
+    - ireturn
+    - err113
+    - wrapcheck
+run:
+  timeout: 30s
+
+linters-settings:
+  ireturn:
+    # List of interfaces to allow.
+    # Lists of the keywords and regular expressions matched to interface or package names can be used.
+    # `allow` and `reject` settings cannot be used at the same time.
+    #
+    # Keywords:
+    # - `empty` for `interface{}`
+    # - `error` for errors
+    # - `stdlib` for standard library
+    # - `anon` for anonymous interfaces
+    # - `generic` for generic interfaces added in go 1.18
+    #
+    # Default: [anon, error, empty, stdlib]
+    allow:
+      - generic
+      - error
+
+issues:
+  # Configure how issues are reported.
+  max-issues-per-linter: 0
+  max-same-issues: 0
