@@ -1,9 +1,8 @@
 /*
-Package main implements a Go-based HAProxy backend switch tester. This
-program replicates the functionality of a bash script that observes
-HAProxy’s behaviour under frequent backend switching and reloads. It
-aims to identify if HAProxy maintains stale connections to an old
-backend after reconfiguration and reload.
+Package main implements a HAProxy backend switch tester. The program
+tests HAProxy's behavior during frequent backend switching and reloads
+to identify if HAProxy maintains stale connections to old backends
+after reconfiguration and reload.
 
 The program simulates backend switching by alternating between two
 backend containers (`backend1` and `backend2`), each running an HTTP
@@ -400,25 +399,43 @@ func (tr *TestRunner) LoopBackends(retryTimeout time.Duration) error {
 		backend := &tr.config.Backends[currentIndex]
 		log.Printf("Switching to backend %s on port %d\n", backend.Name, backend.Port)
 
+		operationStart := time.Now()
+
 		if err := tr.haproxy.WriteConfig(backend); err != nil {
 			return fmt.Errorf("failed to write config: %w", err)
 		}
+		writeTime := time.Since(operationStart)
 
+		reloadStart := time.Now()
 		if err := tr.haproxy.Reload(); err != nil {
 			return fmt.Errorf("failed to reload HAProxy: %w", err)
 		}
+		reloadTime := time.Since(reloadStart)
 
+		verifyStart := time.Now()
 		err := tr.retryUntilTimeout(func() error {
 			if tr.config.RequestDelay > 0 {
 				time.Sleep(tr.config.RequestDelay)
 			}
-
 			return tr.VerifyResponse(backend.ID)
 		}, retryTimeout)
+		verifyTime := time.Since(verifyStart)
 
 		if err != nil {
 			return fmt.Errorf("verification failed for backend %s after retries: %w", backend.Name, err)
 		}
+
+		totalTime := time.Since(operationStart)
+		log.Printf("Operation timings for switch to %s:\n"+
+			"  Config write: %v\n"+
+			"  HAProxy reload: %v\n"+
+			"  Backend verify: %v\n"+
+			"  Total switch time: %v\n",
+			backend.Name,
+			writeTime,
+			reloadTime,
+			verifyTime,
+			totalTime)
 
 		currentIndex = (currentIndex + 1) % len(tr.config.Backends)
 	}
@@ -426,17 +443,24 @@ func (tr *TestRunner) LoopBackends(retryTimeout time.Duration) error {
 
 func (tr *TestRunner) retryUntilTimeout(checkFunc func() error, timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
+	attempt := 1
 
 	for {
+		attemptStart := time.Now()
 		if err := checkFunc(); err == nil {
-			return nil // Success
+			log.Printf("Verification succeeded on attempt %d after %v",
+				attempt, time.Since(attemptStart))
+			return nil
 		}
+		log.Printf("Verification attempt %d took %v",
+			attempt, time.Since(attemptStart))
 
 		if time.Now().After(deadline) {
 			return fmt.Errorf("timeout reached after %v", timeout)
 		}
 
-		time.Sleep(100 * time.Millisecond)
+		attempt++
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
@@ -459,13 +483,16 @@ func main() {
 		log.Fatal("HAPROXY_BIN environment variable is not set (e.g., HAPROXY_BIN=haproxy)")
 	}
 
-	if err := checkHAProxyRunning(haproxyBin); err != nil {
-		log.Fatal(err)
-	}
-
+	checkHAProxy := flag.Bool("check-haproxy", true, "Check if HAProxy is already running before starting")
 	idleClose := flag.Bool("idle-close-on-response", true, "Enable/disable idle-close-on-response option in HAProxy")
 	delay := flag.Duration("delay", 0, "Delay between switch and request")
 	flag.Parse()
+
+	if *checkHAProxy {
+		if err := checkHAProxyRunning(haproxyBin); err != nil {
+			log.Fatal(err)
+		}
+	}
 
 	config := NewConfig(*idleClose)
 	config.RequestDelay = *delay
