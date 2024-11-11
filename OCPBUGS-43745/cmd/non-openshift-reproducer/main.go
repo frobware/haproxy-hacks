@@ -456,7 +456,7 @@ func checkHAProxyRunning(haproxyBin string) error {
 func main() {
 	haproxyBin := os.Getenv("HAPROXY_BIN")
 	if haproxyBin == "" {
-		log.Fatal("HAPROXY_BIN environment variable is not set.")
+		log.Fatal("HAPROXY_BIN environment variable is not set (e.g., HAPROXY_BIN=haproxy)")
 	}
 
 	if err := checkHAProxyRunning(haproxyBin); err != nil {
