@@ -72,6 +72,11 @@ The following options are available:
   allowing a simulation of real-world delays that may occur in
   production environments. Accepts standard Go duration formats (e.g.,
   `100ms`, `2s`). Defaults to no delay.
+
+- `-check-haproxy`: A boolean flag to enable or disable checking if
+  HAProxy is already running before starting the test. When enabled,
+  prevents the test from starting if another HAProxy instance is
+  detected. Defaults to true.
 */
 
 package main
