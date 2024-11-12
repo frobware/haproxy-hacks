@@ -142,10 +142,12 @@ func NewConfig(idleClose bool) *Config {
 		panic(fmt.Sprintf("Failed to create temp directory: %v", err))
 	}
 
+	nginxImage := "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"
+
 	return &Config{
 		Backends: []Backend{
-			{Name: "backend1", Port: 18081, Image: "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"},
-			{Name: "backend2", Port: 18082, Image: "quay.io/openshifttest/nginx-alpine@sha256:04f316442d48ba60e3ea0b5a67eb89b0b667abf1c198a3d0056ca748736336a0"},
+			{Name: "backend1", Port: 18081, Image: nginxImage},
+			{Name: "backend2", Port: 18082, Image: nginxImage},
 		},
 		FrontendPort:  18080,
 		HaproxyBin:    os.Getenv("HAPROXY_BIN"),
@@ -518,7 +520,7 @@ func main() {
 		return
 	}
 
-	if err := runner.LoopBackends(10 * time.Second); err != nil {
+	if err := runner.LoopBackends(0 * time.Second); err != nil {
 		log.Printf("LoopBackends failed: %v\n", err)
 	}
 }
