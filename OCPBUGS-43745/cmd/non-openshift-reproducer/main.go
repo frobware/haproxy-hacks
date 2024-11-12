@@ -83,11 +83,15 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
+	"net"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -96,6 +100,34 @@ import (
 	"syscall"
 	"time"
 )
+
+var sharedTransport = &http.Transport{
+	DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		dialer := &net.Dialer{
+			DualStack: false,
+			KeepAlive: 10 * time.Second,
+		}
+		conn, err := dialer.DialContext(ctx, network, addr)
+		if err != nil {
+			return nil, err
+		}
+
+		localAddr := conn.LocalAddr().String()
+		remoteAddr := conn.RemoteAddr().String()
+		log.Printf("Dial established: local=%s, remote=%s", localAddr, remoteAddr)
+
+		return conn, nil
+	},
+	MaxIdleConns:        100,
+	IdleConnTimeout:     90 * time.Second,
+	DisableKeepAlives:   false,
+	MaxIdleConnsPerHost: 10,
+}
+
+var sharedClient = &http.Client{
+	Transport: sharedTransport,
+	Timeout:   10 * time.Second,
+}
 
 // Backend represents a container running a backend service.
 type Backend struct {
@@ -256,9 +288,9 @@ defaults
     option httplog
     option dontlognull
     option log-health-checks
-    timeout connect 5000
-    timeout client 50000
-    timeout server 50000
+    timeout connect 5s
+    timeout client 30s
+    timeout server 50s
     timeout client-fin 1s
     timeout server-fin 1s
     timeout http-request 10s
@@ -311,7 +343,7 @@ func (hm *HAProxyManager) Reload() error {
 				return
 			}
 
-			time.Sleep(10 * time.Millisecond)
+			time.Sleep(1 * time.Millisecond)
 		}
 	}()
 
@@ -343,6 +375,12 @@ func NewTestRunner(config *Config) *TestRunner {
 }
 
 func (tr *TestRunner) Initialize() error {
+	origialDelay := tr.config.RequestDelay
+	tr.config.RequestDelay = 0
+	defer func() {
+		tr.config.RequestDelay = origialDelay
+	}()
+
 	for i := range tr.config.Backends {
 		backend := &tr.config.Backends[i]
 		if err := tr.containers.StartContainer(backend); err != nil {
@@ -366,41 +404,49 @@ func (tr *TestRunner) Initialize() error {
 		return fmt.Errorf("failed to start HAProxy: %w", err)
 	}
 
-	return nil
+	return tr.VerifyResponse(&tr.config.Backends[0], 0, 1)
 }
 
 func (tr *TestRunner) HitBackend() (string, error) {
-	resp, err := http.Get(fmt.Sprintf("http://localhost:%d", tr.config.FrontendPort))
+	if tr.config.RequestDelay > 0 {
+		log.Printf("Adding delay of %s before GET request", tr.config.RequestDelay)
+		time.Sleep(tr.config.RequestDelay)
+	}
+
+	url := fmt.Sprintf("http://127.0.0.1:%d", tr.config.FrontendPort)
+
+	response, err := fetchResponseWithTrace(url, slog.Default())
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to frontend: %w", err)
 	}
-	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	return string(body), nil
+	return response, nil
 }
 
-func (tr *TestRunner) VerifyResponse(expectedBackendID string) error {
-	response, err := tr.HitBackend()
-	if err != nil {
-		return err
-	}
+func (tr *TestRunner) VerifyResponse(backend *Backend, retryInterval time.Duration, maxRetries int) error {
+	return retryWithInterval(
+		func() (bool, error) {
+			response, err := tr.HitBackend()
+			if err != nil {
+				return false, fmt.Errorf("error in HitBackend: %w", err)
+			}
 
-	if strings.Contains(response, expectedBackendID) {
-		log.Printf("Received expected response: %s\n", response)
+			if strings.Contains(response, backend.ID) {
+				log.Printf("Received expected response %q from backend %q", strings.TrimSpace(response), backend.Name)
+				return true, nil
+			}
 
-		return nil
-	}
-
-	return fmt.Errorf("unexpected response %s; expected %s", response, expectedBackendID)
+			return false, fmt.Errorf("unexpected response %q; expected backend ID %q for backend %q", response, backend.ID, backend.Name)
+		},
+		maxRetries,
+		retryInterval,
+		fmt.Sprintf("Verify response for backend %q", backend.Name),
+	)
 }
 
-func (tr *TestRunner) LoopBackends(retryTimeout time.Duration) error {
+func (tr *TestRunner) LoopBackends(retryInterval time.Duration, maxIterartions int) error {
 	currentIndex := 1
+	iteration := 0
 
 	for {
 		backend := &tr.config.Backends[currentIndex]
@@ -420,23 +466,20 @@ func (tr *TestRunner) LoopBackends(retryTimeout time.Duration) error {
 		reloadTime := time.Since(reloadStart)
 
 		verifyStart := time.Now()
-		err := tr.retryUntilTimeout(func() error {
-			if tr.config.RequestDelay > 0 {
-				time.Sleep(tr.config.RequestDelay)
-			}
-			return tr.VerifyResponse(backend.ID)
-		}, retryTimeout)
-		verifyTime := time.Since(verifyStart)
-
-		if err != nil {
-			return fmt.Errorf("verification failed for backend %s after retries: %w", backend.Name, err)
+		maxRetries := 100
+		if retryInterval == 0 {
+			maxRetries = 1
 		}
+		if err := tr.VerifyResponse(backend, retryInterval, maxRetries); err != nil {
+			return err
+		}
+		verifyTime := time.Since(verifyStart)
 
 		totalTime := time.Since(operationStart)
 		log.Printf("Operation timings for switch to %s:\n"+
-			"  Config write: %v\n"+
-			"  HAProxy reload: %v\n"+
-			"  Backend verify: %v\n"+
+			"  Config write:      %v\n"+
+			"  HAProxy reload:    %v\n"+
+			"  Backend verify:    %v\n"+
 			"  Total switch time: %v\n",
 			backend.Name,
 			writeTime,
@@ -445,6 +488,11 @@ func (tr *TestRunner) LoopBackends(retryTimeout time.Duration) error {
 			totalTime)
 
 		currentIndex = (currentIndex + 1) % len(tr.config.Backends)
+
+		iteration += 1
+		if iteration >= maxIterartions {
+			return nil
+		}
 	}
 }
 
@@ -471,6 +519,37 @@ func (tr *TestRunner) retryUntilTimeout(checkFunc func() error, timeout time.Dur
 	}
 }
 
+// retryWithInterval retries a provided function up to maxRetries
+// times with a specified interval. It logs each attempt and returns
+// either the result of a successful attempt or an error if max
+// retries are reached.
+func retryWithInterval(
+	retryFunc func() (bool, error),
+	maxRetries int,
+	retryInterval time.Duration,
+	description string,
+) error {
+	startTime := time.Now()
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		success, err := retryFunc()
+
+		if success {
+			log.Printf("%s succeeded on attempt %d after %v", description, attempt, time.Since(startTime))
+			return nil
+		}
+
+		log.Printf("%s failed on attempt %d: %v", description, attempt, err)
+
+		if attempt == maxRetries {
+			return fmt.Errorf("%s failed after %d attempts and %v: %w", description, attempt, time.Since(startTime), err)
+		}
+
+		time.Sleep(retryInterval)
+	}
+
+	return fmt.Errorf("%s failed after %d retries", description, maxRetries)
+}
+
 // checkHAProxyRunning checks if any instance of the HAProxy binary is
 // running. If it finds a running instance, it returns an error.
 func checkHAProxyRunning(haproxyBin string) error {
@@ -484,15 +563,84 @@ func checkHAProxyRunning(haproxyBin string) error {
 	return nil
 }
 
+// fetchResponseWithTrace performs a GET request to a specified URL
+// with connection tracing and logs detailed connection and request
+// information, using the shared client.
+func fetchResponseWithTrace(url string, logger *slog.Logger) (string, error) {
+	trace := &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			logger.Info("Connection obtained",
+				"reused", info.Reused,
+				"wasIdle", info.WasIdle,
+				"idleTime", info.IdleTime)
+		},
+		ConnectStart: func(network, addr string) {
+			logger.Info("Starting connection", "network", network, "addr", addr)
+		},
+		ConnectDone: func(network, addr string, err error) {
+			if err != nil {
+				logger.Error("Connection attempt failed", "network", network, "addr", addr, "error", err)
+			} else {
+				logger.Info("Connection successfully established", "network", network, "addr", addr)
+			}
+		},
+		PutIdleConn: func(err error) {
+			if err != nil {
+				logger.Warn("Connection not returned to idle pool", "error", err)
+			} else {
+				logger.Info("Connection returned to idle pool")
+			}
+		},
+		GotFirstResponseByte: func() {
+			logger.Info("First byte of response received")
+		},
+	}
+
+	ctx := httptrace.WithClientTrace(context.Background(), trace)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
+
+	logger.Info("Executing GET request", "url", url)
+
+	resp, err := sharedClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("GET request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	logger.Info("Response", "status", resp.Status, "headers", resp.Header, "url", url, "body", string(body))
+
+	return string(body), nil
+}
+
 func main() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+
 	haproxyBin := os.Getenv("HAPROXY_BIN")
 	if haproxyBin == "" {
 		log.Fatal("HAPROXY_BIN environment variable is not set (e.g., HAPROXY_BIN=haproxy)")
 	}
 
+	maxIterations := flag.Int("max-iterations", 1, "The maximum number of iterations for backend switching")
 	checkHAProxy := flag.Bool("check-haproxy", true, "Check if HAProxy is already running before starting")
+	retryInterval := flag.Duration("retry-interval", 0, "Duration to sleep on failed on responses")
 	idleClose := flag.Bool("idle-close-on-response", true, "Enable/disable idle-close-on-response option in HAProxy")
-	delay := flag.Duration("delay", 0, "Delay between switch and request")
+	requestDelay := flag.Duration("delay", 0, "Duration to wait after switching backend and before sending request")
+
 	flag.Parse()
 
 	if *checkHAProxy {
@@ -502,7 +650,7 @@ func main() {
 	}
 
 	config := NewConfig(*idleClose)
-	config.RequestDelay = *delay
+	config.RequestDelay = *requestDelay
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
@@ -520,7 +668,7 @@ func main() {
 		return
 	}
 
-	if err := runner.LoopBackends(0 * time.Second); err != nil {
-		log.Printf("LoopBackends failed: %v\n", err)
+	if err := runner.LoopBackends(*retryInterval, *maxIterations); err != nil {
+		log.Fatalf("LoopBackends failed: %v\n", err)
 	}
 }
