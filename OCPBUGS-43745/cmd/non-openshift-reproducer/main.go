@@ -105,7 +105,7 @@ var sharedTransport = &http.Transport{
 	DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
 			DualStack: false,
-			KeepAlive: 10 * time.Second,
+			KeepAlive: 90 * time.Second,
 		}
 		conn, err := dialer.DialContext(ctx, network, addr)
 		if err != nil {
@@ -118,10 +118,10 @@ var sharedTransport = &http.Transport{
 
 		return conn, nil
 	},
-	MaxIdleConns:        100,
+	MaxIdleConns:        1000,
 	IdleConnTimeout:     90 * time.Second,
 	DisableKeepAlives:   false,
-	MaxIdleConnsPerHost: 10,
+	MaxIdleConnsPerHost: 100,
 }
 
 var sharedClient = &http.Client{
@@ -290,7 +290,7 @@ defaults
     option log-health-checks
     timeout connect 5s
     timeout client 30s
-    timeout server 50s
+    timeout server 30s
     timeout client-fin 1s
     timeout server-fin 1s
     timeout http-request 10s
@@ -343,7 +343,7 @@ func (hm *HAProxyManager) Reload() error {
 				return
 			}
 
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}()
 
@@ -627,6 +627,18 @@ func fetchResponseWithTrace(url string, logger *slog.Logger) (string, error) {
 	return string(body), nil
 }
 
+// handleFailure handles failure by holding the process open if
+// holdOnFailure is true.
+func handleFailure(holdOnFailure bool, config *Config) {
+	if holdOnFailure {
+		log.Printf("Error encountered. Holding process open for inspection. Press Ctrl+C to terminate.")
+		select {}
+	} else {
+		config.Cleanup()
+		os.Exit(1)
+	}
+}
+
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
 
@@ -635,11 +647,12 @@ func main() {
 		log.Fatal("HAPROXY_BIN environment variable is not set (e.g., HAPROXY_BIN=haproxy)")
 	}
 
-	maxIterations := flag.Int("max-iterations", 1, "The maximum number of iterations for backend switching")
 	checkHAProxy := flag.Bool("check-haproxy", true, "Check if HAProxy is already running before starting")
-	retryInterval := flag.Duration("retry-interval", 0, "Duration to sleep on failed on responses")
+	holdOnFailure := flag.Bool("hold-on-failure", false, "Hold the process open if an error occurs, requiring manual intervention")
 	idleClose := flag.Bool("idle-close-on-response", true, "Enable/disable idle-close-on-response option in HAProxy")
+	maxIterations := flag.Int("max-iterations", 1, "The maximum number of iterations for backend switching")
 	requestDelay := flag.Duration("delay", 0, "Duration to wait after switching backend and before sending request")
+	retryInterval := flag.Duration("retry-interval", 0, "Duration to sleep on failed on responses")
 
 	flag.Parse()
 
@@ -669,6 +682,7 @@ func main() {
 	}
 
 	if err := runner.LoopBackends(*retryInterval, *maxIterations); err != nil {
-		log.Fatalf("LoopBackends failed: %v\n", err)
+		log.Printf("LoopBackends failed: %v\n", err)
+		handleFailure(*holdOnFailure, config)
 	}
 }
