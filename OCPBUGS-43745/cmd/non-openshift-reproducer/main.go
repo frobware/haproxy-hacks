@@ -20,65 +20,64 @@ stops.
 
 1. **Initial Setup**:
 
-   - The program starts two backend containers (`backend1` and
-     `backend2`) running nginx-alpine HTTP servers.
+  - The program starts two backend containers (`backend1` and
+    `backend2`) running nginx-alpine HTTP servers.
 
-   - HAProxy is configured initially to route requests to `backend1`.
+  - HAProxy is configured initially to route requests to `backend1`.
 
-   - The configuration and temporary files are managed in a temporary
-     directory created at runtime.
+  - The configuration and temporary files are managed in a temporary
+    directory created at runtime.
 
 2. **Backend Switching Logic**:
 
-   - The program runs an infinite loop that alternates between
-     `backend1` and `backend2` by modifying the HAProxy configuration
-     file and reloading HAProxy with the updated settings.
+  - The program runs an infinite loop that alternates between
+    `backend1` and `backend2` by modifying the HAProxy configuration
+    file and reloading HAProxy with the updated settings.
 
-   - After each switch, an HTTP request is sent to HAProxy on the
-     frontend port, and the response is captured to identify which
-     backend served the request.
+  - After each switch, an HTTP request is sent to HAProxy on the
+    frontend port, and the response is captured to identify which
+    backend served the request.
 
 3. **Verification and Delay**:
 
-   - After each request, the program verifies that the response
-     matches the expected backend.
+  - After each request, the program verifies that the response
+    matches the expected backend.
 
-   - The `-delay` flag specifies a delay between each backend switch
-     to simulate real-world conditions.
+  - The `-delay` flag specifies a delay between each backend switch
+    to simulate real-world conditions.
 
-   - The program retries verification up to a configurable timeout
-     duration after each backend switch to ensure HAProxy responds
-     with the expected backend.
+  - The program retries verification up to a configurable timeout
+    duration after each backend switch to ensure HAProxy responds
+    with the expected backend.
 
 4. **Cleanup**:
 
-   - The program ensures all resources are cleaned up upon exit by
-     stopping and removing the backend containers and deleting
-     temporary files.
+  - The program ensures all resources are cleaned up upon exit by
+    stopping and removing the backend containers and deleting
+    temporary files.
 
-   - A signal handler listens for termination signals and triggers the
-     cleanup process.
+  - A signal handler listens for termination signals and triggers the
+    cleanup process.
 
 ### Options
 
 The following options are available:
 
-- `-idle-close-on-response`: A boolean flag to enable or disable the
-  `idle-close-on-response` option in HAProxy. When enabled, this can
-  be used to test how HAProxy behaves with idle connections on
-  response close. Defaults to true.
+  - `-idle-close-on-response`: A boolean flag to enable or disable the
+    `idle-close-on-response` option in HAProxy. When enabled, this can
+    be used to test how HAProxy behaves with idle connections on
+    response close. Defaults to true.
 
-- `-delay`: Specifies the delay duration between each backend switch,
-  allowing a simulation of real-world delays that may occur in
-  production environments. Accepts standard Go duration formats (e.g.,
-  `100ms`, `2s`). Defaults to no delay.
+  - `-delay`: Specifies the delay duration between each backend switch,
+    allowing a simulation of real-world delays that may occur in
+    production environments. Accepts standard Go duration formats (e.g.,
+    `100ms`, `2s`). Defaults to no delay.
 
-- `-check-haproxy`: A boolean flag to enable or disable checking if
-  HAProxy is already running before starting the test. When enabled,
-  prevents the test from starting if another HAProxy instance is
-  detected. Defaults to true.
+  - `-check-haproxy`: A boolean flag to enable or disable checking if
+    HAProxy is already running before starting the test. When enabled,
+    prevents the test from starting if another HAProxy instance is
+    detected. Defaults to true.
 */
-
 package main
 
 import (
@@ -104,9 +103,11 @@ import (
 var sharedTransport = &http.Transport{
 	DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 		dialer := &net.Dialer{
-			DualStack: false,
-			KeepAlive: 90 * time.Second,
+			Timeout:       30 * time.Second,
+			FallbackDelay: -1,
+			KeepAlive:     30 * time.Second,
 		}
+
 		conn, err := dialer.DialContext(ctx, network, addr)
 		if err != nil {
 			return nil, err
@@ -118,15 +119,18 @@ var sharedTransport = &http.Transport{
 
 		return conn, nil
 	},
-	MaxIdleConns:        1000,
-	IdleConnTimeout:     90 * time.Second,
-	DisableKeepAlives:   false,
-	MaxIdleConnsPerHost: 100,
+	DisableKeepAlives:     false,
+	ExpectContinueTimeout: 1 * time.Second,
+	ForceAttemptHTTP2:     false,
+	IdleConnTimeout:       90 * time.Second,
+	MaxIdleConns:          100,
+	MaxIdleConnsPerHost:   10,
+	TLSHandshakeTimeout:   10 * time.Second,
 }
 
 var sharedClient = &http.Client{
 	Transport: sharedTransport,
-	Timeout:   10 * time.Second,
+	Timeout:   30 * time.Second,
 }
 
 // Backend represents a container running a backend service.
@@ -149,6 +153,7 @@ type Config struct {
 	ConfigFile    string
 	IdleClose     bool
 	cleanupCalled bool
+	HTTPKeepAlive time.Duration
 }
 
 // HAProxyManager handles HAProxy operations.
@@ -193,46 +198,32 @@ func NewConfig(idleClose bool) *Config {
 	}
 }
 
-func (c *Config) Cleanup() {
+func (c *Config) Cleanup(cm *ContainerManager) {
 	if c.cleanupCalled {
 		return
 	}
 
 	c.cleanupCalled = true
 
-	configContent, err := os.ReadFile(c.ConfigFile)
-	if err != nil {
-		log.Printf("Warning: could not read HAProxy config file %s: %v\n", c.ConfigFile, err)
-	} else {
-		log.Printf("HAProxy configuration at cleanup:\n%s\n", string(configContent))
-	}
-
 	for _, backend := range c.Backends {
-		stopCmd := exec.Command(c.Podman, "stop", backend.Name)
-		if err := stopCmd.Run(); err != nil {
-			log.Printf("Warning: failed to stop container %s: %v\n", backend.Name, err)
-		} else {
-			log.Printf("Successfully stopped container %s\n", backend.Name)
+		if err := cm.StopContainer(backend.Name); err != nil {
+			log.Printf("Warning: %v\n", err)
 		}
 
-		rmCmd := exec.Command(c.Podman, "rm", backend.Name)
-		if err := rmCmd.Run(); err != nil {
-			log.Printf("Warning: failed to remove container %s: %v\n", backend.Name, err)
-		} else {
-			log.Printf("Successfully removed container %s\n", backend.Name)
+		if err := cm.RemoveContainer(backend.Name); err != nil {
+			log.Printf("Warning: %v\n", err)
 		}
 	}
 
 	if pidBytes, err := os.ReadFile(c.PidFile); err == nil {
 		pid := strings.TrimSpace(string(pidBytes))
-
 		if killErr := exec.Command("kill", pid).Run(); killErr != nil {
 			log.Printf("Warning: failed to kill process with PID %s: %v\n", pid, killErr)
 		} else {
 			log.Printf("Successfully killed process with PID %s\n", pid)
 		}
 	} else {
-		log.Printf("Warning: could not read PID file %s: %v\n", c.PidFile, err)
+		log.Fatalf("Could not read PID file %s: %v\n", c.PidFile, err)
 	}
 
 	os.RemoveAll(c.TempDir)
@@ -262,6 +253,30 @@ func (cm *ContainerManager) StartContainer(backend *Backend) error {
 	return exec.Command(cm.config.Podman, "run", "-d", "--name", backend.Name, "-p", fmt.Sprintf("%d:8080", backend.Port), backend.Image).Run()
 }
 
+// StopContainer stops a container by name.
+func (cm *ContainerManager) StopContainer(name string) error {
+	stopCmd := exec.Command(cm.config.Podman, "stop", name)
+	if err := stopCmd.Run(); err != nil {
+		return fmt.Errorf("failed to stop container %s: %w", name, err)
+	}
+
+	log.Printf("Successfully stopped container %s\n", name)
+
+	return nil
+}
+
+// RemoveContainer removes a container by name.
+func (cm *ContainerManager) RemoveContainer(name string) error {
+	rmCmd := exec.Command(cm.config.Podman, "rm", name)
+	if err := rmCmd.Run(); err != nil {
+		return fmt.Errorf("failed to remove container %s: %w", name, err)
+	}
+
+	log.Printf("Successfully removed container %s\n", name)
+
+	return nil
+}
+
 func (cm *ContainerManager) GetContainerID(backend *Backend) (string, error) {
 	cmd := exec.Command(cm.config.Podman, "ps", "-qf", fmt.Sprintf("name=%s", backend.Name))
 
@@ -278,7 +293,7 @@ func NewHAProxyManager(config *Config) *HAProxyManager {
 }
 
 func (hm *HAProxyManager) WriteConfig(backend *Backend) error {
-	defaults := `
+	defaults := fmt.Sprintf(`
 global
     daemon
     log /dev/log local0 info
@@ -294,7 +309,8 @@ defaults
     timeout client-fin 1s
     timeout server-fin 1s
     timeout http-request 10s
-    timeout http-keep-alive 300s`
+    timeout http-keep-alive %vms`, hm.config.HTTPKeepAlive.Milliseconds())
+
 	if hm.config.IdleClose {
 		defaults += "\n    option idle-close-on-response"
 	}
@@ -377,6 +393,7 @@ func NewTestRunner(config *Config) *TestRunner {
 func (tr *TestRunner) Initialize() error {
 	origialDelay := tr.config.RequestDelay
 	tr.config.RequestDelay = 0
+
 	defer func() {
 		tr.config.RequestDelay = origialDelay
 	}()
@@ -433,6 +450,7 @@ func (tr *TestRunner) VerifyResponse(backend *Backend, retryInterval time.Durati
 
 			if strings.Contains(response, backend.ID) {
 				log.Printf("Received expected response %q from backend %q", strings.TrimSpace(response), backend.Name)
+
 				return true, nil
 			}
 
@@ -457,25 +475,29 @@ func (tr *TestRunner) LoopBackends(retryInterval time.Duration, maxIterartions i
 		if err := tr.haproxy.WriteConfig(backend); err != nil {
 			return fmt.Errorf("failed to write config: %w", err)
 		}
-		writeTime := time.Since(operationStart)
 
+		writeTime := time.Since(operationStart)
 		reloadStart := time.Now()
+
 		if err := tr.haproxy.Reload(); err != nil {
 			return fmt.Errorf("failed to reload HAProxy: %w", err)
 		}
-		reloadTime := time.Since(reloadStart)
 
+		reloadTime := time.Since(reloadStart)
 		verifyStart := time.Now()
 		maxRetries := 100
+
 		if retryInterval == 0 {
 			maxRetries = 1
 		}
+
 		if err := tr.VerifyResponse(backend, retryInterval, maxRetries); err != nil {
 			return err
 		}
-		verifyTime := time.Since(verifyStart)
 
+		verifyTime := time.Since(verifyStart)
 		totalTime := time.Since(operationStart)
+
 		log.Printf("Operation timings for switch to %s:\n"+
 			"  Config write:      %v\n"+
 			"  HAProxy reload:    %v\n"+
@@ -489,7 +511,7 @@ func (tr *TestRunner) LoopBackends(retryInterval time.Duration, maxIterartions i
 
 		currentIndex = (currentIndex + 1) % len(tr.config.Backends)
 
-		iteration += 1
+		iteration++
 		if iteration >= maxIterartions {
 			return nil
 		}
@@ -505,8 +527,10 @@ func (tr *TestRunner) retryUntilTimeout(checkFunc func() error, timeout time.Dur
 		if err := checkFunc(); err == nil {
 			log.Printf("Verification succeeded on attempt %d after %v",
 				attempt, time.Since(attemptStart))
+
 			return nil
 		}
+
 		log.Printf("Verification attempt %d took %v",
 			attempt, time.Since(attemptStart))
 
@@ -515,6 +539,7 @@ func (tr *TestRunner) retryUntilTimeout(checkFunc func() error, timeout time.Dur
 		}
 
 		attempt++
+
 		time.Sleep(1 * time.Millisecond)
 	}
 }
@@ -530,11 +555,13 @@ func retryWithInterval(
 	description string,
 ) error {
 	startTime := time.Now()
+
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		success, err := retryFunc()
 
 		if success {
 			log.Printf("%s succeeded on attempt %d after %v", description, attempt, time.Since(startTime))
+
 			return nil
 		}
 
@@ -597,6 +624,7 @@ func fetchResponseWithTrace(url string, logger *slog.Logger) (string, error) {
 	}
 
 	ctx := httptrace.WithClientTrace(context.Background(), trace)
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
@@ -629,12 +657,20 @@ func fetchResponseWithTrace(url string, logger *slog.Logger) (string, error) {
 
 // handleFailure handles failure by holding the process open if
 // holdOnFailure is true.
-func handleFailure(holdOnFailure bool, config *Config) {
+func handleFailure(holdOnFailure bool, config *Config, cm *ContainerManager) {
 	if holdOnFailure {
+		configContent, err := os.ReadFile(config.ConfigFile)
+		if err != nil {
+			log.Printf("Warning: could not read HAProxy config file %s: %v\n", config.ConfigFile, err)
+		} else {
+			log.Printf("HAProxy configuration:\n%s\n", string(configContent))
+		}
+
 		log.Printf("Error encountered. Holding process open for inspection. Press Ctrl+C to terminate.")
+
 		select {}
 	} else {
-		config.Cleanup()
+		config.Cleanup(cm)
 		os.Exit(1)
 	}
 }
@@ -653,6 +689,7 @@ func main() {
 	maxIterations := flag.Int("max-iterations", 1, "The maximum number of iterations for backend switching")
 	requestDelay := flag.Duration("delay", 0, "Duration to wait after switching backend and before sending request")
 	retryInterval := flag.Duration("retry-interval", 0, "Duration to sleep on failed on responses")
+	httpKeepAlive := flag.Duration("http-keep-alive", 5*time.Minute, "Duration for HAPRoxy timeout http-keep-alive")
 
 	flag.Parse()
 
@@ -664,17 +701,20 @@ func main() {
 
 	config := NewConfig(*idleClose)
 	config.RequestDelay = *requestDelay
+	config.HTTPKeepAlive = *httpKeepAlive
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
+	runner := NewTestRunner(config)
+	defer config.Cleanup(runner.containers)
+
 	go func() {
 		<-sigChan
-		config.Cleanup()
+		config.Cleanup(runner.containers)
 		os.Exit(1)
 	}()
 
-	runner := NewTestRunner(config)
 	if err := runner.Initialize(); err != nil {
 		log.Printf("Initialization failed: %v\n", err)
 
@@ -683,6 +723,6 @@ func main() {
 
 	if err := runner.LoopBackends(*retryInterval, *maxIterations); err != nil {
 		log.Printf("LoopBackends failed: %v\n", err)
-		handleFailure(*holdOnFailure, config)
+		handleFailure(*holdOnFailure, config, runner.containers)
 	}
 }
