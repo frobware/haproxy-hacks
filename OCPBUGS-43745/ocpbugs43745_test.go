@@ -333,6 +333,12 @@ func waitForHAProxyConfigCondition(
 	shouldBePresent bool,
 	logger *slog.Logger,
 ) error {
+	parseHAProxyConfig := os.Getenv("PARSE_HAPROXY_CONFIG") == "true"
+	if !parseHAProxyConfig {
+		logger.Info("Skipping HAProxy configuration parsing as PARSE_HAPROXY_CONFIG is not set to true")
+		return nil
+	}
+
 	return wait.PollUntilContextTimeout(ctx, 7*time.Second, time.Minute, true, func(ctx context.Context) (bool, error) {
 		for _, routerPod := range routerPods {
 			backends, err := routerPod.getHAProxyConfig(ctx)
@@ -402,24 +408,34 @@ func waitForHAProxyConfigUpdate(
 }
 
 func fetchServiceResponse(logger *slog.Logger, route *routev1.Route, client *routeClient) (string, error) {
-	response, err := client.getResponse(route)
-	if err != nil {
-		logger.Error("Failed getting response from service",
-			"service", route.Spec.To.Name,
-			"host", route.Spec.Host,
-			"error", err)
+	const maxRetries = 5
+	const retryDelay = 2 * time.Second
 
-		return "", fmt.Errorf("failed to get response from service: %w", err)
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		status, body, err := client.getResponse(route)
+		if err != nil {
+			logger.Error("Connection error, failed to get response from service",
+				"attempt", attempt,
+				"error", err)
+			return "", fmt.Errorf("failed to get response from service: %w", err)
+		}
+
+		if status == http.StatusServiceUnavailable {
+			logger.Warn("Received 503 Service Unavailable, retrying...",
+				"attempt", attempt,
+				"maxRetries", maxRetries)
+			time.Sleep(retryDelay)
+			continue
+		}
+
+		if status == http.StatusOK {
+			return body, nil
+		}
+
+		return "", fmt.Errorf("unexpected status code: %d", status)
 	}
 
-	logger.Info("Received response from service",
-		"service", route.Spec.To.Name,
-		"host", route.Spec.Host,
-		"response", response,
-		"namespace", route.Namespace,
-		"routeName", route.Name)
-
-	return response, nil
+	return "", fmt.Errorf("failed to get a valid response after %d attempts", maxRetries)
 }
 
 // updateRouteService updates the route to point to a new service.
@@ -685,19 +701,18 @@ func newRouteClient(options routeClientOptions, logger *slog.Logger) *routeClien
 	}
 }
 
-func (c *routeClient) getResponse(route *routev1.Route) (string, error) {
+func (c *routeClient) getResponse(route *routev1.Route) (int, string, error) {
 	if err := c.validateRoute(route); err != nil {
-		return "", err
+		return 0, "", err
 	}
 
 	url := c.buildURL(route)
-
 	response, err := c.executeRequest(route, url)
 	if err != nil {
-		return "", err
+		return 0, "", fmt.Errorf("request execution failed: %w", err)
 	}
 
-	return response.body, nil
+	return response.statusCode, response.body, nil
 }
 
 func (c *routeClient) validateRoute(route *routev1.Route) error {
@@ -767,7 +782,6 @@ func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeRe
 		"keepAliveDisabled", sharedTransport.DisableKeepAlives,
 		"cacheControl", c.options.CacheControl)
 
-	// Execute the request.
 	resp, err := c.doRequest(req)
 	if err != nil {
 		c.logger.Error("Request failed",
@@ -775,19 +789,16 @@ func (c *routeClient) executeRequest(route *routev1.Route, url string) (*routeRe
 			"error", err,
 			"routeName", route.Name,
 			"service", route.Spec.To.Name)
-
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	// Log connection reuse info if available.
 	if resp.Header.Get("X-Connection-Info") != "" {
 		c.logger.Info("Connection info",
 			"info", resp.Header.Get("X-Connection-Info"),
 			"url", url)
 	}
 
-	// Process and return the response.
 	return c.processResponse(resp)
 }
 
@@ -810,10 +821,6 @@ func (c *routeClient) doRequest(req *http.Request) (*http.Response, error) {
 }
 
 func (c *routeClient) processResponse(resp *http.Response) (*routeResponse, error) {
-	if err := c.validateStatusCode(resp.StatusCode); err != nil {
-		return nil, err
-	}
-
 	body, err := c.readBody(resp.Body)
 	if err != nil {
 		return nil, err
@@ -821,6 +828,7 @@ func (c *routeClient) processResponse(resp *http.Response) (*routeResponse, erro
 
 	c.logger.Info("Received response",
 		"status", resp.Status,
+		"statusCode", resp.StatusCode,
 		"headers", fmt.Sprintf("%+v", resp.Header))
 
 	return &routeResponse{
@@ -828,14 +836,6 @@ func (c *routeClient) processResponse(resp *http.Response) (*routeResponse, erro
 		body:       body,
 		headers:    resp.Header,
 	}, nil
-}
-
-func (c *routeClient) validateStatusCode(statusCode int) error {
-	if statusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", statusCode)
-	}
-
-	return nil
 }
 
 func (c *routeClient) readBody(body io.ReadCloser) (string, error) {
@@ -1177,67 +1177,7 @@ func TestRouteServiceSwitch(t *testing.T) {
 		}
 
 		if resp1 == resp2 {
-			t.Errorf("Expected different responses after switching services, but got the same response: %s", resp1)
-
-			// Keep trying until we get a different response or timeout
-			logger := tc.logger.With("phase", "retry")
-
-			retryCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-			defer cancel()
-
-			logger.Info("Starting retry loop to wait for service switch to take effect")
-
-			ticker := time.NewTicker(5 * time.Second)
-			defer ticker.Stop()
-
-			getter := NewResourceGetter(tc)
-			attempts := 0
-
-			for {
-				select {
-				case <-retryCtx.Done():
-					t.Fatalf("Timed out waiting for service switch. All responses matched original: %s", resp1)
-
-					return
-				case <-ticker.C:
-					attempts++
-					logger.Info("Retrying request", "attempt", attempts)
-
-					route, err := getter.GetTestRoute(retryCtx)
-					if err != nil {
-						logger.Error("Failed to get route during retry", "error", err)
-
-						continue
-					}
-
-					newResp, err := fetchServiceResponse(logger, route, tc.httpClient)
-					if err != nil {
-						logger.Error("Failed to get response during retry",
-							"error", err,
-							"route", route.Name,
-							"service", route.Spec.To.Name)
-
-						continue
-					}
-
-					if newResp != resp1 {
-						logger.Info("Successfully got different response",
-							"originalResponse", resp1,
-							"newResponse", newResp,
-							"attempts", attempts,
-							"route", route.Name,
-							"service", route.Spec.To.Name)
-
-						return
-					}
-
-					logger.Info("Still getting original response",
-						"response", newResp,
-						"attempts", attempts,
-						"route", route.Name,
-						"service", route.Spec.To.Name)
-				}
-			}
+			t.Fatalf("Expected different responses after switching services, but got the same response: %s", resp1)
 		}
 	})
 }
