@@ -528,24 +528,22 @@ func waitForRouteAdmission(ctx context.Context, routeClient *routeclientset.Clie
 	})
 }
 
-// switchRouteServiceAndFetchResponse switches the route to a
-// specified service index and fetches the response.
-func switchRouteServiceAndFetchResponse(
+// switchRouteService switches the route to point to a specified service index.
+func switchRouteService(
 	ctx context.Context,
 	tc *ocpbugs43745TestConfig,
 	serviceIndex int,
-	delay time.Duration,
-) (string, error) {
+) (*routev1.Route, error) {
 	getter := NewResourceGetter(tc)
 
 	service, backendPod, err := getter.GetServiceAndPod(ctx, serviceIndex)
 	if err != nil {
-		return "", fmt.Errorf("failed to get service and pod: %w", err)
+		return nil, fmt.Errorf("failed to get service and pod: %w", err)
 	}
 
 	route, err := getter.GetTestRoute(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get test route: %w", err)
+		return nil, fmt.Errorf("failed to get test route: %w", err)
 	}
 
 	updatedRoute, err := routeSwitchServiceAndVerifyResponse(
@@ -559,26 +557,53 @@ func switchRouteServiceAndFetchResponse(
 		tc.logger,
 	)
 	if err != nil {
-		return "", fmt.Errorf("failed during switch to service %s: %w", service.Name, err)
+		return nil, fmt.Errorf("failed during switch to service %s: %w", service.Name, err)
 	}
 
 	tc.testRouteName = updatedRoute.Name
 
 	if err := waitForRouteAdmission(ctx, tc.routeClientset, updatedRoute.Namespace, updatedRoute.Name); err != nil {
-		return "", fmt.Errorf("route admission failed: %w", err)
+		return nil, fmt.Errorf("route admission failed: %w", err)
 	}
 
-	if delay > 0 {
-		tc.logger.Info("Delaying GET request", "route", tc.testRouteName, "duration", delay)
-		time.Sleep(delay)
-	}
+	return updatedRoute, nil
+}
 
-	currentRoute, err := getter.GetTestRoute(ctx)
+// switchRouteServiceAndFetchResponse switches the route and either fetches the response or waits for user input.
+func switchRouteServiceAndFetchResponse(
+	ctx context.Context,
+	tc *ocpbugs43745TestConfig,
+	serviceIndex int,
+	delay time.Duration,
+	fetchResponse bool,
+) (string, error) {
+	updatedRoute, err := switchRouteService(ctx, tc, serviceIndex)
 	if err != nil {
-		return "", fmt.Errorf("failed to get current route: %w", err)
+		return "", err
 	}
 
-	return fetchServiceResponse(tc.logger, currentRoute, tc.httpClient)
+	// Build the URL based on the updated route
+	url := "http://" + updatedRoute.Spec.Host
+	tc.logger.Info("Route switched successfully", "URL", url, "route", updatedRoute.Name)
+
+	if fetchResponse {
+		if delay > 0 {
+			tc.logger.Info("Delaying GET request", "route", tc.testRouteName, "duration", delay)
+			time.Sleep(delay)
+		}
+
+		currentRoute, err := NewResourceGetter(tc).GetTestRoute(ctx)
+		if err != nil {
+			return "", fmt.Errorf("failed to get current route: %w", err)
+		}
+
+		return fetchServiceResponse(tc.logger, currentRoute, tc.httpClient)
+	} else {
+		tc.logger.Info("Waiting for user input. Press Enter to continue...")
+		fmt.Println("Press Enter to continue...")
+		fmt.Scanln() // Wait for Enter key input
+		return "", nil
+	}
 }
 
 // waitForReplicationControllerReady waits for the replication
@@ -1053,6 +1078,7 @@ func setupTestRoute(ctx context.Context, tc *ocpbugs43745TestConfig) error {
 
 	tc.testRouteName = route.Name
 
+	fmt.Println(route.Spec.Host)
 	return nil
 }
 
@@ -1160,18 +1186,34 @@ func TestRouteServiceSwitch(t *testing.T) {
 		})
 	}
 
+	useJavaClient := false
+
+	if useJavaClient {
+		_, err := switchRouteServiceAndFetchResponse(ctx, tc, 0, 0, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		_, err = switchRouteServiceAndFetchResponse(ctx, tc, 1, getResponseDelay, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		select {}
+	}
+
 	t.Run("switching between services returns different responses", func(t *testing.T) {
 		tc.logger.Info("Testing with HTTP client options:",
 			"EnableKeepAlive", tc.httpClientOptions.EnableKeepAlive,
 			"CacheControl", tc.httpClientOptions.CacheControl,
 			"Timeout", tc.httpClientOptions.Timeout)
 
-		resp1, err := switchRouteServiceAndFetchResponse(ctx, tc, 0, 0)
+		resp1, err := switchRouteServiceAndFetchResponse(ctx, tc, 0, 0, true)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		resp2, err := switchRouteServiceAndFetchResponse(ctx, tc, 1, getResponseDelay)
+		resp2, err := switchRouteServiceAndFetchResponse(ctx, tc, 1, getResponseDelay, true)
 		if err != nil {
 			t.Fatal(err)
 		}
